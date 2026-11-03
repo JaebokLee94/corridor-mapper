@@ -13,7 +13,9 @@
     "test": "node --test tests/*.test.js tests/surf/*.test.mjs tests/drf/*.test.mjs",
     "test:legacy-dom": "node tests/jsdom_smoke.js",
     "validate:drf": "node tests/drf/run-reference.mjs --seed-count 10 --workers 3",
-    "test:pspt": "node --test tests/drf/pspt*.test.mjs"
+    "test:pspt": "node --test tests/drf/pspt*.test.mjs",
+    "start:compute": "node tools/simulation-server.mjs",
+    "bench:drf": "node tests/drf/background-performance.mjs"
   },
   "repository": {
     "type": "git",

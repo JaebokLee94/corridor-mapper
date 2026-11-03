@@ -233,18 +233,35 @@ test('Pause, Step and Resume send explicit commands and wait for worker status b
   assert.deepEqual(errors,[]);
 });
 
-test('hidden charts defer rendering and visibility return refreshes the current selection without advancing',()=>{
-  const events=new Map(),drawn=[],document={hidden:true,addEventListener:(name,fn)=>events.set(name,fn)};
+test('hidden charts defer rendering and visibility return refreshes the current selection and sweep without advancing',()=>{
+  const events=new Map(),drawn=[],sweeps=[],document={hidden:true,addEventListener:(name,fn)=>events.set(name,fn)};
   const state={selected:17,mode:'paused'};
   vm.runInNewContext(section('function renderSelected()','async function updateProfile(')+'\nrenderSelected();',{
     document,$:()=>assert.fail('Hidden chart rendering must be skipped'),
   });
   vm.runInNewContext(section("document.addEventListener('visibilitychange'","document.addEventListener('keydown'"),{
-    document,state,controls(){},renderSelected:()=>drawn.push(state.selected),advance:()=>assert.fail('Visibility must not start computation'),
+    document,state,controls(){},renderSelected:()=>drawn.push(state.selected),renderSweep:()=>sweeps.push('refreshed'),advance:()=>assert.fail('Visibility must not start computation'),
   });
-  events.get('visibilitychange')();assert.deepEqual(drawn,[]);
+  events.get('visibilitychange')();assert.deepEqual(drawn,[]);assert.deepEqual(sweeps,[]);
   document.hidden=false;events.get('visibilitychange')();
-  assert.deepEqual(drawn,[17]);assert.equal(state.mode,'paused');
+  assert.deepEqual(drawn,[17]);assert.deepEqual(sweeps,['refreshed']);assert.equal(state.mode,'paused');
+});
+
+test('server connection failure blocks both comparison and sweep instead of using browser computation',()=>{
+  const {context,state,$}=runUiContext();
+  state.mode='idle';state.connecting=true;context.controls();
+  assert.equal($('runButton').disabled,true);assert.equal($('stepButton').disabled,true);assert.equal($('sweepButton').disabled,true);
+});
+
+test('failed server commands recover actual controls without cancelling the job',async()=>{
+  const {context,state,$,posted,errors}=runUiContext(4);state.server={};state.mode='paused';state.busy=false;
+  context.commandRun('resume');assert.equal(state.mode,'running');assert.equal($('pauseButton').disabled,true);
+  await context.receiveRunMessage({type:'command-error',command:'resume',message:'Network error',job:{status:'paused'},requestId:1},1);
+  assert.equal(state.mode,'paused');assert.equal(state.busy,false);assert.equal($('stepButton').disabled,false);
+  context.commandRun('step');
+  await context.receiveRunMessage({type:'command-error',command:'step',message:'Network error',job:null,recoveryError:'Offline',requestId:1},1);
+  assert.equal(state.mode,'paused');assert.equal(state.busy,false);assert.match($('status').textContent,/reload to reconnect/);
+  assert.deepEqual(posted.map(p=>p.type),['resume','step']);assert.deepEqual(errors,[]);
 });
 
 test('stale worker notifications cannot change a cancelled or replacement run',async()=>{

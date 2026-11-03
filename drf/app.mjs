@@ -5,6 +5,7 @@ import { METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261103-defaults1';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261103-defaults1';
 import { download, png300dpi } from '../surf/exports.mjs';
+import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs';
 
 const $ = id => document.getElementById(id), form = $('settings');
 const state = { mode: 'idle', scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0,
@@ -27,7 +28,8 @@ function settings() {
   const values = Object.fromEntries(new FormData(form)); values.specular = form.elements.namedItem('specular').checked;
   return normalizeInput(values);
 }
-function createWorker(name) {
+function createWorker(name, options = {}) {
+  if (name === 'run' && state.server) return createServerRunWorker(state.server, options);
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261103-background2`, import.meta.url), { type: 'module' });
 }
 function makeWorker(name, onProgress = () => {}) {
@@ -48,13 +50,13 @@ function makeWorker(name, onProgress = () => {}) {
 function stopReplay() { cancelAnimationFrame(replayFrame); replayFrame = 0; state.replay = false; $('replayButton').textContent = 'Replay'; }
 function controls() {
   const active = ['running', 'paused'].includes(state.mode), sweeping = !!state.sweep, preparing = active && !state.scenario;
-  $('runButton').disabled = active || sweeping; $('pauseButton').disabled = !active || preparing;
+  $('runButton').disabled = active || sweeping || !!state.connecting; $('pauseButton').disabled = !active || preparing || !!state.pendingCommand;
   $('pauseButton').textContent = state.mode === 'paused' ? 'Resume' : 'Pause';
-  $('stepButton').disabled = preparing || state.busy || state.mode === 'running' || sweeping;
+  $('stepButton').disabled = preparing || state.busy || state.mode === 'running' || sweeping || !!state.connecting;
   $('cancelButton').disabled = !active;
   for (const el of form.elements) el.disabled = active || sweeping;
   for (const el of $('sweepSettings').elements) el.disabled = active || sweeping;
-  $('sweepButton').disabled = active || sweeping; $('sweepCancel').disabled = !sweeping;
+  $('sweepButton').disabled = active || sweeping || !!state.connecting; $('sweepCancel').disabled = !sweeping;
   $('timeSlider').max = Math.max(1, state.frames.length); $('timeSlider').value = state.selected; $('timeSlider').disabled = !state.frames.length;
   $('replayButton').disabled = !state.frames.length;
   $('runProgress').max = state.scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value || DEFAULT_INPUT.snapshots); $('runProgress').value = state.frames.length;
@@ -63,11 +65,19 @@ function controls() {
   for (const id of ['exportCsv', 'exportPng']) $(id).disabled = !state.valid || !state.frames.length;
   document.body.dataset.state = state.mode;
   $('runState').textContent = ({idle:'Ready',running:'Computing',paused:'Paused',cancelled:'Partial run',done:'Complete'})[state.mode] ?? 'Stopped';
+  if (state.server) $('runState').textContent += ' · Server';
   $('newSeed').disabled = active || sweeping;
 }
 function cancel(clear = false) {
   state.generation++; hoverGeneration++; clearTimeout(hoverTimer); stopReplay();
-  for (const worker of state.workers) worker.stop(); state.workers = [];
+  const generation = state.generation;
+  for (const worker of state.workers) {
+    const stopped = worker.stop();
+    stopped?.catch?.(error => {
+      if (state.generation === generation) notice(`Server cancellation was not confirmed: ${error.message}. Reload to reconnect to the job.`);
+    });
+  }
+  state.workers = []; state.pendingCommand = null;
   runWorker = null; evalWorker = null; hoverWorker = null;
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
@@ -82,15 +92,15 @@ function cancel(clear = false) {
   }
   controls(); renderSelected();
 }
-async function prepare(single = false) {
+async function prepare(single = false, resumeId) {
   try {
     const input = settings();
     cancel(true); state.pendingInput=input; state.mode = 'running'; state.busy = true;
     const generation = state.generation; controls();
     location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`;
     notice('Generating wall geometry and measurements.');
-    const worker = createWorker('run'); runWorker = worker;
-    state.workers.push({ stop: () => worker.terminate() });
+    const worker = createWorker('run', { resumeId }); runWorker = worker;
+    state.workers.push({ stop: () => worker.terminate(), detach: worker.detach ? () => worker.detach() : null });
     worker.onmessage = ({ data }) => { void receiveRunMessage(data, generation); };
     worker.onerror = event => { if (generation === state.generation) fail(new Error(event.message || 'Could not load the simulation worker. Reload and run again.')); };
     worker.postMessage({ type: 'start', requestId: generation, input, single });
@@ -106,9 +116,24 @@ async function receiveRunMessage(data, generation) {
   if (generation !== state.generation || data.requestId !== generation) return;
   try {
     if (data.type === 'error') throw new Error(data.message);
+    if (data.type === 'command-error') {
+      const previous = state.pendingCommand;
+      if (['running', 'paused'].includes(data.job?.status)) {
+        state.mode = data.job.status; state.busy = data.job.status === 'running';
+      } else if (previous) {
+        state.mode = previous.mode; state.busy = previous.busy;
+      }
+      state.pendingCommand = null; controls();
+      notice(`Server command was not confirmed: ${data.message}.${data.recoveryError ? ' Server status is unavailable; reload to reconnect.' : ' Computation has not been cancelled.'}`); return;
+    }
+    if (data.type === 'connection') {
+      if (!data.connected) notice('Reconnecting to the server. The server job continues independently.');
+      return;
+    }
     if (data.type === 'progress') { notice(`Generating measurements ${data.t} / ${data.total}`); return; }
     if (data.type === 'prepared') {
       state.scenario = data.scenario; state.grid = data.grid; state.valid = true;
+      if (state.server) { fillSettings(data.scenario.input); location.hash = `v1=${encodeURIComponent(JSON.stringify(data.scenario.input))}`; }
       // Inspection is separate from the run and cannot hold up its progress.
       hoverWorker = makeWorker('field'); evalWorker = makeWorker('eval');
       void evalWorker.request({ type: 'init', scenario: data.scenario, grid: data.grid }).catch(error => {
@@ -125,6 +150,7 @@ async function receiveRunMessage(data, generation) {
       return;
     }
     if (data.type === 'status') {
+      state.pendingCommand = null;
       state.mode = data.mode; state.busy = data.mode === 'running'; controls();
       if (data.mode === 'paused') notice('Paused after the current snapshot.');
       if (data.mode === 'done') {
@@ -138,8 +164,9 @@ async function receiveRunMessage(data, generation) {
   } catch (error) { if (generation === state.generation) fail(error); }
 }
 function commandRun(type) {
-  if (!runWorker || !state.scenario || !['running', 'paused'].includes(state.mode)) return;
+  if (!runWorker || !state.scenario || !['running', 'paused'].includes(state.mode) || state.pendingCommand) return;
   if (type === 'step' && (state.mode !== 'paused' || state.busy)) return;
+  if (state.server) state.pendingCommand = { type, mode: state.mode, busy: state.busy };
   if (type === 'resume') { state.mode = 'running'; state.followLive = true; }
   if (type === 'pause') state.mode = 'paused';
   if (type === 'step') state.followLive = true;
@@ -279,7 +306,7 @@ form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); rend
 $('timeSlider').oninput = () => { stopReplay(); state.followLive = false; state.selected = Number($('timeSlider').value); hoverGeneration++; renderSelected(); };
 $('replayButton').onclick = toggleReplay;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { controls(); renderSelected(); }
+  if (!document.hidden) { controls(); renderSelected(); renderSweep(); }
 });
 document.addEventListener('keydown', event => {
   if (event.target.matches('input,select,textarea,button') || $('aboutDialog').open || $('shareDialog').open || $('analysisDialog').open) return;
@@ -309,7 +336,8 @@ for (const button of document.querySelectorAll('[data-tab]')) button.onclick = (
   renderSelected(); renderSweep();
 };
 function renderSweep() {
-  const aggregates = aggregateRuns(state.sweepRuns); if ($('sweepPanel').hidden) return;
+  if (document.hidden || $('sweepPanel').hidden) return;
+  const aggregates = aggregateRuns(state.sweepRuns);
   for (const [method, canvas] of [['guarded', 'sweepChart'], ['baseline', 'sweepBaselineChart']])
     drawSweep($(canvas), aggregates.filter(row => row.method === method), [], 'recall');
   const body = $('sweepTable').querySelector('tbody'); body.replaceChildren();
@@ -325,16 +353,25 @@ function renderSweep() {
     body.append(tr);
   }
 }
-$('sweepButton').onclick = async () => {
+async function runSweep(jobs, resumeId) {
+  if (state.connecting) { $('sweepStatus').textContent = 'The compute server is not connected. Reload after restarting the server.'; return; }
   const generation = state.generation; let handle;
   try {
-    const base = settings(), values = Object.fromEntries(new FormData($('sweepSettings'))), jobs = sweepJobs(base, parseValues(values.sweepNoise), parseValues(values.sweepRoughness), parseValues(values.sweepSeeds, true));
+    const base = jobs[0] ?? settings();
     state.sweepRuns = []; $('sweepButton').disabled = true; $('sweepCancel').disabled = false;
     $('sweepStatus').textContent = `0 / ${jobs.length} · ${base.snapshots} snapshots · Both methods use the fixed tuning-200 thresholds.`;
-    handle = state.sweep = startSweep(jobs, ({ completed, total, results }) => {
+    const onProgress = ({ completed, total, results, progress }) => {
       if (generation !== state.generation) return;
-      state.sweepRuns = results; $('sweepStatus').textContent = `${completed} / ${total} complete · ${base.snapshots} snapshots · paired methods · mean ± 1 sample SD`; renderSweep();
-    });
+      state.sweepRuns = results;
+      if (progress?.type === 'command-error') {
+        $('sweepStatus').textContent = `${completed} / ${total} complete · Cancellation was not confirmed: ${progress.message}. The server job may still be running; retry Cancel sweep.`;
+        return;
+      }
+      const current = progress?.type === 'sweep-progress' ? ` · experiment ${progress.id + 1}: ${progress.t} / ${progress.total} snapshots` : '';
+      $('sweepStatus').textContent = `${completed} / ${total} complete${current} · paired methods · mean ± 1 sample SD`;
+      if (!progress || progress.type === 'sweep-result') renderSweep();
+    };
+    handle = state.sweep = state.server ? startServerSweep(state.server, jobs, onProgress, { resumeId }) : startSweep(jobs, onProgress);
     controls();
     const result = await handle.promise;
     if (generation !== state.generation) return;
@@ -343,6 +380,12 @@ $('sweepButton').onclick = async () => {
     renderSweep();
   } catch (error) { if (generation === state.generation) $('sweepStatus').textContent = `Sweep stopped: ${error.message}`; }
   finally { if (state.sweep === handle) { state.sweep = null; controls(); } }
+}
+$('sweepButton').onclick = () => {
+  try {
+    const base = settings(), values = Object.fromEntries(new FormData($('sweepSettings')));
+    return runSweep(sweepJobs(base, parseValues(values.sweepNoise), parseValues(values.sweepRoughness), parseValues(values.sweepSeeds, true)));
+  } catch (error) { $('sweepStatus').textContent = `Sweep stopped: ${error.message}`; }
 };
 $('sweepCancel').onclick = () => state.sweep?.cancel();
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
@@ -368,7 +411,10 @@ const chartResize = new ResizeObserver(() => { renderSelected(); renderSweep(); 
 chartResize.observe($('analysis-panel') ?? $('sweepPanel'));
 chartResize.observe($('metricChart'));
 window.addEventListener('resize', () => { renderSelected(); renderSweep(); });
-window.addEventListener('beforeunload', () => { for (const worker of state.workers) worker.stop(); state.sweep?.cancel(); });
+window.addEventListener('beforeunload', () => {
+  for (const worker of state.workers) worker.detach ? worker.detach() : worker.stop();
+  if (state.sweep?.detach) state.sweep.detach(); else state.sweep?.cancel();
+});
 let initialInput = DEFAULT_INPUT;
 try {
   const hasSharedInput=location.hash.startsWith('#v1='),raw=hasSharedInput ? JSON.parse(decodeURIComponent(location.hash.slice(4))) : DEFAULT_INPUT;
@@ -384,6 +430,20 @@ if (matchMedia('(max-width: 760px)').matches) $('settingsDetails').open=false;
     $('provenanceCore').textContent = `${p.coreHash.slice(0, 12)}`; renderSweep(); })
   .catch(error => notice(`Could not load validation metadata: ${error.message}`));
 controls(); renderSelected();
+if (document.querySelector('meta[name="echomap-compute"]')?.content === 'server') {
+  state.connecting = true; controls(); notice('Connecting to the compute server.');
+  connectComputeServer().then(async config => {
+    state.server = config; state.connecting = false; controls();
+    if (config.job?.mode === 'sweep' && config.job.jobs?.length) {
+      fillSettings(config.job.jobs[0]); $('analysisDialog').showModal(); await runSweep(config.job.jobs, config.job.id);
+    } else if (config.job?.id && config.job.mode !== 'sweep') {
+      if (config.job.input) fillSettings(config.job.input);
+      await prepare(false, config.job.id);
+    } else notice('Server ready. Computation continues when this tab is hidden or closed.');
+  }).catch(error => {
+    state.connecting = true; controls(); notice(`Compute server unavailable: ${error.message}. Reload after restarting the server.`);
+  });
+}
 
 // Switching the displayed method never recomputes or mutates either estimator.
 for (const button of document.querySelectorAll('[data-method]')) button.onclick=()=>{state.method=button.dataset.method;map.fit();baselineMap.fit();renderSelected();};

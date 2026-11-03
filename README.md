@@ -118,6 +118,28 @@ Open [localhost:8871/drf.html](http://127.0.0.1:8871/drf.html). For local-file u
 
 The tests cover analytic geometry and likelihood cases, frozen Python checkpoints, causal prefixes, truth exclusion, paired sweep/export contracts, and bundle/deployment integrity. Historical SURF hash fixtures are platform sensitive; CI runs the full suite on macOS and the current DRF suite on Linux. Tests establish the properties they check, not physical-sensor performance or an error-rate guarantee. The 200-scene raw tuning archive is not bundled, so `npm test` does not regenerate its table.
 
+### Compute independently of the browser
+
+To keep comparisons and sweeps running when the tab is hidden or closed, use the local Node service:
+
+```sh
+npm run start:compute -- --port 9174 --workers 4
+```
+
+Open [localhost:9174/drf.html](http://127.0.0.1:9174/drf.html). The same interface receives computed snapshots as they finish. A comparison runs sequentially in a Node worker; a sweep runs up to four independent experiments in parallel. Closing the tab disconnects the viewer without cancelling calculation. Reopening the same local site restores the last job. Pause, Step and Cancel are explicit server commands.
+
+The service binds to loopback only. It accepts one active comparison or sweep group, retains the latest two completed jobs for up to 24 hours, and limits each job's cached messages to 512 MiB. Node restart, logout, or shutdown does not resume a previous job. Browser-independent scheduling does not prevent OS sleep or thermal throttling. The public GitHub Pages site and offline file continue to calculate in browser workers; they do not use this local service automatically.
+
+The same Node worker architecture can run on a cloud VM, with HTTPS, authenticated access, persistent job storage and an approved deployment configuration added before exposing it to other machines. No cloud account or paid resource is created by this command.
+
+An opt-in benchmark compares numerical digests for the scenario and every snapshot, and reports computation separately from verification:
+
+```sh
+npm run bench:drf -- --input experiment-input.json --output after.json
+```
+
+Use a normalized input JSON and identical inputs, machine and runtime for before/after measurements. The benchmark also supports `--source /path/to/baseline` and `--expected before.json`. It is not run as part of the regular unit test suite.
+
 ## Scope and research limits
 
 This is a **synthetic, measurement-level simulator**, not an RF waveform or hardware validation platform. The reported noise SDs match those used to generate observations. Controlled noise/model-mismatch experiments are not implemented; curved walls, finite patches and scattering can still differ from the estimators' assumptions.

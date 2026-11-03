@@ -7,18 +7,21 @@ const FERMAT_ROUNDOFF = 64 * Number.EPSILON;
 function leg(s, p) { const a = [s[0] - p[0], s[1] - p[1]], r = Math.hypot(...a); return { a, r }; }
 export function sameSide(t, s, pT, pR) { return cross(t, leg(s, pT).a) * cross(t, leg(s, pR).a) > 0; }
 export function facetSinDelta(t, s, pT, pR) {
-  const a = [pT[0] - s[0], pT[1] - s[1]], b = [pR[0] - s[0], pR[1] - s[1]], ra = Math.hypot(...a), rb = Math.hypot(...b), speed = Math.hypot(...t);
+  // The cell loop calls this for every Tx/Rx pair. Scalar coordinates keep the
+  // same Float64 operation order without allocating six temporary 2-vectors.
+  const ax = pT[0] - s[0], ay = pT[1] - s[1], bx = pR[0] - s[0], by = pR[1] - s[1],
+    ra = Math.hypot(ax, ay), rb = Math.hypot(bx, by), speed = Math.hypot(...t);
   if (!(ra > 0 && rb > 0 && speed > 0)) return NaN;
-  const ua = a.map(v => v / ra), ub = b.map(v => v / rb);
-  if (dot(ua, ub) >= 0) {
-    const sum = [ua[0] + ub[0], ua[1] + ub[1]], orientation = Math.sign(cross(a, b));
+  const uax = ax / ra, uay = ay / ra, ubx = bx / rb, uby = by / rb;
+  if (uax * ubx + uay * uby >= 0) {
+    const sx = uax + ubx, sy = uay + uby, orientation = Math.sign(ax * by - ay * bx);
     if (!orientation) return NaN;
     // u_R-u_T is parallel to sign(cross(u_T,u_R))*perp(u_T+u_R).
     // This identity avoids cancellation when the two vehicle directions almost coincide.
-    return orientation * dot(t, sum) / (speed * Math.hypot(...sum));
+    return orientation * (t[0] * sx + t[1] * sy) / (speed * Math.hypot(sx, sy));
   }
-  const difference = [ub[0] - ua[0], ub[1] - ua[1]];
-  return cross(t, difference) / (speed * Math.hypot(...difference));
+  const dx = ubx - uax, dy = uby - uay;
+  return (t[0] * dy - t[1] * dx) / (speed * Math.hypot(dx, dy));
 }
 export function specularPolynomial(span, pT, pR) {
   const sx = span.C.map(row => row[0]), sy = span.C.map(row => row[1]), tx = derivative(sx), ty = derivative(sy);

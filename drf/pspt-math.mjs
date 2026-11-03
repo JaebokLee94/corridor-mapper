@@ -84,29 +84,40 @@ export class Surfel {
   }
 
   /** Python-compatible nearest sampled stationary root, with linear interpolation.
-   * Returns [rho*,u*,d(rho*)/d(state),e_i,e_j] or null. O(nuGrid), O(nuGrid).
+   * Returns [rho*,u*,d(rho*)/d(state),e_i,e_j] or null. O(nuGrid), O(1) scratch.
    * This preserves the prototype's single-root approximation; it is not all-root certification.
    */
   predict(pi, pj, { ext = 2, nuGrid = 41 } = {}) {
     if (pi.length !== 2 || pj.length !== 2 || ![...pi, ...pj, ext].every(Number.isFinite)
         || ext <= 0 || !Number.isInteger(nuGrid) || nuGrid < 2) throw new RangeError("invalid surface prediction input");
     const [center, tangent, normal, curvature] = this.frame();
-    const u = Array.from({ length: nuGrid }, (_, i) => -ext * this.ell + i * (2 * ext * this.ell / (nuGrid - 1)));
-    const point = (at) => add(add(center, tangent, at), normal, 0.5 * curvature * at * at);
-    const residuals = u.map((at) => {
-      const s = point(at), di = add(s, pi, -1), dj = add(s, pj, -1);
-      const ri = Math.hypot(...di), rj = Math.hypot(...dj);
-      if (!ri || !rj) return NaN;
-      return dot(add(tangent, normal, curvature * at), di.map((value, k) => value / ri + dj[k] / rj));
-    });
-    let us = null;
-    for (let i = 0; i + 1 < nuGrid; i++) if (residuals[i] * residuals[i + 1] <= 0) {
-      const difference = residuals[i + 1] - residuals[i];
-      const root = u[i] - residuals[i] * (u[i + 1] - u[i]) / (Math.abs(difference) < 1e-15 ? 1e-15 : difference);
-      if (us === null || Math.abs(root) < Math.abs(us)) us = root;
+    const lo = -ext * this.ell, spacing = 2 * ext * this.ell / (nuGrid - 1);
+    let us = null, previousU, previousResidual;
+    for (let i = 0; i < nuGrid; i++) {
+      const at = lo + i * spacing, bend = 0.5 * curvature * at * at,
+        sx = (center[0] + at * tangent[0]) + bend * normal[0],
+        sy = (center[1] + at * tangent[1]) + bend * normal[1],
+        dix = sx + -1 * pi[0], diy = sy + -1 * pi[1],
+        djx = sx + -1 * pj[0], djy = sy + -1 * pj[1],
+        ri = Math.hypot(dix, diy), rj = Math.hypot(djx, djy);
+      let residual = NaN;
+      if (ri && rj) {
+        // Preserve the original dot/add operation order exactly, including its
+        // initial +0. Scalar temporaries remove hundreds of tiny arrays per call.
+        const slope = curvature * at;
+        residual = 0;
+        residual += (tangent[0] + slope * normal[0]) * (dix / ri + djx / rj);
+        residual += (tangent[1] + slope * normal[1]) * (diy / ri + djy / rj);
+      }
+      if (i && previousResidual * residual <= 0) {
+        const difference = residual - previousResidual;
+        const root = previousU - previousResidual * (at - previousU) / (Math.abs(difference) < 1e-15 ? 1e-15 : difference);
+        if (us === null || Math.abs(root) < Math.abs(us)) us = root;
+      }
+      previousU = at; previousResidual = residual;
     }
     if (us === null) return null;
-    const s = point(us);
+    const s = add(add(center, tangent, us), normal, 0.5 * curvature * us * us);
     if (dot(add(pi, s, -1), normal) <= 0 || dot(add(pj, s, -1), normal) <= 0) return null;
     const di = add(s, pi, -1), dj = add(s, pj, -1), ri = Math.hypot(...di), rj = Math.hypot(...dj);
     if (!ri || !rj) return null;
