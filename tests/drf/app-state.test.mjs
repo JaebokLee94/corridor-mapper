@@ -32,29 +32,29 @@ test('shared URLs preserve the exact seed and snapshot count across reloads; onl
   }
 });
 
-test('actual full run and single steps preserve the requested length and use the declared experiment domain',async()=>{
+test('full runs and single steps send exactly one start command with the requested settings',async()=>{
   for (const [single,requested] of [[false,60],[true,60],[false,80]]) {
-    const expected=requested,input={scene:'layered',vehicles:10,snapshots:requested,grid:150,band:4,perimeter:'exact'},generated=[],filled=[],advanced=[];
-    const state={generation:0,scenario:null,mode:'idle'},location={hash:'#v1=old'};
-    const context=vm.createContext({state,location,DEFAULT_INPUT:{snapshots:80},
-      settings:()=>({...input}),fillSettings:value=>filled.push({...value}),
-      cancel:()=>{state.generation++;},controls(){},notice(){},createGrid:(nx,ny,domain)=>({nx,ny,domain}),
-      makeWorker:name=>({stop(){},async request(message){
-        if (name==='scenario') {generated.push({...message.input});return {scenario:{input:message.input,domain:[0,80,-20,50]}};}
-        return {};
-      }}),advance:value=>advanced.push(value??false),fail:error=>{throw error;},
+    const input={scene:'layered',seed:0xffffffff,vehicles:10,snapshots:requested,grid:150,band:4,perimeter:'exact'},posted=[],inspections=[];
+    const state={generation:0,scenario:null,mode:'idle',workers:[]},location={hash:'#v1=old'};
+    const worker={postMessage:message=>posted.push(message),terminate(){}};
+    const context=vm.createContext({state,location,
+      settings:()=>({...input}),cancel:()=>{state.generation++;},controls(){},notice(){},
+      createWorker:name=>{assert.equal(name,'run');return worker;},
+      makeWorker:name=>({request:async message=>{inspections.push([name,message]);return {};}}),
+      fail:error=>{throw error;},
     });
-    vm.runInContext(section('async function prepare(','function fail('),context);
+    vm.runInContext(section('async function prepare(','function fail(')+section('async function receiveRunMessage(','async function hashField('),context);
     await context.prepare(single);
-    assert.equal(generated.length,1);
-    assert.equal(generated[0].snapshots,expected,'Generate the same length stored in the URL');
-    assert.equal(state.scenario.input.snapshots,expected);
-    assert.equal(JSON.parse(decodeURIComponent(location.hash.slice(3))).snapshots,expected);
-    assert.equal(generated[0].vehicles,10,'Preserve the restored vehicle count');
-    assert.deepEqual(filled,[],'Respect the experiment length shown in the settings');
-    assert.deepEqual(state.grid.domain,[0,80,-20,50],'Pass the predeclared domain without consulting truth wall bounds');
-    assert.deepEqual(advanced,[single]);
-    assert.equal(state.mode,single ? 'paused' : 'running');
+    assert.equal(posted.length,1,'Starting the run must not dispatch any per-snapshot request');
+    assert.equal(posted[0].type,'start');assert.equal(posted[0].requestId,state.generation);assert.equal(posted[0].single,single);
+    assert.deepEqual({...posted[0].input},input,'Preserve seed, fleet size and requested run length');
+    assert.deepEqual(JSON.parse(decodeURIComponent(location.hash.slice(3))),input);
+    const scenario={input,domain:[0,80,-20,50]},grid={nx:150,ny:150,domain:scenario.domain};
+    await context.receiveRunMessage({type:'prepared',requestId:state.generation,scenario,grid},state.generation);
+    assert.equal(state.scenario,scenario);assert.equal(state.grid,grid,'Use the grid supplied by the autonomous worker');
+    assert.equal(state.valid,true);assert.equal(state.mode,'running');assert.equal(state.busy,true);
+    assert.equal(posted.length,1,'Prepared notifications need no acknowledgement to continue');
+    assert.equal(inspections.length,1);assert.equal(inspections[0][0],'eval');assert.equal(inspections[0][1].type,'init');
   }
 });
 
@@ -88,7 +88,7 @@ test('actual preview geometry stays cached when the truth overlay is hidden',()=
 });
 
 test('actual view reset preserves simulation, selection and replay; experiment reset still clears them',async()=>{
-  const nodes=new Map(),pending=new Map(),charts=new Map();let nextFrame=0,stoppedWorkers=0,cancelledSweeps=0,fitCalls=0,releaseField;
+  const nodes=new Map(),pending=new Map(),charts=new Map();let nextFrame=0,stoppedWorkers=0,cancelledSweeps=0,fitCalls=0;
   const $=id=>{
     if (!nodes.has(id)) nodes.set(id,{id,value:'',textContent:'old snapshot value',checked:false,options:[],
       dataset:{},removeAttribute(){},replaceChildren(...options){this.options=options;}});
@@ -101,7 +101,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
     scenario:{input:{snapshots:3},truth:[{configs:[]},{configs:[]},{configs:[]}],wire:[],walls:[]},
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
   const context=vm.createContext({state,$,form,hoverGeneration:0,hoverTimer:0,replayFrame:0,
-    fieldWorker:{},evalWorker:{},hoverWorker:{},psptWorker:{},DEFAULT_INPUT:{snapshots:60},LAYERED_DOMAIN,location:{hash:'#old'},
+    runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},LAYERED_DOMAIN,location:{hash:'#old'},
     document:{body:{dataset:{}},createElement:()=>({}),querySelectorAll:()=>[]},map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,
     fmt:v=>Number.isFinite(v) ? String(v) : '—',percentile:values=>values[0]??null,
     requestAnimationFrame:fn=>{const id=++nextFrame;pending.set(id,fn);return id;},cancelAnimationFrame:id=>pending.delete(id),clearTimeout(){},
@@ -114,7 +114,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   vm.runInContext([
     section('function stopReplay()','async function prepare('),
     section('function renderSelected()','async function updateProfile('),
-    section('async function advance(','async function hashField('),
+    section('async function receiveRunMessage(','async function hashField('),
     section('function replayTick(','$(\'runButton\').onclick'),viewReset,reset,
   ].join('\n'),context);
   const assertViewOnly=()=>{
@@ -156,18 +156,16 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   const [id,callback]=pending.entries().next().value;pending.delete(id);callback(300);
   assert.equal(pending.size,1,'Replay tick must retain only one next rAF');assert.equal(state.selected,1);
   vm.runInContext('stopReplay();',context);state.mode='running';state.selected=3;state.followLive=true;
-  state.scenario.wire=Array.from({length:5},()=>({}));
-  context.fieldWorker={request:()=>new Promise(resolve=>{releaseField=resolve;})};context.evalWorker={request:async()=>({evaluation:{}})};
+  state.scenario.wire=Array.from({length:5},()=>({}));state.busy=true;
   const predictedCandidates=[{id:'1:h',center:[10,20],status:'pending'}];
-  context.psptWorker={request:async message=>{assert.deepEqual(Object.keys(message).sort(),['snapshot','type']);assert.equal(message.snapshot,state.scenario.wire[state.next]);return {methods:{guarded:{candidates:predictedCandidates,ms:2},baseline:{candidates:[],ms:1}}};}};
-  const inFlight=context.advance();assert.equal(state.busy,true);
   const beforeFit=fitCalls;assertViewOnly();assert.equal(state.selected,3);assert.equal(state.mode,'running');assert.equal(state.followLive,true);
   assert.equal(state.frames.length,3,'View reset must preserve completed records');assert.equal(fitCalls-beforeFit,4);assert.equal(pending.size,0);
-  releaseField({type:'frame',requestId:1,t:4,Q:4,admitted:4,rejected:0,ms:1});await inFlight;
-  assert.equal(state.frames.length,4,'An in-flight completed result must be retained');
-  assert.equal(state.frames.at(-1).candidates,predictedCandidates);assert.equal(state.frames.at(-1).psptMs,2);assert.equal(state.frames.at(-1).method,'guarded-tuned');assert.equal(state.selected,4,'Live following must continue after a view reset');
+  const frame={t:4,Q:4,admitted:4,rejected:0,ms:1,candidates:predictedCandidates,psptMs:2,method:'guarded-tuned'};
+  await context.receiveRunMessage({type:'frame',requestId:state.generation,frame,evaluation:{},next:4},state.generation);
+  assert.equal(state.frames.length,4,'Worker results arriving after view reset must be retained');
+  assert.equal(state.frames.at(-1),frame);assert.equal(state.selected,4,'Live following must continue after a view reset');
   assert.equal(state.mode,'running');assert.equal(state.followLive,true);
-  assert.equal(state.busy,true,'Dispatch the next snapshot without waiting for a repaint');assert.equal(pending.size,0);
+  assert.equal(state.busy,true,'Run remains busy until the worker confirms a pause or completion');assert.equal(pending.size,0);
   state.workers=[{stop(){stoppedWorkers++;}}];
   $('inspector').textContent='old D/A/Q';$('diagnosticSummary').textContent='old Theorem 2';
   vm.runInContext("$('resetButton').onclick();",context);
@@ -181,45 +179,58 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   assert.match($('inspector').textContent,/Hover/);assert.ok(!$('inspector').textContent.includes('old D/A/Q'));
   assert.equal(charts.get('diagnosticChart').length,0);assert.equal(charts.get('profileChart').length,0);
   assert.equal(charts.get('countChart')[0].length,0);assert.equal(charts.get('countChart')[1].length,0);
-  assert.equal(context.fieldWorker,null);assert.equal(context.evalWorker,null);assert.equal(context.hoverWorker,null);assert.equal(context.psptWorker,null);
+  assert.equal(context.runWorker,null);assert.equal(context.evalWorker,null);assert.equal(context.hoverWorker,null);
 });
 
-test('background computation completes in causal order without animation frames; pause and step remain explicit',async()=>{
-  for (const pauseAt of [0,5]) {
-    const total=120,nodes=new Map(),calls=[],errors=[];
-    const $=id=>{if (!nodes.has(id)) nodes.set(id,{dataset:{}});return nodes.get(id);};
-    const state={generation:1,busy:false,mode:'running',scenario:{wire:Array.from({length:total},(_,i)=>({t:i+1,configs:[]})),input:{snapshots:total}},
-      next:0,frames:[],evaluations:[],selected:0,followLive:true};
-    const context=vm.createContext({state,$,controls(){},renderSelected(){},notice(){},
-      fieldWorker:{request:async({snapshot})=>{calls.push(['field',snapshot.t]);return {t:snapshot.t,Dbar:[],betaHat:[]};}},
-      psptWorker:{request:async message=>{
-        assert.deepEqual(Object.keys(message).sort(),['snapshot','type'],'Only the current measured snapshot reaches the estimator');
-        assert.equal(message.snapshot.t,state.evaluations.length+1,'Evaluate each prefix before dispatching the next');
-        calls.push(['methods',message.snapshot.t]);
-        if (message.snapshot.t===pauseAt) state.mode='paused';
-        return {methods:{guarded:{candidates:[],ms:1},baseline:{candidates:[],ms:1}}};
-      }},
-      evalWorker:{request:async({frame})=>{calls.push(['evaluate',frame.t]);return {evaluation:{t:frame.t}};}},
-      hashField:async()=> 'completed-hash',requestAnimationFrame:()=>{throw new Error('No repaint callbacks in a hidden tab');},
-      fail:error=>errors.push(error),
-    });
-    vm.runInContext(section('async function advance(','async function hashField('),context);
-    const settle=async()=>{for (let i=0;i<total*10;i++) await Promise.resolve();assert.deepEqual(errors,[]);};
-    await context.advance();await settle();
-    if (pauseAt) {
-      assert.equal(state.frames.length,pauseAt,'Pause retains the in-flight snapshot and stops further dispatch');
-      assert.equal(state.busy,false);assert.equal(state.mode,'paused');
-      await context.advance();await settle();assert.equal(state.frames.length,pauseAt,'Hidden tabs do not implicitly resume a paused run');
-      await context.advance(true);await settle();
-      assert.equal(state.frames.length,pauseAt+1,'Single step computes exactly one snapshot');assert.equal(state.mode,'paused');
-      state.followLive=false;state.selected=2;state.mode='running';await context.advance();await settle();
-    }
-    assert.equal(state.mode,'done');assert.equal(state.busy,false);assert.equal(state.frames.length,total);
-    assert.equal(state.selected,pauseAt ? 2 : total,'Preserve a manually selected snapshot while computing in the background');
-    assert.equal($('mapCanvas').dataset.fieldHash,'completed-hash');
-    assert.deepEqual(calls,Array.from({length:total},(_,i)=>[['field',i+1],['methods',i+1],['evaluate',i+1]]).flat());
-    assert.deepEqual(state.evaluations.map(e=>e.t),Array.from({length:total},(_,i)=>i+1));
+function runUiContext(total=120) {
+  const nodes=new Map(),posted=[],drawn=[],errors=[];
+  const $=id=>{if (!nodes.has(id)) nodes.set(id,{dataset:{}});return nodes.get(id);};
+  const snapshotInput={value:String(total)},elements=[];elements.namedItem=()=>snapshotInput;$('sweepSettings').elements=[];
+  const state={generation:1,busy:true,mode:'running',scenario:{input:{snapshots:total}},
+    next:0,frames:[],evaluations:[],selected:0,followLive:true,sweepRuns:[],valid:true};
+  const context=vm.createContext({state,$,form:{elements},document:{body:{dataset:{}}},DEFAULT_INPUT,
+    runWorker:{postMessage:message=>posted.push({...message})},
+    renderSelected:()=>drawn.push(state.selected),notice:text=>{$('status').textContent=text;},
+    hashField:async()=> 'completed-hash',requestAnimationFrame:()=>assert.fail('UI receipt must not depend on a repaint'),
+    fail:error=>errors.push(error),makeWorker:()=>assert.fail('Only prepared messages create inspection workers'),
+  });
+  vm.runInContext(section('function controls()','function cancel(')+section('async function receiveRunMessage(','async function hashField('),context);
+  return {context,state,$,posted,drawn,errors};
+}
+
+test('UI receives every background result without requesting or acknowledging any next snapshot',async()=>{
+  const {context,state,$,posted,errors}=runUiContext();
+  const frames=Array.from({length:120},(_,i)=>({t:i+1}));
+  for (const [i,frame] of frames.entries()) {
+    if (i===5) {state.selected=2;state.followLive=false;}
+    await context.receiveRunMessage({type:'frame',requestId:1,frame,evaluation:{t:frame.t},next:i+1},1);
   }
+  await context.receiveRunMessage({type:'status',requestId:1,mode:'done',next:120,total:120},1);
+  assert.deepEqual(errors,[]);assert.deepEqual(posted,[],'Rendering is never an acknowledgement required by the worker');
+  assert.deepEqual(state.frames,frames);assert.deepEqual(state.evaluations.map(e=>e.t),frames.map(f=>f.t));
+  assert.equal(state.selected,2,'A manual selection survives background results');
+  assert.equal(state.mode,'done');assert.equal(state.busy,false);assert.equal($('runProgress').value,120);
+  assert.equal($('mapCanvas').dataset.fieldHash,'completed-hash');assert.match($('status').textContent,/Complete · 120/);
+});
+
+test('Pause, Step and Resume send explicit commands and wait for worker status before enabling another step',async()=>{
+  const {context,state,$,posted,errors}=runUiContext(4);
+  context.commandRun('pause');
+  assert.equal(state.mode,'paused');assert.equal(state.busy,true);assert.equal($('stepButton').disabled,true);
+  context.commandRun('step');assert.equal(posted.length,1,'A pause request does not mean the worker has stopped yet');
+  await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:1},evaluation:{},next:1},1);
+  assert.equal(state.mode,'paused');assert.equal(state.busy,true);assert.equal(state.frames.length,1,'Keep the snapshot already in flight');
+  await context.receiveRunMessage({type:'status',requestId:1,mode:'paused',next:1,total:4},1);
+  assert.equal(state.busy,false);assert.equal($('stepButton').disabled,false);
+  state.followLive=false;context.commandRun('step');context.commandRun('step');
+  assert.equal(posted.length,2,'A second click cannot queue a duplicate single step');assert.equal(state.followLive,true);
+  await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:2},evaluation:{},next:2},1);
+  await context.receiveRunMessage({type:'status',requestId:1,mode:'paused',next:2,total:4},1);
+  assert.equal(state.frames.length,2);assert.equal(state.busy,false);assert.equal(state.mode,'paused');
+  context.commandRun('resume');
+  assert.equal(state.mode,'running');assert.equal(state.busy,true);assert.equal($('stepButton').disabled,true);
+  assert.deepEqual(posted,[{type:'pause',requestId:1},{type:'step',requestId:1},{type:'resume',requestId:1}]);
+  assert.deepEqual(errors,[]);
 });
 
 test('hidden charts defer rendering and visibility return refreshes the current selection without advancing',()=>{
@@ -236,27 +247,40 @@ test('hidden charts defer rendering and visibility return refreshes the current 
   assert.deepEqual(drawn,[17]);assert.equal(state.mode,'paused');
 });
 
-test('cancellation ignores late PSPT or evaluator responses without retaining a partial snapshot',async()=>{
-  for (const delayed of ['pspt','evaluation']) {
-    let release,waiting=false,evaluationCalls=0,scheduled=0;
-    const wire={t:1,configs:[]},state={generation:1,busy:false,mode:'running',scenario:{wire:[wire],input:{snapshots:1}},next:0,
-      frames:[],evaluations:[],selected:0,followLive:true};
-    const pause=()=>new Promise(resolve=>{release=resolve;waiting=true;});
-    const context=vm.createContext({state,controls(){},renderSelected(){},notice(){},$:()=>({}),
-      fieldWorker:{request:async message=>{assert.equal(message.snapshot,wire);return {type:'frame',requestId:1,t:1,Dbar:[],betaHat:[]};}},
-      psptWorker:{request:async message=>{assert.deepEqual(Object.keys(message).sort(),['snapshot','type']);return delayed==='pspt' ? pause() : {methods:{guarded:{candidates:[],ms:1},baseline:{candidates:[],ms:1}}};}},
-      evalWorker:{request:async()=>{evaluationCalls++;return pause();}},
-      requestAnimationFrame:()=>{scheduled++;},fail:error=>{throw error;},
-    });
-    vm.runInContext(section('async function advance(','async function hashField('),context);
-    const run=context.advance();
-    for (let k=0;k<10&&!waiting;k++) await Promise.resolve();
-    assert.ok(waiting,'Reach the requested worker response boundary');
-    state.generation++;state.mode='cancelled';state.busy=false;
-    release(delayed==='pspt' ? {candidates:[{id:'late',status:'supported'}],psptMs:1} : {evaluation:{precision:1}});
-    await run;
-    assert.equal(evaluationCalls,delayed==='pspt' ? 0 : 1);
-    assert.deepEqual(state.frames,[]);assert.deepEqual(state.evaluations,[]);
-    assert.equal(state.next,0);assert.equal(state.selected,0);assert.equal(state.mode,'cancelled');assert.equal(scheduled,0);
+test('stale worker notifications cannot change a cancelled or replacement run',async()=>{
+  const {context,state,$,posted,errors}=runUiContext();
+  const original={...state};state.generation=2;state.mode='cancelled';state.busy=false;
+  for (const data of [
+    {type:'progress',t:70,total:120},
+    {type:'prepared',scenario:{input:{snapshots:120}},grid:{}},
+    {type:'frame',frame:{t:1},evaluation:{},next:1},
+    {type:'status',mode:'done',next:120,total:120},
+    {type:'error',message:'Late worker error'},
+  ]) {
+    await context.receiveRunMessage({...data,requestId:1},1);
+    await context.receiveRunMessage({...data,requestId:1},2);
   }
+  assert.deepEqual(errors,[]);assert.deepEqual(posted,[]);
+  assert.equal(state.frames,original.frames);assert.equal(state.evaluations,original.evaluations);assert.equal(state.scenario,original.scenario);
+  assert.equal(state.frames.length,0);assert.equal(state.next,0);assert.equal(state.selected,0);assert.equal(state.mode,'cancelled');
+  assert.equal($('mapCanvas').dataset.fieldHash,undefined);
+});
+
+test('cancellation during result hashing cannot overwrite the next run completion state',async()=>{
+  const {context,state,$,errors}=runUiContext(1);let release;
+  state.frames=[{t:1}];state.next=1;
+  context.hashField=()=>new Promise(resolve=>{release=resolve;});
+  const done=context.receiveRunMessage({type:'status',requestId:1,mode:'done',next:1,total:1},1);
+  assert.equal(state.mode,'done');assert.equal(typeof release,'function');
+  state.generation++;state.mode='running';$('status').textContent='New run';
+  release('old-result-hash');await done;
+  assert.equal($('mapCanvas').dataset.fieldHash,undefined);assert.equal($('status').textContent,'New run');
+  assert.equal(state.mode,'running');assert.deepEqual(errors,[]);
+});
+
+test('out-of-order results fail explicitly rather than mislabelling the measured prefix',async()=>{
+  const {context,state,errors}=runUiContext();
+  await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:2},evaluation:{},next:2},1);
+  assert.equal(errors.length,1);assert.match(errors[0].message,/Out-of-order/);
+  assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.next,0);
 });

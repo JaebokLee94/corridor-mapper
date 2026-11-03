@@ -48,7 +48,7 @@ test('offline bundle is current and its classic Blob workers preserve the field'
   assert.deepEqual(JSON.parse(JSON.stringify(runtime.metadata)),
     ['drf/provenance.json', 'drf/reference/octave/fixtures.json'].map(path => JSON.parse(read(path))));
   assert.throws(() => runtime.worker('unknown'), /Unknown DRF worker/);
-  for (const name of ['scenario', 'field', 'eval', 'sweep', 'pspt', 'compare']) {
+  for (const name of ['scenario', 'field', 'eval', 'sweep', 'pspt', 'compare', 'run']) {
     const worker = runtime.worker(name);
     assert.equal(worker.options, undefined, 'Blob workers must use the classic script transport');
     assert.equal(runtime.worker(name).url, worker.url, 'Each worker type reuses one Blob URL');
@@ -56,7 +56,7 @@ test('offline bundle is current and its classic Blob workers preserve the field'
     assert.ok(!source.includes('import.meta'), `${name}: no module metadata dependency`);
     assert.doesNotThrow(() => new vm.Script(source), `${name}: parses as a classic script`);
   }
-  assert.equal(blobs.size, 6);
+  assert.equal(blobs.size, 7);
   const messages = [], workerContext = vm.createContext({ performance, postMessage: data => messages.push(data) });
   workerContext.self = workerContext;
   vm.runInContext(await blobs.get(runtime.worker('field').url).text(), workerContext);

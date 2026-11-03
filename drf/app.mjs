@@ -1,5 +1,4 @@
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261103-defaults1';
-import { createGrid } from './field.mjs';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
@@ -10,7 +9,7 @@ import { download, png300dpi } from '../surf/exports.mjs';
 const $ = id => document.getElementById(id), form = $('settings');
 const state = { mode: 'idle', scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0,
   busy: false, replay: false, replayAt: 0, generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
-let fieldWorker, evalWorker, hoverWorker, psptWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
+let runWorker, evalWorker, hoverWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
 $('thresholdSummary').textContent = `Tuning 200 · PSPT ${METHOD_PROTOCOL.guarded.threshold.toFixed(4)} · B ${METHOD_PROTOCOL.baseline.threshold.toFixed(4)}`;
 $('thresholdDetails').textContent = `Fixed tuning log-score thresholds: PSPT ${METHOD_PROTOCOL.guarded.threshold}; B ${METHOD_PROTOCOL.baseline.threshold}. They replace the earlier dev values ${METHOD_PROTOCOL.guarded.previousDevThreshold} and ${METHOD_PROTOCOL.baseline.previousDevThreshold}.`;
 const fmt = (v, places = 3) => typeof v !== 'number' ? '—' : Number.isFinite(v) ? v.toFixed(places) : v === Infinity ? 'Failed (∞)' : v === -Infinity ? 'Failed (−∞)' : 'Failed (NaN)';
@@ -28,8 +27,11 @@ function settings() {
   const values = Object.fromEntries(new FormData(form)); values.specular = form.elements.namedItem('specular').checked;
   return normalizeInput(values);
 }
+function createWorker(name) {
+  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261103-background2`, import.meta.url), { type: 'module' });
+}
 function makeWorker(name, onProgress = () => {}) {
-  const worker = globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261103-defaults1`, import.meta.url), { type: 'module' }), pending = new Map(); let id = 0, stopped = false;
+  const worker = createWorker(name), pending = new Map(); let id = 0, stopped = false;
   worker.onmessage = ({ data }) => {
     if (data.type === 'progress') { onProgress(data); return; }
     const request = pending.get(data.requestId); if (!request) return;
@@ -66,7 +68,7 @@ function controls() {
 function cancel(clear = false) {
   state.generation++; hoverGeneration++; clearTimeout(hoverTimer); stopReplay();
   for (const worker of state.workers) worker.stop(); state.workers = [];
-  fieldWorker = null; evalWorker = null; hoverWorker = null; psptWorker = null;
+  runWorker = null; evalWorker = null; hoverWorker = null;
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
     state.pendingInput = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
@@ -83,57 +85,67 @@ function cancel(clear = false) {
 async function prepare(single = false) {
   try {
     const input = settings();
-    cancel(true); state.pendingInput=input; state.mode = 'running'; const generation = state.generation; controls();
+    cancel(true); state.pendingInput=input; state.mode = 'running'; state.busy = true;
+    const generation = state.generation; controls();
     location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`;
     notice('Generating wall geometry and measurements.');
-    const scenarioWorker = makeWorker('scenario', ({ t, total }) => { if (generation === state.generation) notice(`Generating measurements ${t} / ${total}`); });
-    const { scenario } = await scenarioWorker.request({ type: 'generate', input });
-    if (generation !== state.generation) return;
-    scenarioWorker.stop(); state.scenario = scenario; state.grid = createGrid(input.grid, input.grid, scenario.domain); state.valid = true;
-    fieldWorker = makeWorker('field'); evalWorker = makeWorker('eval'); hoverWorker = makeWorker('field'); psptWorker = makeWorker('compare');
-    await Promise.all([
-      fieldWorker.request({ type: 'init', grid: state.grid, numerical: { band: input.band, perimeter: input.perimeter } }),
-      psptWorker.request({ type: 'init', sigmaR: input.sigmaD }),
-      evalWorker.request({ type: 'init', scenario, grid: state.grid }),
-    ]);
-    if (generation !== state.generation) return;
-    if (single) { state.mode = 'paused'; await advance(true); } else advance();
+    const worker = createWorker('run'); runWorker = worker;
+    state.workers.push({ stop: () => worker.terminate() });
+    worker.onmessage = ({ data }) => { void receiveRunMessage(data, generation); };
+    worker.onerror = event => { if (generation === state.generation) fail(new Error(event.message || 'Could not load the simulation worker. Reload and run again.')); };
+    worker.postMessage({ type: 'start', requestId: generation, input, single });
   } catch (error) { fail(error); }
 }
 function fail(error) {
   if (error.message === 'Cancelled') return;
   cancel(false); state.valid = false; controls(); notice(`Run stopped: ${error.message}`);
 }
-async function advance(single = false) {
-  if (state.busy || !state.scenario || (state.mode !== 'running' && !single)) return;
-  const generation = state.generation; state.busy = true; controls();
+// The worker owns the entire run. These notifications never request or acknowledge
+// the next snapshot, so delaying the page cannot leave the calculation waiting.
+async function receiveRunMessage(data, generation) {
+  if (generation !== state.generation || data.requestId !== generation) return;
   try {
-    const wire = state.scenario.wire[state.next];
-    const [data, prediction] = await Promise.all([
-      fieldWorker.request({ type: 'step', snapshot: wire }),
-      psptWorker.request({ type: 'step', snapshot: wire }),
-    ]);
-    if (generation !== state.generation) return;
-    const { type, requestId, ...frame } = data;
-    frame.methods = prediction.methods; frame.candidates = prediction.methods.guarded.candidates;
-    frame.psptMs = prediction.methods.guarded.ms; frame.method = 'guarded-tuned';
-    const { evaluation } = await evalWorker.request({ type: 'evaluate', frame });
-    if (generation !== state.generation) return;
-    state.frames.push(frame); state.evaluations.push(evaluation); state.next++;
-    if (state.followLive || !state.selected) state.selected = state.frames.length;
-    $('timeSlider').value = state.selected; state.busy = false;
-    renderSelected(); notice(`Comparing methods ${frame.t} / ${state.scenario.input.snapshots}`);
-    if (state.next === state.scenario.wire.length) {
-      state.mode = 'done'; controls(); const hash = await hashField(frame);
-      if (generation !== state.generation) return;
-      $('mapCanvas').dataset.fieldHash = hash;
-      notice(`Complete · ${state.frames.length} snapshots · both methods evaluated`);
-    } else if (single) state.mode = 'paused';
-    controls();
-    // Worker replies yield to the event loop. Computation must not wait for a
-    // repaint: browsers suspend requestAnimationFrame in background tabs.
-    if (state.mode === 'running') void advance();
-  } catch (error) { state.busy = false; fail(error); }
+    if (data.type === 'error') throw new Error(data.message);
+    if (data.type === 'progress') { notice(`Generating measurements ${data.t} / ${data.total}`); return; }
+    if (data.type === 'prepared') {
+      state.scenario = data.scenario; state.grid = data.grid; state.valid = true;
+      // Inspection is separate from the run and cannot hold up its progress.
+      hoverWorker = makeWorker('field'); evalWorker = makeWorker('eval');
+      void evalWorker.request({ type: 'init', scenario: data.scenario, grid: data.grid }).catch(error => {
+        if (generation === state.generation && error.message !== 'Cancelled') notice(error.message);
+      });
+      controls(); return;
+    }
+    if (data.type === 'frame') {
+      if (data.next !== state.next + 1) throw new Error('Out-of-order simulation result');
+      state.frames.push(data.frame); state.evaluations.push(data.evaluation); state.next = data.next;
+      if (state.followLive || !state.selected) state.selected = state.frames.length;
+      renderSelected(); controls();
+      notice(`Comparing methods ${data.frame.t} / ${state.scenario.input.snapshots}`);
+      return;
+    }
+    if (data.type === 'status') {
+      state.mode = data.mode; state.busy = data.mode === 'running'; controls();
+      if (data.mode === 'paused') notice('Paused after the current snapshot.');
+      if (data.mode === 'done') {
+        const hash = await hashField(state.frames.at(-1));
+        if (generation !== state.generation) return;
+        $('mapCanvas').dataset.fieldHash = hash;
+        notice(`Complete · ${state.frames.length} snapshots · both methods evaluated`);
+        renderSelected();
+      }
+    }
+  } catch (error) { if (generation === state.generation) fail(error); }
+}
+function commandRun(type) {
+  if (!runWorker || !state.scenario || !['running', 'paused'].includes(state.mode)) return;
+  if (type === 'step' && (state.mode !== 'paused' || state.busy)) return;
+  if (type === 'resume') { state.mode = 'running'; state.followLive = true; }
+  if (type === 'pause') state.mode = 'paused';
+  if (type === 'step') state.followLive = true;
+  state.busy = true; controls();
+  runWorker.postMessage({ type, requestId: state.generation });
+  notice(type === 'pause' ? 'Pausing after the current snapshot.' : 'Computing the next snapshot.');
 }
 async function hashField(frame) {
   const bytes = new Uint8Array(frame.Dbar.byteLength + frame.betaHat.byteLength);
@@ -258,8 +270,8 @@ function resetView() {
   for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
 }
 $('runButton').onclick = () => prepare();
-$('pauseButton').onclick = () => { state.mode = state.mode === 'paused' ? 'running' : 'paused'; controls(); if (state.mode === 'running') { state.followLive = true; advance(); } else notice('Paused after the current snapshot.'); };
-$('stepButton').onclick = () => { state.followLive = true; state.mode === 'paused' ? advance(true) : prepare(true); };
+$('pauseButton').onclick = () => commandRun(state.mode === 'paused' ? 'resume' : 'pause');
+$('stepButton').onclick = () => { state.mode === 'paused' ? commandRun('step') : prepare(true); };
 $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
 $('resetButton').onclick = () => { state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(DEFAULT_INPUT); renderSelected(); location.hash = ''; renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.'); };

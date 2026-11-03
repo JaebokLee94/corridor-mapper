@@ -27,7 +27,7 @@ const options = {
     });
   } }],
 };
-const names = ['scenario', 'field', 'eval', 'sweep', 'pspt', 'compare'];
+const names = ['scenario', 'field', 'eval', 'sweep', 'pspt', 'compare', 'run'];
 const bundles = await Promise.all([...names.map(name => `drf/${name}.worker.mjs`), 'drf/app.mjs']
   .map(entry => build({ ...options, entryPoints: [entry] })));
 const sources = Object.fromEntries(names.map((name, i) => [name, bundles[i].outputFiles[0].text]));
