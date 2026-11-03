@@ -6,6 +6,10 @@
   <meta name="theme-color" content="#f4f6f8" />
   <meta name="description" content="A reproducible research workbench for range-only wall mapping. Compare guarded PSPT and fixed-fragment Gaussian evidence on identical causal measurements." />
   <title>EchoMap · Range-only wall mapping | Hanyang WSL</title>
+  <link rel="icon" href="favicon.ico?v=20261103" sizes="16x16 32x32 48x48" />
+  <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
+  <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
+  <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
   <link rel="stylesheet" href="drf/style.css?v=20261022-audit3" />
 </head>
 <body>
@@ -35,7 +39,7 @@
           <div class="prop-grid">
             <label class="field span-2"><span>Wall configuration</span><select name="wallSide"><option value="both">Both walls</option><option value="upper">Upper only</option><option value="lower">Lower only</option></select></label>
             <label class="field span-2"><span>Random seed</span><span class="seed-row"><input name="seed" type="number" min="0" max="4294967295" step="1" value="1" required /><button id="newSeed" type="button" title="Generate a new seed and clear results">New seed</button></span></label>
-            <label class="field"><span>Vehicles</span><input name="vehicles" type="number" min="2" max="20" step="1" value="3" required /></label>
+            <label class="field"><span>Vehicles</span><input name="vehicles" type="number" min="2" max="20" step="1" value="10" required /></label>
             <label class="field"><span>Snapshots</span><input name="snapshots" type="number" min="1" max="120" step="1" value="120" required /></label>
             <label class="field"><span>Position σ<sub>p</sub> <small>m</small></span><input name="sigmaP" type="number" min="0" max="2" step="0.01" value="0.1" required /></label>
             <label class="field"><span>Range σ<sub>d</sub> <small>m</small></span><input name="sigmaD" type="number" min="0.01" max="2" step="0.01" value="0.1" required /></label>
@@ -142,8 +146,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261022-independent2';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261022-independent2';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261103-defaults1';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261103-defaults1';}
     runtime.onerror=()=>{document.getElementById('status').textContent='Could not load the application. Reload the page or check the local files.';};
     document.body.append(runtime);
   </script>

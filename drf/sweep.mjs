@@ -1,8 +1,8 @@
-import { generateScenario, normalizeInput } from './scenario.mjs?v=20261022-independent2';
+import { generateScenario, normalizeInput } from './scenario.mjs?v=20261103-defaults1';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261022-independent2';
-import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261022-independent2';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261103-defaults1';
+import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
 
 function summarize(frame, evaluation) {
   const keys = ['precision', 'surfacePrecision', 'recall', 'holdRate', 'firstSupportPrecision',
@@ -94,7 +94,7 @@ export function startSweep(jobs, onProgress, workerCount = Math.min(4, Math.max(
   }
   const count = Math.min(jobs.length, workerCount);
   for (let k = 0; k < count; k++) {
-    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261022-independent2', import.meta.url), { type: 'module' }); workers.push(worker);
+    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261103-defaults1', import.meta.url), { type: 'module' }); workers.push(worker);
     worker.onmessage = ({ data }) => {
       if (cancelled || settled) return;
       if (data.type === 'error') { settled = true; stop(); fail(new Error(data.message)); return; }

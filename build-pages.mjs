@@ -4,6 +4,7 @@ import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 const root = new URL('./', import.meta.url), output = new URL('_site/', root);
 const files = [
   'drf.html', 'wall_metrics.js', 'surf/map.mjs', 'surf/exports.mjs',
+  'favicon.ico', 'assets/echomap-icon.svg', 'assets/echomap-icon-32.png', 'assets/echomap-touch-icon.png',
   ...[
     'app.mjs', 'baseline.mjs', 'comparison.mjs', 'compare.worker.mjs', 'diffuse.mjs', 'eval.worker.mjs', 'statistics.mjs', 'reflection-diagnostics.mjs', 'field.mjs',
     'field.worker.mjs', 'pspt.worker.mjs', 'pspt.mjs', 'pspt-math.mjs', 'pspt-ridges.mjs', 'pspt-evaluate.mjs', 'offline.bundle.js', 'poly.mjs', 'provenance.json',

@@ -70,7 +70,7 @@ The current operating points come from **exploratory tuning on 200 synthetic sce
 
 These are archived Python tuning aggregates, **not a fresh benchmark of the current browser release**. They used 3 vehicles, position SD 0 m, range SD 0.1 m, 120 snapshots and the earlier trajectory. Neither method simultaneously met the empirical FP ≤ 1% and recall ≥ 60% targets; neither has an LTT-certified error bound. B's low coverage at this threshold is part of the result.
 
-The original 54-scene set was initially used for evaluation and later reused for development. Its old results must not be advertised as held-out evidence for the current method. It used 3 vehicles and position SD 0.1 m. Those two settings match the current **unshared defaults**, but do not describe the 10-vehicle example above, the 200-scene tuning distribution, or all current generator settings.
+The original 54-scene set was initially used for evaluation and later reused for development. Its old results must not be advertised as held-out evidence for the current method. It used 3 vehicles and position SD 0.1 m. The current unshared defaults use 10 vehicles, so the fleet size differs; the 200-scene tuning distribution and current generator settings also differ.
 
 [Read the complete protocol and distribution differences](THRESHOLD_PROTOCOL.md) · [Inspect the tuning record and source hashes](validation/threshold-tuning-20261020.json) · [Read the historical study](PSPT_VALIDATION.md)
 
@@ -92,7 +92,7 @@ D̄ is the mean residual density in m⁻². β̂ is a dimensionless field-contra
 3. Open **Experiments, diagnostics & exports** for paired sweeps and post-hoc scattering diagnostics.
 4. Choose **Share experiment** to copy a seeded settings URL, or download JSON/CSV to retain results.
 
-Shared URLs preserve their seed and snapshot count on reload. An unseeded visit chooses a new seed. A URL shares settings, not computed outputs or an immutable software revision; retain the JSON and repository commit for a research record.
+New visits and Reset use **10 vehicles and 120 snapshots**. Shared URLs preserve their explicit settings, including seed, fleet size and snapshot count, on reload. An unseeded visit chooses a new seed. A URL shares settings, not computed outputs or an immutable software revision; retain the JSON and repository commit for a research record.
 
 In **Both walls**, the upper and lower boundaries have independent large-scale curves and small-scale perturbations. A constant vertical shift, applied only when needed, keeps their minimum vertical separation above 6 m without bending or clipping either curve. The route follows the midpoint of the finished walls with its full ±2 m lateral oscillation. The 6 m gap covers this 4 m motion envelope plus 1 m vertical truth-pose clearance on each side, for all supported vehicles and phases. Single-wall modes retain their earlier generator.
 
