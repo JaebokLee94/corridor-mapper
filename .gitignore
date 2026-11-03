@@ -3,4 +3,3 @@ __pycache__/
 *.pyc
 .dev-qa/
 _site/
-remote-results/

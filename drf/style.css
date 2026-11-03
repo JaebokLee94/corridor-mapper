@@ -61,12 +61,9 @@ math { font-family:var(--font-math); }
 .workspace { display:grid; grid-template-columns:var(--sidebar) minmax(0,1fr); }
 .sidebar { min-width:0; align-self:start; position:sticky; top:0; max-height:100dvh; overflow:auto; overscroll-behavior-y:contain; background:var(--color-surface-1); border-right:1px solid var(--color-line); scrollbar-width:thin; }
 .run-section { padding:20px; position:relative; }
-.load-result { width:100%; margin-top:8px; }
-.remote-provenance { margin-top:8px; font-size:12px; overflow-wrap:anywhere; }
-.sidebar-title { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:10px; margin-bottom:12px; }
+.sidebar-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
 .sidebar-title h2 { font-size:18px; }
-#executionMode { font-size:13px; }
-.run-actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
+.run-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
 .run-button { grid-column:1/-1; min-height:42px; }
 .run-actions button:not(.run-button) { padding:7px 4px; }
 .status { margin-top:12px; min-height:3em; color:var(--color-ink-muted); overflow-wrap:anywhere; }
@@ -209,18 +206,6 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .equation { padding:20px; background:var(--color-surface-2); margin:16px 0; font-size:20px; }
 #shareDialog { max-width:620px; }
 #shareDialog .field { margin-top:18px; }
-#remoteDialog { width:min(700px,calc(100vw - 32px)); }
-.remote-summary { padding:10px 14px; border-radius:5px; background:var(--color-surface-3); color:var(--color-accent); }
-.remote-steps { padding-left:25px; margin:20px 0; }
-.remote-steps li { padding-left:8px; margin:0 0 24px; }
-.remote-steps li::marker { font-weight:650; color:var(--color-accent); }
-.remote-steps h3 { font-size:16px; margin:0; }
-.remote-steps p { font-size:14px; margin:6px 0 12px; }
-.remote-steps .field { margin-bottom:10px; }
-#remoteRequest { width:100%; min-height:90px; resize:vertical; padding:10px; border:1px solid var(--color-line); border-radius:5px; color:var(--color-ink); background:var(--color-surface-2); font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
-#remoteRequest:focus-visible { outline:3px solid var(--color-focus); outline-offset:3px; }
-.button-link { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 12px; border:1px solid var(--color-line); border-radius:var(--radius); text-decoration:none; font-weight:600; }
-.remote-status { padding-top:12px; border-top:1px solid var(--color-line); font-size:14px; color:var(--color-ink-muted); }
 .noscript { padding:20px; background:var(--color-surface-1); }
 @media(min-width:1750px) { .main-grid { grid-template-columns:minmax(0,1fr) 360px; } .results-panel { padding:20px 24px; } }
 @media(max-width:1280px) {
@@ -264,6 +249,9 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .workspace { display:flex; flex-direction:column; }
   .sidebar { width:100%; position:static; max-height:none; overflow:visible; border-right:0; border-bottom:1px solid var(--color-line); }
   .run-section { padding:14px 16px 12px; }
+  .sidebar-title { display:none; }
+  .run-actions { display:flex; gap:6px; }
+  .run-button { flex:1; }
   .run-actions button:not(.run-button) { min-width:54px; padding:6px; }
   .status { min-height:0; margin-top:10px; }
   .settings-summary { display:flex; padding:8px 16px 14px; }

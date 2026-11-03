@@ -3,7 +3,6 @@ import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261103-defaults1';
-import { normalizeRemoteRequest, remoteJobs, parseRemoteResult } from './remote-format.mjs?v=20261103-actions1';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261103-defaults1';
 import { download, png300dpi } from '../surf/exports.mjs';
 
@@ -48,17 +47,14 @@ function makeWorker(name, onProgress = () => {}) {
 }
 function stopReplay() { cancelAnimationFrame(replayFrame); replayFrame = 0; state.replay = false; $('replayButton').textContent = 'Replay'; }
 function controls() {
-  const active = ['running', 'paused'].includes(state.mode), sweeping = !!state.sweep, preparing = active && !state.scenario,
-    importing = !!state.remoteLoading, remote = $('executionMode').value === 'github';
-  $('runButton').disabled = active || sweeping || importing; $('pauseButton').disabled = !active || preparing;
+  const active = ['running', 'paused'].includes(state.mode), sweeping = !!state.sweep, preparing = active && !state.scenario;
+  $('runButton').disabled = active || sweeping; $('pauseButton').disabled = !active || preparing;
   $('pauseButton').textContent = state.mode === 'paused' ? 'Resume' : 'Pause';
-  $('stepButton').disabled = remote || importing || preparing || state.busy || state.mode === 'running' || sweeping;
-  $('stepButton').title = remote ? 'Single-step execution is available in This browser mode.' : 'Compute one snapshot';
+  $('stepButton').disabled = preparing || state.busy || state.mode === 'running' || sweeping;
   $('cancelButton').disabled = !active;
-  for (const el of form.elements) el.disabled = active || sweeping || importing;
-  for (const el of $('sweepSettings').elements) el.disabled = active || sweeping || importing;
-  $('sweepButton').disabled = active || sweeping || importing; $('sweepCancel').disabled = !sweeping;
-  for (const id of ['executionMode','loadRemoteButton','remoteImportButton','remoteFile']) $(id).disabled = active || sweeping || importing;
+  for (const el of form.elements) el.disabled = active || sweeping;
+  for (const el of $('sweepSettings').elements) el.disabled = active || sweeping;
+  $('sweepButton').disabled = active || sweeping; $('sweepCancel').disabled = !sweeping;
   $('timeSlider').max = Math.max(1, state.frames.length); $('timeSlider').value = state.selected; $('timeSlider').disabled = !state.frames.length;
   $('replayButton').disabled = !state.frames.length;
   $('runProgress').max = state.scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value || DEFAULT_INPUT.snapshots); $('runProgress').value = state.frames.length;
@@ -67,7 +63,7 @@ function controls() {
   for (const id of ['exportCsv', 'exportPng']) $(id).disabled = !state.valid || !state.frames.length;
   document.body.dataset.state = state.mode;
   $('runState').textContent = ({idle:'Ready',running:'Computing',paused:'Paused',cancelled:'Partial run',done:'Complete'})[state.mode] ?? 'Stopped';
-  $('newSeed').disabled = active || sweeping || importing;
+  $('newSeed').disabled = active || sweeping;
 }
 function cancel(clear = false) {
   state.generation++; hoverGeneration++; clearTimeout(hoverTimer); stopReplay();
@@ -77,7 +73,6 @@ function cancel(clear = false) {
   if (clear) {
     state.pendingInput = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
     state.followLive = true;
-    state.remoteProvenance = null; state.remoteComparisonProvenance = null; $('remoteProvenance').hidden = true;
     $('mapCanvas').removeAttribute('data-field-hash');
     for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
   } else if (state.frames.length && state.scenario) {
@@ -274,113 +269,7 @@ function toggleReplay() {
 function resetView() {
   for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
 }
-function openRemoteRun(mode) {
-  try {
-    const request = { schema: 'echomap-request/1', mode, input: settings() };
-    if (mode === 'sweep') {
-      const values = Object.fromEntries(new FormData($('sweepSettings')));
-      request.sweep = { noise: parseValues(values.sweepNoise), roughness: parseValues(values.sweepRoughness), seeds: parseValues(values.sweepSeeds, true) };
-    }
-    const normalized = normalizeRemoteRequest(request), jobs = remoteJobs(normalized);
-    $('remoteRequest').value = JSON.stringify(normalized);
-    $('remoteSummary').textContent = mode === 'sweep'
-      ? `${jobs.length} paired experiments · ${normalized.input.snapshots} snapshots each · fixed tuning-200 thresholds`
-      : `One paired comparison · ${normalized.input.snapshots} snapshots · seed ${normalized.input.seed}`;
-    $('remoteStatus').textContent = 'Settings prepared. No job has been submitted yet.';
-    if ($('analysisDialog').open) $('analysisDialog').close();
-    $('remoteDialog').showModal();
-  } catch (error) { notice(`Could not prepare GitHub run: ${error.message}`); }
-}
-
-// Read a bounded result stream before changing any existing experiment. The
-// decoder restores typed fields and nonfinite metrics; validation is shared with
-// the runner. A GitHub artifact is a ZIP wrapper and must be extracted first.
-async function readRemoteFile(file) {
-  if (!file || file.size > 256 * 1024 * 1024) throw new Error('Choose a result file smaller than 256 MiB.');
-  if (/\.zip$/i.test(file.name)) throw new Error('Extract the GitHub artifact ZIP, then choose result.json.gz or result.json.');
-  const prefix = new Uint8Array(await file.slice(0, 2).arrayBuffer()), compressed = prefix[0] === 0x1f && prefix[1] === 0x8b;
-  if (compressed && typeof DecompressionStream !== 'function') throw new Error('This browser cannot open gzip files. Decompress result.json.gz and load result.json.');
-  const stream = compressed ? file.stream().pipeThrough(new DecompressionStream('gzip')) : file.stream();
-  const reader = stream.getReader(), decoder = new TextDecoder(); let size = 0, text = '';
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > 512 * 1024 * 1024) throw new Error('The expanded result exceeds the 512 MiB import limit.');
-      text += decoder.decode(value, { stream: true });
-    }
-    text += decoder.decode();
-    return parseRemoteResult(text);
-  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-}
-
-function applyRemoteResult(result) {
-  if (['running', 'paused'].includes(state.mode) || state.sweep) throw new Error('Finish or cancel the browser run before loading a result.');
-  if (result.request.mode === 'comparison' && !result.comparison?.frames.length) throw new Error('This partial result has no completed snapshots to display.');
-  cancel(true); state.sweepRuns = []; fillSettings(result.request.input);
-  location.hash = `v1=${encodeURIComponent(JSON.stringify(result.request.input))}`;
-  state.remoteProvenance = result.provenance;
-  const source = result.provenance;
-  const sourceLabel = source.runId ? 'GitHub' : 'Node.js';
-  $('remoteProvenance').textContent = `${source.runId ? 'GitHub Actions · run ' + source.runId : 'Node.js'} · commit ${String(source.commit || 'unknown').slice(0, 12)}`;
-  $('remoteProvenance').hidden = false;
-  $('executionMode').value = 'github';
-  if (result.request.mode === 'comparison') {
-    state.remoteComparisonProvenance = result.provenance; state.remoteSweepProvenance = null;
-    const { scenario, grid, frames, evaluations } = result.comparison;
-    Object.assign(state, { scenario, grid, frames, evaluations, next: frames.length, selected: frames.length,
-      valid: !!frames.length, followLive: false, mode: result.status === 'complete' ? 'done' : 'cancelled' });
-    // These workers only inspect saved inputs and fields. They do not resume the
-    // server's estimators or regenerate the completed comparison.
-    hoverWorker = makeWorker('field'); evalWorker = makeWorker('eval');
-    const generation = state.generation;
-    void evalWorker.request({ type: 'init', scenario, grid }).catch(error => {
-      if (generation === state.generation && error.message !== 'Cancelled') notice(`Inspection unavailable: ${error.message}`);
-    });
-    void hashField(frames.at(-1)).then(hash => {
-      if (generation === state.generation) $('mapCanvas').dataset.fieldHash = hash;
-    }).catch(() => {});
-    notice(`Loaded ${result.status === 'complete' ? 'complete' : 'partial'} ${sourceLabel} result · ${frames.length} / ${result.request.input.snapshots} snapshots`);
-    if ($('analysisDialog').open) $('analysisDialog').close();
-  } else {
-    state.remoteSweepProvenance = result.provenance;
-    state.sweepRuns = result.sweep.runs;
-    for (const [name, values] of Object.entries({ sweepNoise: result.request.sweep.noise, sweepRoughness: result.request.sweep.roughness, sweepSeeds: result.request.sweep.seeds })) $('sweepSettings').elements.namedItem(name).value = values.join(',');
-    $('sweepStatus').textContent = `${result.status === 'complete' ? 'Complete' : 'Partial'} ${sourceLabel} result · ${result.sweep.runs.length} / ${result.sweep.total} experiments · ${result.request.input.snapshots} snapshots · paired methods`;
-    notice(`Loaded ${result.sweep.runs.length} completed ${sourceLabel} sweep experiments.`);
-    if (!$('analysisDialog').open) $('analysisDialog').showModal();
-    $('sweepTab').click();
-  }
-  controls(); renderSelected(); renderSweep();
-}
-
-async function loadRemoteFile(file) {
-  if (!file) return;
-  if (['running', 'paused'].includes(state.mode) || state.sweep || state.remoteLoading) {
-    notice('Finish or cancel the browser run before loading a result.'); return;
-  }
-  const generation = state.generation;
-  state.remoteLoading = true; controls(); $('remoteStatus').textContent = 'Reading and validating the result…';
-  try {
-    const result = await readRemoteFile(file);
-    if (generation !== state.generation) throw new Error('The experiment changed during import. Select the result again.');
-    if ($('remoteDialog').open) $('remoteDialog').close();
-    applyRemoteResult(result);
-    $('remoteStatus').textContent = 'Result loaded.';
-  } catch (error) { $('remoteStatus').textContent = `Could not load result: ${error.message}`; notice($('remoteStatus').textContent); }
-  finally { state.remoteLoading = false; $('remoteFile').value = ''; controls(); }
-}
-
-$('runButton').onclick = () => $('executionMode').value === 'github' ? openRemoteRun('comparison') : prepare();
-$('executionMode').onchange = controls;
-$('closeRemote').onclick = () => $('remoteDialog').close();
-$('remoteCopy').onclick = async () => {
-  try { await navigator.clipboard.writeText($('remoteRequest').value); $('remoteStatus').textContent = 'Copied. In GitHub, choose Run workflow, paste these settings into request, then confirm Run workflow.'; }
-  catch { $('remoteRequest').focus(); $('remoteRequest').select(); $('remoteStatus').textContent = 'Select and copy the settings, then paste them into the GitHub request field.'; }
-};
-for (const id of ['loadRemoteButton', 'remoteImportButton']) $(id).onclick = () => $('remoteFile').click();
-$('remoteFile').onchange = () => loadRemoteFile($('remoteFile').files[0]);
+$('runButton').onclick = () => prepare();
 $('pauseButton').onclick = () => commandRun(state.mode === 'paused' ? 'resume' : 'pause');
 $('stepButton').onclick = () => { state.mode === 'paused' ? commandRun('step') : prepare(true); };
 $('firstSnapshot').onclick = resetView;
@@ -393,7 +282,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) { controls(); renderSelected(); }
 });
 document.addEventListener('keydown', event => {
-  if (event.target.matches('input,select,textarea,button') || $('aboutDialog').open || $('shareDialog').open || $('analysisDialog').open || $('remoteDialog').open) return;
+  if (event.target.matches('input,select,textarea,button') || $('aboutDialog').open || $('shareDialog').open || $('analysisDialog').open) return;
   if (event.code === 'Space') { event.preventDefault(); toggleReplay(); }
   if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.frames.length) {
     event.preventDefault(); stopReplay(); state.followLive = false; state.selected = Math.max(1, Math.min(state.frames.length, state.selected + (event.key === 'ArrowRight' ? 1 : -1)));
@@ -437,12 +326,10 @@ function renderSweep() {
   }
 }
 $('sweepButton').onclick = async () => {
-  if ($('executionMode').value === 'github') { openRemoteRun('sweep'); return; }
   const generation = state.generation; let handle;
   try {
     const base = settings(), values = Object.fromEntries(new FormData($('sweepSettings'))), jobs = sweepJobs(base, parseValues(values.sweepNoise), parseValues(values.sweepRoughness), parseValues(values.sweepSeeds, true));
-    state.sweepRuns = []; state.remoteProvenance = null; state.remoteSweepProvenance = null; $('remoteProvenance').hidden = true;
-    $('sweepButton').disabled = true; $('sweepCancel').disabled = false;
+    state.sweepRuns = []; $('sweepButton').disabled = true; $('sweepCancel').disabled = false;
     $('sweepStatus').textContent = `0 / ${jobs.length} · ${base.snapshots} snapshots · Both methods use the fixed tuning-200 thresholds.`;
     handle = state.sweep = startSweep(jobs, ({ completed, total, results }) => {
       if (generation !== state.generation) return;
@@ -460,9 +347,7 @@ $('sweepButton').onclick = async () => {
 $('sweepCancel').onclick = () => state.sweep?.cancel();
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
 $('exportJson').onclick = () => {
-  const data = { schema: 'echomap-drf/5', estimators: METHOD_PROTOCOL, selectedMethod: state.method, toleranceM: 0.4, provenance,
-    execution: { comparison: state.remoteComparisonProvenance ?? { source: 'browser' }, sweep: state.remoteSweepProvenance ?? { source: 'browser' } },
-    units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
+  const data = { schema: 'echomap-drf/5', estimators: METHOD_PROTOCOL, selectedMethod: state.method, toleranceM: 0.4, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
     grid: state.grid ? { ...state.grid, arrayOrder: 'iy*nx+ix; ascending y; cell centers' } : null,
     input: state.scenario?.input ?? state.sweepRuns[0]?.input, measurement: state.scenario?.wire.slice(0, state.frames.length) ?? [], result: state.frames,
     evaluation: state.evaluations, truth: { role: 'evaluation only', wallModel: state.scenario?.wallModel, wallGeneration: state.scenario?.wallGeneration, walls: state.scenario?.walls ?? [], snapshots: state.scenario?.truth.slice(0, state.frames.length) ?? [] },
@@ -492,7 +377,6 @@ try {
   if (!hasSharedInput) initialInput={...initialInput,seed:crypto.getRandomValues(new Uint32Array(1))[0]};
 } catch (error) { notice(`Could not restore URL settings: ${error.message}`); }
 fillSettings(initialInput);
-if (location.protocol === 'file:') $('executionMode').value = 'browser';
 history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialInput))}`);
 if (matchMedia('(max-width: 760px)').matches) $('settingsDetails').open=false;
 (globalThis.__drfOffline ? Promise.resolve(globalThis.__drfOffline.metadata) : Promise.all([fetch(new URL('./provenance.json', import.meta.url)).then(r => r.json()), fetch(new URL('./reference/octave/fixtures.json', import.meta.url)).then(r => r.json())]))

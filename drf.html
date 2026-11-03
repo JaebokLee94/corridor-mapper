@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261103-actions3" />
+  <link rel="stylesheet" href="drf/style.css?v=20261022-audit3" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -27,12 +27,9 @@
   <main class="workspace" id="workspace">
     <aside class="sidebar settings-panel" aria-label="Experiment controls">
       <section class="run-section" aria-label="Run controls">
-        <div class="sidebar-title"><h2>Experiment</h2><select id="executionMode" aria-label="Execution location"><option value="github" selected>GitHub Actions</option><option value="browser">This browser</option></select></div>
-        <div class="run-actions"><button id="runButton" class="primary run-button" type="button" disabled>Run comparison</button><button id="resetButton" type="button" title="Restore defaults and clear results">Reset</button><button id="pauseButton" type="button" disabled>Pause</button><button id="stepButton" type="button" disabled>Step</button><button id="cancelButton" type="button" disabled>Cancel</button></div>
-        <button id="loadRemoteButton" class="load-result" type="button">Load GitHub result</button>
-        <input id="remoteFile" type="file" accept=".json,.gz,application/json,application/gzip" aria-label="GitHub result file" hidden />
+        <div class="sidebar-title"><h2>Experiment</h2><button id="resetButton" class="ghost" type="button" title="Restore defaults and clear results">Reset</button></div>
+        <div class="run-actions"><button id="runButton" class="primary run-button" type="button" disabled>Run comparison</button><button id="pauseButton" type="button" disabled>Pause</button><button id="stepButton" type="button" disabled>Step</button><button id="cancelButton" type="button" disabled>Cancel</button></div>
         <p id="status" class="status" role="status" aria-live="polite">Ready. Run both methods on the same measurements.</p>
-        <p id="remoteProvenance" class="note remote-provenance" hidden></p>
         <progress id="runProgress" max="120" value="0" aria-label="Computed snapshots"></progress>
       </section>
       <details id="settingsDetails" open><summary class="settings-summary">Parameters &amp; layers</summary>
@@ -145,22 +142,12 @@
     <h3>Reading the results</h3><p>Centre precision measures supported centres within 0.4 m of true walls. Observed recall measures supported-patch coverage within 0.4 m of wall samples lying within 1 m of past generated reflection points. Surface F₁ combines sampled-patch precision and observed recall. Empty precision is undefined; recall is zero when observed walls exist but the estimate is empty. These metrics differ from the whole-fragment grouped FP loss used in the previous tuning study.</p><p>Solid segments are supported patches; they are never snapped to true walls or joined across unsupported gaps. The dashed wall is evaluation truth. Held candidates express insufficient or ambiguous evidence. A supported candidate can still be wrong.</p>
     <h3>Fields and simulation</h3><div class="equation"><math display="block"><mover><mi>D</mi><mo>‾</mo></mover><mo>=</mo><mfrac><mi>D</mi><mrow><mi>max</mi><mo>(</mo><mi>Q</mi><mo>,</mo><mn>1</mn><mo>)</mo></mrow></mfrac><mo>,</mo><mspace width="1em"></mspace><mover><mi>β</mi><mo>ˆ</mo></mover><mo>=</mo><mfrac><mi>D</mi><mrow><mi>A</mi><mo>+</mo><msub><mi>ε</mi><mi>A</mi></msub></mrow></mfrac></math></div><p>β̂ is a field-contrast index, not a probability. In Both walls, each wall has its own large-scale cubic B-spline and small-scale perturbation. If needed, constant vertical shifts separate the curves without changing their shapes; their minimum vertical gap exceeds 6 m, computed from cubic extrema. The vehicle route follows the midpoint of the finished walls with its full ±2 m lateral oscillation. The 6 m gap covers that 4 m motion envelope plus 1 m vertical truth-pose clearance on each side. Single-wall modes retain their earlier generator. The estimation domain is [0, 80] × [−20, 50] m. Vehicles advance ⅔ m in x per snapshot, covering 80 m over 120 snapshots from their initial positions. Beyond the finite wall ends, the centreline follows its endpoint tangent.</p><p>The simulator reports the same noise SDs that it uses to generate observations. Controlled noise/model-mismatch experiments are not implemented; finite patch models can still differ from curved walls and scattering. No robustness claim follows from this nominal setup. Validation is synthetic and numerical. The tool does not establish performance with physical sensors or in real caves. The source repository retains the previous implementation and validation evidence.</p>
   </dialog>
-  <dialog id="remoteDialog" aria-labelledby="remoteTitle">
-    <div class="dialog-title"><h2 id="remoteTitle">Run on GitHub Actions</h2><button id="closeRemote" type="button">Close</button></div>
-    <p id="remoteSummary" class="remote-summary"></p>
-    <ol class="remote-steps">
-      <li><h3>Copy the experiment settings</h3><p>The seed, parameters and fixed estimator thresholds stay the same.</p><label class="field"><span>Request JSON</span><textarea id="remoteRequest" rows="4" readonly spellcheck="false"></textarea></label><button id="remoteCopy" type="button">Copy settings</button></li>
-      <li><h3>Start the workflow on GitHub</h3><p>Sign in with repository write access. Choose <strong>Run workflow</strong>, paste the settings into <strong>request</strong>, then confirm. Once submitted, calculation continues without this page. View progress or cancel the run on GitHub.</p><a id="remoteWorkflow" class="button-link primary" href="https://github.com/woqhrl9494-cell/corridor-mapper/actions/workflows/simulation.yml" target="_blank" rel="noopener noreferrer">Open GitHub workflow ↗</a></li>
-      <li><h3>Load the saved result</h3><p>Download the run’s result artifact within <strong>3 days</strong> and extract the ZIP. Choose <strong>result.json.gz</strong> or the decompressed <strong>result.json</strong> to view the maps or sweep charts here.</p><button id="remoteImportButton" type="button">Load result file</button></li>
-    </ol>
-    <p id="remoteStatus" class="remote-status" role="status">Settings prepared. No job has been submitted yet.</p>
-  </dialog>
-  <dialog id="shareDialog" aria-labelledby="shareTitle"><div class="dialog-title"><h2 id="shareTitle">Share experiment settings</h2><button id="closeShare" type="button">Close</button></div><p>The link restores the seed and simulation parameters. Recipients choose GitHub Actions or their browser to run the experiment.</p><label class="field"><span>Experiment link</span><input id="shareLink" type="url" readonly /></label><p id="shareStatus" role="status"></p></dialog>
+  <dialog id="shareDialog" aria-labelledby="shareTitle"><div class="dialog-title"><h2 id="shareTitle">Share experiment settings</h2><button id="closeShare" type="button">Close</button></div><p>The link restores the seed and simulation parameters. Recipients run the experiment in their own browser.</p><label class="field"><span>Experiment link</span><input id="shareLink" type="url" readonly /></label><p id="shareStatus" role="status"></p></dialog>
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261103-actions3';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261103-actions3';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261103-background2';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261103-background2';}
     runtime.onerror=()=>{document.getElementById('status').textContent='Could not load the application. Reload the page or check the local files.';};
     document.body.append(runtime);
   </script>
