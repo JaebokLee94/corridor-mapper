@@ -59,7 +59,6 @@ function controls() {
   for (const el of $('sweepSettings').elements) el.disabled = active || sweeping || importing;
   $('sweepButton').disabled = active || sweeping || importing; $('sweepCancel').disabled = !sweeping;
   for (const id of ['executionMode','loadRemoteButton','remoteImportButton','remoteFile']) $(id).disabled = active || sweeping || importing;
-  $('executionHint').textContent = remote ? 'Run on GitHub, then load the result here. The browser can be closed during computation.' : 'Compute on this device. Keep the browser open until the run finishes.';
   $('timeSlider').max = Math.max(1, state.frames.length); $('timeSlider').value = state.selected; $('timeSlider').disabled = !state.frames.length;
   $('replayButton').disabled = !state.frames.length;
   $('runProgress').max = state.scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value || DEFAULT_INPUT.snapshots); $('runProgress').value = state.frames.length;

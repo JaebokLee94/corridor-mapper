@@ -61,8 +61,7 @@ math { font-family:var(--font-math); }
 .workspace { display:grid; grid-template-columns:var(--sidebar) minmax(0,1fr); }
 .sidebar { min-width:0; align-self:start; position:sticky; top:0; max-height:100dvh; overflow:auto; overscroll-behavior-y:contain; background:var(--color-surface-1); border-right:1px solid var(--color-line); scrollbar-width:thin; }
 .run-section { padding:20px; position:relative; }
-.execution-field { margin-bottom:8px; }
-.execution-hint { margin:0 0 12px; font-size:12px; }
+.field.execution-field { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:10px; margin-bottom:12px; }
 .load-result { width:100%; margin-top:8px; }
 .remote-provenance { margin-top:8px; font-size:12px; overflow-wrap:anywhere; }
 .sidebar-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
