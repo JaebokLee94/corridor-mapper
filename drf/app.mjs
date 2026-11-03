@@ -130,7 +130,9 @@ async function advance(single = false) {
       notice(`Complete · ${state.frames.length} snapshots · both methods evaluated`);
     } else if (single) state.mode = 'paused';
     controls();
-    if (state.mode === 'running') requestAnimationFrame(() => advance());
+    // Worker replies yield to the event loop. Computation must not wait for a
+    // repaint: browsers suspend requestAnimationFrame in background tabs.
+    if (state.mode === 'running') void advance();
   } catch (error) { state.busy = false; fail(error); }
 }
 async function hashField(frame) {
@@ -173,6 +175,8 @@ function previewWalls() {
   } catch (error) { notice(error.message); return []; }
 }
 function renderSelected() {
+  // Keep every result, but defer hidden-tab chart work until visibility returns.
+  if (document.hidden) return;
   hoverGeneration++;
   $('inspector').textContent = 'Hover to inspect a grid cell. Scroll to zoom; drag to pan.';
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
@@ -262,6 +266,9 @@ $('resetButton').onclick = () => { state.sweep?.cancel(); state.sweepRuns = []; 
 form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { location.hash = `v1=${encodeURIComponent(JSON.stringify(settings()))}`; } catch (e) { notice(e.message); } });
 $('timeSlider').oninput = () => { stopReplay(); state.followLive = false; state.selected = Number($('timeSlider').value); hoverGeneration++; renderSelected(); };
 $('replayButton').onclick = toggleReplay;
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { controls(); renderSelected(); }
+});
 document.addEventListener('keydown', event => {
   if (event.target.matches('input,select,textarea,button') || $('aboutDialog').open || $('shareDialog').open || $('analysisDialog').open) return;
   if (event.code === 'Space') { event.preventDefault(); toggleReplay(); }

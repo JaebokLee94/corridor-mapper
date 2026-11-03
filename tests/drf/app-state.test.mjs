@@ -166,7 +166,8 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   releaseField({type:'frame',requestId:1,t:4,Q:4,admitted:4,rejected:0,ms:1});await inFlight;
   assert.equal(state.frames.length,4,'An in-flight completed result must be retained');
   assert.equal(state.frames.at(-1).candidates,predictedCandidates);assert.equal(state.frames.at(-1).psptMs,2);assert.equal(state.frames.at(-1).method,'guarded-tuned');assert.equal(state.selected,4,'Live following must continue after a view reset');
-  assert.equal(state.mode,'running');assert.equal(state.followLive,true);assert.equal(pending.size,1,'Keep advancing after the current frame');
+  assert.equal(state.mode,'running');assert.equal(state.followLive,true);
+  assert.equal(state.busy,true,'Dispatch the next snapshot without waiting for a repaint');assert.equal(pending.size,0);
   state.workers=[{stop(){stoppedWorkers++;}}];
   $('inspector').textContent='old D/A/Q';$('diagnosticSummary').textContent='old Theorem 2';
   vm.runInContext("$('resetButton').onclick();",context);
@@ -181,6 +182,58 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   assert.equal(charts.get('diagnosticChart').length,0);assert.equal(charts.get('profileChart').length,0);
   assert.equal(charts.get('countChart')[0].length,0);assert.equal(charts.get('countChart')[1].length,0);
   assert.equal(context.fieldWorker,null);assert.equal(context.evalWorker,null);assert.equal(context.hoverWorker,null);assert.equal(context.psptWorker,null);
+});
+
+test('background computation completes in causal order without animation frames; pause and step remain explicit',async()=>{
+  for (const pauseAt of [0,5]) {
+    const total=120,nodes=new Map(),calls=[],errors=[];
+    const $=id=>{if (!nodes.has(id)) nodes.set(id,{dataset:{}});return nodes.get(id);};
+    const state={generation:1,busy:false,mode:'running',scenario:{wire:Array.from({length:total},(_,i)=>({t:i+1,configs:[]})),input:{snapshots:total}},
+      next:0,frames:[],evaluations:[],selected:0,followLive:true};
+    const context=vm.createContext({state,$,controls(){},renderSelected(){},notice(){},
+      fieldWorker:{request:async({snapshot})=>{calls.push(['field',snapshot.t]);return {t:snapshot.t,Dbar:[],betaHat:[]};}},
+      psptWorker:{request:async message=>{
+        assert.deepEqual(Object.keys(message).sort(),['snapshot','type'],'Only the current measured snapshot reaches the estimator');
+        assert.equal(message.snapshot.t,state.evaluations.length+1,'Evaluate each prefix before dispatching the next');
+        calls.push(['methods',message.snapshot.t]);
+        if (message.snapshot.t===pauseAt) state.mode='paused';
+        return {methods:{guarded:{candidates:[],ms:1},baseline:{candidates:[],ms:1}}};
+      }},
+      evalWorker:{request:async({frame})=>{calls.push(['evaluate',frame.t]);return {evaluation:{t:frame.t}};}},
+      hashField:async()=> 'completed-hash',requestAnimationFrame:()=>{throw new Error('No repaint callbacks in a hidden tab');},
+      fail:error=>errors.push(error),
+    });
+    vm.runInContext(section('async function advance(','async function hashField('),context);
+    const settle=async()=>{for (let i=0;i<total*10;i++) await Promise.resolve();assert.deepEqual(errors,[]);};
+    await context.advance();await settle();
+    if (pauseAt) {
+      assert.equal(state.frames.length,pauseAt,'Pause retains the in-flight snapshot and stops further dispatch');
+      assert.equal(state.busy,false);assert.equal(state.mode,'paused');
+      await context.advance();await settle();assert.equal(state.frames.length,pauseAt,'Hidden tabs do not implicitly resume a paused run');
+      await context.advance(true);await settle();
+      assert.equal(state.frames.length,pauseAt+1,'Single step computes exactly one snapshot');assert.equal(state.mode,'paused');
+      state.followLive=false;state.selected=2;state.mode='running';await context.advance();await settle();
+    }
+    assert.equal(state.mode,'done');assert.equal(state.busy,false);assert.equal(state.frames.length,total);
+    assert.equal(state.selected,pauseAt ? 2 : total,'Preserve a manually selected snapshot while computing in the background');
+    assert.equal($('mapCanvas').dataset.fieldHash,'completed-hash');
+    assert.deepEqual(calls,Array.from({length:total},(_,i)=>[['field',i+1],['methods',i+1],['evaluate',i+1]]).flat());
+    assert.deepEqual(state.evaluations.map(e=>e.t),Array.from({length:total},(_,i)=>i+1));
+  }
+});
+
+test('hidden charts defer rendering and visibility return refreshes the current selection without advancing',()=>{
+  const events=new Map(),drawn=[],document={hidden:true,addEventListener:(name,fn)=>events.set(name,fn)};
+  const state={selected:17,mode:'paused'};
+  vm.runInNewContext(section('function renderSelected()','async function updateProfile(')+'\nrenderSelected();',{
+    document,$:()=>assert.fail('Hidden chart rendering must be skipped'),
+  });
+  vm.runInNewContext(section("document.addEventListener('visibilitychange'","document.addEventListener('keydown'"),{
+    document,state,controls(){},renderSelected:()=>drawn.push(state.selected),advance:()=>assert.fail('Visibility must not start computation'),
+  });
+  events.get('visibilitychange')();assert.deepEqual(drawn,[]);
+  document.hidden=false;events.get('visibilitychange')();
+  assert.deepEqual(drawn,[17]);assert.equal(state.mode,'paused');
 });
 
 test('cancellation ignores late PSPT or evaluator responses without retaining a partial snapshot',async()=>{
