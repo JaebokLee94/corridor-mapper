@@ -1,0 +1,40 @@
+name: EchoMap simulation
+run-name: EchoMap simulation · ${{ github.actor }}
+
+# Repository simulation development and validation, not a hosted web service.
+# Requests are dispatched through GitHub's authenticated Actions UI or CLI.
+on:
+  workflow_dispatch:
+    inputs:
+      request:
+        description: 'Paste the request JSON copied from EchoMap (comparison or sweep)'
+        required: true
+        type: string
+        default: '{"schema":"echomap-request/1","mode":"comparison","input":{"scene":"layered","vehicles":3,"snapshots":10,"grid":100,"seed":1}}'
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.7.0
+      - name: Compute with the same numerical kernels
+        env:
+          ECHOMAP_REQUEST: ${{ inputs.request }}
+        run: node tools/remote-run.mjs --output remote-results --workers 2
+      - name: Save completed results (including partial sweeps)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: echomap-result-${{ github.run_id }}
+          path: |
+            remote-results/result.json.gz
+            remote-results/summary.md
+          if-no-files-found: error
+          retention-days: 3

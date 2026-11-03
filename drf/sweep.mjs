@@ -15,10 +15,10 @@ function summarize(frame, evaluation) {
  * Each seed generates one shared measurement sequence. No per-condition tuning.
  * Memory O(field + truth + estimator state); frame history is not retained.
  */
-export async function runExperiment(raw, progress = () => {}) {
+export async function runExperiment(raw, progress = () => {}, generationProgress = () => {}) {
   const input = normalizeInput(raw);
   if (input.sigmaD === 0) throw new Error('Both methods require range SD σd > 0; exact zero range noise is unsupported.');
-  const scenario = await generateScenario(input), grid = createGrid(input.grid, input.grid, scenario.domain),
+  const scenario = await generateScenario(input, generationProgress), grid = createGrid(input.grid, input.grid, scenario.domain),
     field = createField(grid, { band: input.band, perimeter: input.perimeter }),
     evaluators = Object.fromEntries(['guarded', 'baseline'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
     estimator = new MethodComparison({ sigmaR: input.sigmaD }), timings = [];

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import { gzipSync } from 'node:zlib';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput } from '../../drf/scenario.mjs';
+import { normalizeRemoteRequest, remoteJobs } from '../../drf/remote-format.mjs';
 
 const source=readFileSync(new URL('../../drf/app.mjs',import.meta.url),'utf8');
 const section=(start,end)=>{
@@ -283,4 +285,105 @@ test('out-of-order results fail explicitly rather than mislabelling the measured
   await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:2},evaluation:{},next:2},1);
   assert.equal(errors.length,1);assert.match(errors[0].message,/Out-of-order/);
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.next,0);
+});
+
+test('GitHub preparation preserves requested conditions without starting a browser worker or claiming submission',()=>{
+  const input={...DEFAULT_INPUT,seed:1511833124,vehicles:10,snapshots:120};
+  const nodes=new Map(),notices=[],$=id=>{
+    if(!nodes.has(id)) nodes.set(id,{value:'',textContent:'',open:false,showModal(){this.open=true;},close(){this.open=false;}});
+    return nodes.get(id);
+  };
+  const values={sweepNoise:'0.05,0.1',sweepRoughness:'0,2',sweepSeeds:'1,2,3'};
+  const context=vm.createContext({$,settings:()=>input,normalizeRemoteRequest,remoteJobs,
+    FormData:class{*[Symbol.iterator](){yield*Object.entries(values);}},
+    parseValues:text=>text.split(',').map(Number),notice:text=>notices.push(text),
+    Worker:class{constructor(){assert.fail('Preparing a GitHub request cannot compute locally');}},
+  });
+  vm.runInContext(section('function openRemoteRun(','// Read a bounded result stream'),context);
+  context.openRemoteRun('comparison');
+  const single=JSON.parse($('remoteRequest').value);
+  assert.deepEqual(single.input,input);assert.equal(single.mode,'comparison');
+  assert.equal($('remoteDialog').open,true);assert.match($('remoteStatus').textContent,/No job has been submitted/);
+  $('analysisDialog').open=true;
+  context.openRemoteRun('sweep');
+  const sweep=JSON.parse($('remoteRequest').value);
+  assert.deepEqual(sweep.input,input);assert.deepEqual(sweep.sweep,{noise:[.05,.1],roughness:[0,2],seeds:[1,2,3]});
+  assert.match($('remoteSummary').textContent,/12 paired experiments · 120 snapshots/);
+  assert.equal($('analysisDialog').open,false,'Close the analysis dialog before opening its GitHub request');
+  assert.deepEqual(notices,[]);
+});
+
+test('comparison and sweep buttons route GitHub mode to preparation and keep browser mode explicit',async()=>{
+  const nodes=new Map(),calls=[],$=id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);};
+  const context=vm.createContext({$,openRemoteRun:mode=>calls.push(['remote',mode]),prepare:()=>calls.push(['browser'])});
+  vm.runInContext(section("$('runButton').onclick =", "$('executionMode').onchange"),context);
+  $('executionMode').value='github';$('runButton').onclick();
+  $('executionMode').value='browser';$('runButton').onclick();
+  $('executionMode').value='github';
+  // Exercise the actual remote early return before any local sweep state changes.
+  vm.runInContext(section("$('sweepButton').onclick =", "$('sweepCancel').onclick ="),context);
+  await $('sweepButton').onclick();
+  assert.deepEqual(calls,[['remote','comparison'],['browser'],['remote','sweep']]);
+  assert.equal($('sweepStatus').textContent,undefined,'Request preparation must not display local progress');
+});
+
+test('remote result reader accepts JSON and gzip, validates contents, and rejects artifact ZIPs before changing the app',async()=>{
+  const seen=[],context=vm.createContext({Uint8Array,TextDecoder,DecompressionStream,
+    parseRemoteResult:text=>{seen.push(text);return JSON.parse(text);}});
+  vm.runInContext(section('async function readRemoteFile(','function applyRemoteResult('),context);
+  const text=JSON.stringify({schema:'example',value:23});
+  for(const [name,bytes] of [['result.json',text],['result.json.gz',gzipSync(text)]]){
+    const file=new Blob([bytes]);file.name=name;
+    assert.deepEqual(await context.readRemoteFile(file),{schema:'example',value:23});
+  }
+  assert.equal(seen.length,2);
+  const zip=new Blob(['PK']);zip.name='echomap-result.zip';
+  await assert.rejects(context.readRemoteFile(zip),/Extract the GitHub artifact ZIP/);
+  await assert.rejects(context.readRemoteFile({size:257*1024*1024}),/smaller than 256 MiB/);
+  const broken=new Blob(['broken']);broken.name='result.json';
+  await assert.rejects(context.readRemoteFile(broken),SyntaxError);
+});
+
+test('validated comparison import restores saved frames and replay without rerunning either estimator',async()=>{
+  const nodes=new Map(),inspections=[],notices=[],state={mode:'idle',generation:3,sweep:null};let clears=0,renders=0;
+  const $=id=>{if(!nodes.has(id))nodes.set(id,{dataset:{},value:'',open:false,close(){this.open=false;}});return nodes.get(id);};
+  const result={request:{mode:'comparison',input:{...DEFAULT_INPUT,snapshots:2}},status:'complete',
+    provenance:{commit:'abcdef0123456789',runId:'1234'},comparison:{scenario:{input:{snapshots:2}},grid:{},frames:[{t:1},{t:2}],evaluations:[{},{}]}};
+  const context=vm.createContext({state,$,location:{hash:''},
+    cancel:clear=>{assert.equal(clear,true);clears++;state.generation++;},fillSettings:input=>{context.filled=input;},
+    makeWorker:name=>{assert.ok(['field','eval'].includes(name));return {request:async request=>{inspections.push([name,request]);}};},
+    hashField:async()=> 'imported-hash',notice:text=>notices.push(text),controls(){},renderSelected(){renders++;},renderSweep(){},
+  });
+  vm.runInContext(section('function applyRemoteResult(','async function loadRemoteFile('),context);
+  context.applyRemoteResult(result);await Promise.resolve();
+  assert.equal(clears,1);assert.equal(renders,1);assert.equal(state.frames,result.comparison.frames);
+  assert.equal(state.evaluations,result.comparison.evaluations);assert.equal(state.next,2);assert.equal(state.selected,2);
+  assert.equal(state.mode,'done');assert.equal(state.valid,true);assert.equal(state.followLive,false);
+  assert.equal(state.remoteProvenance,result.provenance);assert.match($('remoteProvenance').textContent,/run 1234 · commit abcdef012345/);
+  assert.equal($('mapCanvas').dataset.fieldHash,'imported-hash');assert.equal($('executionMode').value,'github');
+  assert.deepEqual(inspections.map(([name,request])=>[name,request.type]),[['eval','init']]);
+  assert.match(notices[0],/Loaded complete GitHub result · 2 \/ 2 snapshots/);
+  const original=state.frames;
+  assert.throws(()=>context.applyRemoteResult({...result,status:'partial',comparison:{frames:[]}}),/no completed snapshots/);
+  assert.equal(clears,1);assert.equal(state.frames,original,'Empty partial results must not clear an existing comparison');
+  state.mode='running';
+  assert.throws(()=>context.applyRemoteResult(result),/Finish or cancel/);assert.equal(clears,1);
+});
+
+test('invalid and superseded imports preserve existing simulation results',async()=>{
+  const nodes=new Map(),state={mode:'done',generation:3,frames:[{t:1}],remoteLoading:false},notices=[];
+  const $=id=>{if(!nodes.has(id))nodes.set(id,{open:false,value:''});return nodes.get(id);};
+  let finish,applied=0;
+  const context=vm.createContext({state,$,controls(){},notice:text=>notices.push(text),
+    readRemoteFile:async()=>{throw new Error('Invalid protocol');},applyRemoteResult(){applied++;}});
+  vm.runInContext(section('async function loadRemoteFile(',"$('runButton').onclick ="),context);
+  const frames=state.frames;
+  await context.loadRemoteFile({name:'bad.json'});
+  assert.equal(state.frames,frames);assert.equal(applied,0);assert.equal(state.remoteLoading,false);
+  assert.match(notices.at(-1),/Invalid protocol/);
+  context.readRemoteFile=()=>new Promise(resolve=>{finish=resolve;});
+  const loading=context.loadRemoteFile({name:'valid.json'});state.generation++;
+  finish({});await loading;
+  assert.equal(state.frames,frames);assert.equal(applied,0);assert.match(notices.at(-1),/experiment changed during import/);
+  assert.equal(state.remoteLoading,false);
 });
