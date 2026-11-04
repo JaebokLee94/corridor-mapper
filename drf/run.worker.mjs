@@ -1,4 +1,4 @@
-import { createRunEngine } from './run-engine.mjs';
+import { createRunEngine } from './run-engine.mjs?v=20261104-truthcache2';
 
 const engine = createRunEngine({ emit(message) {
   // Only per-frame readout buffers move to the page; accumulator buffers stay here.

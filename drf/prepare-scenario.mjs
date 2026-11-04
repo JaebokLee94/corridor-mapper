@@ -1,4 +1,4 @@
-import { normalizeInput, createSceneGeometry, generateTruthSnapshot, measureTruthSnapshot, generateScenario } from './scenario.mjs';
+import { normalizeInput, createSceneGeometry, generateTruthSnapshot, measureTruthSnapshot, generateScenario } from './scenario.mjs?v=20261104-truthcache1';
 import { getTruthBundle } from './truth-cache.mjs';
 
 const eligible = input => input.seed >= 1 && input.seed <= 10 && input.vehicles <= 10;

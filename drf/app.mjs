@@ -2,12 +2,12 @@ import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';
 import { sweepCsv } from './sweep-export.mjs';
-import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261103-defaults1';
+import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261104-truthcache1';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261103-defaults1';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-truthcache2';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261104-diagnostics1';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -95,7 +95,7 @@ function settings() {
 }
 function createWorker(name, options = {}) {
   if (name === 'run' && state.server) return createServerRunWorker(state.server, options);
-  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261104-truthcache1`, import.meta.url), { type: 'module' });
+  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261104-truthcache2`, import.meta.url), { type: 'module' });
 }
 function makeWorker(name, onProgress = () => {}) {
   const worker = createWorker(name), pending = new Map(); let id = 0, stopped = false;
