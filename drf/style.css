@@ -7,6 +7,7 @@
   --color-track:#296ba1; --color-ellipse:#409bd1; --color-proxy:#007b60; --color-truth:#263d4b;
   --color-field-track:#1a3850; --color-field-casing:#fff; --color-baseline:#b06718;
   --color-progress-generated:#7d98b3; --color-progress-computed:#244d73;
+  --color-slider-disabled-track:#c0d2df; --color-slider-disabled-thumb:#7899b5;
   --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
   --font-math:"STIX Two Math","Cambria Math",math;
   --sidebar:284px; --header-height:72px; --radius:6px;
@@ -20,6 +21,7 @@
   --color-track:#6ab0e5; --color-ellipse:#7dc9f3; --color-proxy:#64d9b6; --color-truth:#d1dce5;
   --color-field-track:#18364c; --color-field-casing:#fff; --color-baseline:#efb366;
   --color-progress-generated:#9ab1c9; --color-progress-computed:#4979a7;
+  --color-slider-disabled-track:#344f63; --color-slider-disabled-thumb:#6f91ad;
 }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--color-bg); color:var(--color-ink); font:14px/1.5 var(--font-ui); -webkit-font-smoothing:antialiased; }
@@ -198,14 +200,20 @@ table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums;
 .counts-heading { margin:14px 0 0; font-size:14px; line-height:1.35; font-weight:650; }
 .playback-bar { display:flex; gap:18px; align-items:center; padding:14px 0; }
 .timeline { display:flex; gap:14px; flex:1; min-width:0; align-items:center; }
-#timeSlider:disabled { opacity:.4; cursor:default; }
+#timeSlider:disabled { appearance:none; background:transparent; opacity:1; cursor:default; }
+#timeSlider:disabled::-webkit-slider-runnable-track { height:4px; border:0; border-radius:3px; background:var(--color-slider-disabled-track); }
+#timeSlider:disabled::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; margin-top:-5px; border:0; border-radius:50%; background:var(--color-slider-disabled-thumb); }
+#timeSlider:disabled::-moz-range-track,#timeSlider:disabled::-moz-range-progress { height:4px; border:0; border-radius:3px; background:var(--color-slider-disabled-track); }
+#timeSlider:disabled::-moz-range-thumb { width:14px; height:14px; border:0; border-radius:50%; background:var(--color-slider-disabled-thumb); }
 .time-label { display:flex; gap:7px; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .time-label output { font-weight:650; min-width:70px; }
 .speed-label { display:flex; align-items:center; gap:8px; }
 .speed-label select { width:66px; }
 .keyboard-note { color:var(--color-ink-muted); white-space:nowrap; font-size:14px; }
 kbd { font:inherit; color:var(--color-ink-muted); padding:2px 4px; background:var(--color-surface-1); border:1px solid var(--color-line); border-radius:3px; margin:0 2px; }
-.field-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+/* Heatmaps reserve 116 px for axes/colourbars; history reserves 86 px.
+ * Widen each heatmap card by 10 px and narrow history by 20 px for equal plot widths. */
+.field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,calc((100% - 36px) / 3 + 10px))) minmax(0,1fr); gap:18px; }
 .field-grid .vlabel { align-items:center; padding:14px 14px 4px; gap:10px; }
 .field-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 10px; min-width:0; }
 .field-grid h2 { font-size:14px; }
@@ -438,7 +446,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .playback-bar { padding:0; gap:12px; }
   .timeline { gap:10px; }
   .timeline button,.speed-label select { min-height:30px; height:30px; padding:4px 8px; }
-  .field-grid { min-height:0; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+  .field-grid { min-height:0; grid-template-columns:repeat(2,minmax(0,calc((100% - 24px) / 3 + 10px))) minmax(0,1fr); gap:12px; }
   .field-grid>.view { display:grid; grid-template-rows:auto minmax(0,1fr); min-height:0; }
   .field-grid .vlabel { padding:6px 14px 0; gap:6px; }
   .field-grid .view-meta { margin-top:0; font-size:12px; }
