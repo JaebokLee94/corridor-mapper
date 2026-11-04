@@ -366,10 +366,10 @@ function chartSurface(canvas) {
   return {ctx,width,height,color};
 }
 // Title is optional: when the card header already names the metric, the plot takes its space.
-function chartAxes(surface,{title='',xLabel,yLabel,xmin,xmax,ymin,ymax,top=0,height=surface.height,compact=false,metreX=false,xTicks,yTicks,hideXZero=false,showYLabel=false,bottomInset}) {
+function chartAxes(surface,{title='',xLabel,yLabel,xmin,xmax,ymin,ymax,top=0,height=surface.height,compact=false,metreX=false,xTicks,yTicks,hideXZero=false,showYLabel=false,topInset,bottomInset}) {
   compact ||= height<420;
   // Margins keep tick labels, axis titles and the chart title on separate lines.
-  const {ctx,width,color}=surface,padTop=compact ? (title ? 27 : 14) : (title ? 36 : 18),padBottom=bottomInset ?? (compact ? 36 : 46),left=compact && !showYLabel ? 58 : 72;
+  const {ctx,width,color}=surface,padTop=topInset ?? (compact ? (title ? 27 : 14) : (title ? 36 : 18)),padBottom=bottomInset ?? (compact ? 36 : 46),left=compact && !showYLabel ? 58 : 72;
   const box={x:left,y:top+padTop,w:Math.max(1,width-left-14),h:Math.max(1,height-padTop-padBottom)};
   if (!(xmax>xmin)) xmax=xmin+1;
   if (!(ymax>ymin)) ymax=ymin+1;
@@ -487,7 +487,7 @@ export function drawComparisonHistory(canvas,evaluations,selection='recall',snap
   if (xmax<20) xTicks.push(xmax);
   const metricLabels={precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
   const yLabel=metricLabels[selection]?.[surface.height<170?1:0] ?? (percent?'%':'m');
-  const axes=chartAxes(surface,{xLabel:'',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks:percent?[0,25,50,75,100]:undefined,hideXZero:true,showYLabel:true,bottomInset:28});
+  const axes=chartAxes(surface,{xLabel:'',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks:percent?[0,25,50,75,100]:undefined,hideXZero:true,showYLabel:true,topInset:16,bottomInset:26});
   chartLine(surface,axes,series[0],surface.color('accent'),[],false,false,true);
   chartLine(surface,axes,series[1],surface.color('baseline'),[6,4],false,false,true);
 }
