@@ -19,7 +19,7 @@ test('DRF DOM contract and readable stylesheet', () => {
   for (const name of 'scene vehicles snapshots sigmaP sigmaD roughness lambda0 cellStep resolution specular grid band perimeter seed'.split(' ')) assert.ok(html.includes(`name="${name}"`),name);
   assert.ok(!html.includes('장면'));
   const geometryNote=html.match(/<p[^>]*class="note geometry-note"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? '';
-  assert.match(geometryNote,/>Independent walls · Δy ≥6 m<\/p>/,'The compact note retains wall independence and the minimum gap');
+  assert.match(geometryNote,/Independent walls · <span data-tex=\"\\Delta y\\ge 6\\,\\mathrm\{m\}\">Δy ≥6 m<\/span>/,'The compact note retains wall independence and the LaTeX minimum gap');
   assert.match(geometryNote,/title="Both walls have independent shapes and a minimum vertical gap of 6 m\."/,'The tooltip defines the vertical gap in full');
   assert.match(html,/input name="scene" type="hidden" value="layered"/);
   assert.doesNotMatch(html,/<select[^>]*name="scene"/);
@@ -47,7 +47,7 @@ test('axis-fitted camera preserves metre coordinates and the zoom anchor', () =>
 });
 
 test('render keeps world row order, uses real DPR/300 dpi pixels, and charts execute', async () => {
-  const snapshots={},created=[],rectangles=[],labels=[],gridSegments=[],labelPositions=[],dots=[],ellipseStarts=[],strokes=[],gridColor='#c4d3e2';
+  const snapshots={},created=[],rectangles=[],labels=[],mathImages=[],gridSegments=[],labelPositions=[],dots=[],ellipseStarts=[],strokes=[],gridColor='#c4d3e2';
   const context=() => {
     let path=[],subpathStarts=[],point;
     return new Proxy({font:'16px Arial',createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData:(data)=>{snapshots.image=data.data;},measureText:(text)=>({width:text.length*9}),createLinearGradient:()=>({addColorStop(){}})}, {get(target,key){return key in target ? target[key] : (...args)=>{
@@ -61,6 +61,7 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
         if ((subpathStarts[i+1] ?? path.length)-start===96) ellipseStarts.push(path[start][0]);
       if (key==='arc') dots.push(args);
       if (key==='fillText') {assert.ok(parseFloat(target.font.match(/(\d+)px/)[1])>=14,args[0]);labels.push(args[0]);if (/^V\d+$/.test(args[0])) labelPositions.push(args);}
+      if (key==='drawImage' && args[0]?.src?.startsWith('data:image/svg+xml')) mathImages.push(args);
       if (key==='strokeRect') rectangles.push(args);
     };}});
   };
@@ -84,7 +85,7 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
   };
   const assertChartGrids=message=>rectangles.forEach(([x,y,w,h],k)=>assertGrid({x,y,w,h},`${message} subplot ${k}`));
   const saved={};
-  const stubs={document:{createElement:()=>{const c=makeCanvas();created.push(c);return c;},documentElement:{}},window:{devicePixelRatio:2},getComputedStyle:()=>({getPropertyValue:name=>name==='--color-grid' ? gridColor : '#111111'}),ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},matchMedia:()=>({addEventListener(){}}),requestAnimationFrame:()=>1};
+  const stubs={document:{createElement:()=>{const c=makeCanvas();created.push(c);return c;},documentElement:{}},window:{devicePixelRatio:2,dispatchEvent(){}},Image:class{set src(value){this._src=value;this.complete=true;queueMicrotask(()=>this.onload?.());}get src(){return this._src;}async decode(){}},getComputedStyle:()=>({getPropertyValue:name=>name==='--color-grid' ? gridColor : name==='--color-plot-bg' ? '#ffffff' : '#111111'}),ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},matchMedia:()=>({addEventListener(){}}),requestAnimationFrame:()=>1};
   try {
     for (const [key,value] of Object.entries(stubs)) {saved[key]=globalThis[key];globalThis[key]=value;}
     const canvas=makeCanvas(),map=new DrfMap(canvas),frame={Dbar:new Float32Array([0,1,2,3]),betaHat:new Float32Array([0,.2,.5,1])};
@@ -102,8 +103,16 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
     assert.deepEqual(JSON.parse(canvas.dataset.view),cssView,'DPR must not change the metre viewport');
     const target=makeCanvas();map.paint(target,300/96);assert.equal(target.width,2188);assert.equal(target.height,1688);
     assert.ok(await map.png() instanceof Blob);
-    assert.ok(labels.includes('D̄ [1/m²]'));assert.ok(labels.some(text=>text.includes('linear color scale')));
-    assert.ok(labels.includes('Axes: independent x/y scale'),'export must disclose the selected axis scale');
+    assert.ok(mathImages.length>=3,'PNG includes the LaTeX field symbol and both mathematical axis labels');
+    assert.ok(mathImages.every(([image,...rect])=>decodeURIComponent(image.src).includes('<svg') && rect.every(Number.isFinite)),'Mathematical labels are SVG images with finite drawing dimensions');
+    assert.ok(labels.some(text=>text.includes('linear color scale')));
+    assert.ok(labels.includes('Axes: independent ') && labels.includes(' scale'),'export must disclose the selected axis scale');
+    const beforeLog=map.state;
+    map.set({...map.state,heatField:'betaHat',scaleMode:'log'});mathImages.length=0;
+    assert.ok(await map.png() instanceof Blob);
+    assert.ok(mathImages.length>=4,'Log-contrast PNG includes both axis labels, the contrast symbol and the log expression on its first export');
+    map.set(beforeLog);
+
     gridSegments.length=0;map.set({...map.state,heatField:'betaHat'});map.paint(canvas,1);
     assertGrid(map.box,'contrast');
     assertMetreGrid(map,'contrast');
@@ -188,7 +197,7 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
     const manualCamera={...map.camera},manualView=canvas.dataset.view,manualBox={...map.box};
     labels.length=0;assert.ok(await map.png() instanceof Blob);
     assert.ok(labels.includes('Axes: equal metres'),'RAW PNG must report its effective metric scale');
-    assert.ok(!labels.includes('Axes: independent x/y scale'));
+    assert.ok(!labels.includes('Axes: independent '));
     assert.deepEqual(map.camera,manualCamera,'selected-axis PNG export must not reset the manual screen camera');
     assert.equal(canvas.dataset.view,manualView,'PNG export must leave the screen viewport unchanged');
     assert.deepEqual(map.box,manualBox,'PNG export must leave the screen hit-test box unchanged');
@@ -199,7 +208,7 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
     map.set({...map.state,mode:undefined,aspectMode:'fill'});map.fit();map.paint(canvas,2);
     assert.notEqual(map.camera.scaleX,map.camera.scaleY,'field fill mode retains its selected independent scales');
     labels.length=0;assert.ok(await map.png() instanceof Blob);
-    assert.ok(labels.includes('Axes: independent x/y scale'),'field fill PNG reports independent scales');
+    assert.ok(labels.includes('Axes: independent ') && labels.includes(' scale'),'field fill PNG reports independent scales');
     map.set({...map.state,aspectMode:'equal'});map.fit();map.paint(canvas,2);
     assert.equal(map.camera.scaleX,map.camera.scaleY,'explicit equal-axis mode preserves metres in both directions');
     labels.length=0;assert.ok(await map.png() instanceof Blob);

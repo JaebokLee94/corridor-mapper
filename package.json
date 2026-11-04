@@ -15,7 +15,8 @@
     "validate:drf": "node tests/drf/run-reference.mjs --seed-count 10 --workers 3",
     "test:pspt": "node --test tests/drf/pspt*.test.mjs",
     "start:compute": "node tools/simulation-server.mjs",
-    "bench:drf": "node tests/drf/background-performance.mjs"
+    "bench:drf": "node tests/drf/background-performance.mjs",
+    "build:latex": "node build-latex.mjs"
   },
   "repository": {
     "type": "git",
@@ -31,7 +32,8 @@
   "homepage": "https://github.com/JaebokLee94/corridor-mapper#readme",
   "devDependencies": {
     "esbuild": "0.28.2",
-    "jsdom": "30.0.1"
+    "jsdom": "30.0.1",
+    "mathjax-full": "3.2.2"
   },
   "private": true
 }

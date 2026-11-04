@@ -1,4 +1,5 @@
 import { boundsOf } from "../surf/map.mjs";
+import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
 // Display affine transform only: each axis retains metres; inference never sees pixels.
 export const mapToScreen=(p,c,b)=>[b.x+b.w/2+(p[0]-c.cx)*c.scaleX,b.y+b.h/2-(p[1]-c.cy)*c.scaleY];
@@ -9,53 +10,25 @@ export function zoomMap(c,factor,anchor,box) {
 }
 
 const UI_FONT='-apple-system, BlinkMacSystemFont, "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", Arial, sans-serif';
-const MATH_FONT='"STIX Two Math", "STIX Two Text", "Latin Modern Math", "Cambria Math", "Times New Roman", serif';
 const uiFont=(size,weight=400) => `${weight} ${size}px ${UI_FONT}`;
-const mathFont=(size,italic) => `${italic ? 'italic ' : ''}${size}px ${MATH_FONT}`;
 
-// Paper notation inside $…$: Latin and lowercase Greek letters italic; digits, operators and
-// uppercase Greek upright; _x, _{xy} subscripts and ^x superscripts. Scripts keep the 14 px floor.
-function richRuns(text,size,weight) {
-  const runs=[],mathSize=Math.round(size*1.12),scriptSize=Math.max(14,Math.round(mathSize*.72));
-  const push=(value,font,dy=0,script=0) => {
-    const last=runs.at(-1);
-    if (last && !script && !last.script && last.font===font) last.text+=value;
-    else runs.push({text:value,font,dy,script});
-  };
-  text.split('$').forEach((part,k) => {
-    if (!part) return;
-    if (k%2===0) { push(part,uiFont(size,weight)); return; }
-    for (let i=0;i<part.length;) {
-      const c=part[i];
-      if ((c==='_' || c==='^') && i+1<part.length) {
-        let body;
-        if (part[i+1]==='{') { const end=part.indexOf('}',i+2),stop=end<0 ? part.length : end;body=part.slice(i+2,stop);i=stop+1; }
-        else { body=part[i+1];i+=2; }
-        const italic=/^\p{L}$/u.test(body) && !/[Α-Ω]/.test(body);
-        push(body,mathFont(scriptSize,italic),c==='_' ? mathSize*.26 : -mathSize*.42,c==='_' ? 1 : 2);
-        continue;
-      }
-      const letter=part.slice(i).match(/^\p{L}\p{M}*/u)?.[0];
-      if (letter) { push(letter,mathFont(mathSize,!/^[Α-Ω]/.test(letter)));i+=letter.length; }
-      else { push(c,mathFont(mathSize,false));i++; }
-    }
-  });
-  return runs;
-}
+// Prose uses the UI font; every $...$ expression is compiled from LaTeX to SVG.
+// One baseline and the SVG metrics align accents, fractions, and scripts correctly.
 function drawRich(ctx,text,x,y,{size=14,weight=400,align='left',color}={}) {
-  const runs=richRuns(text,size,weight),starts=[];let cursor=0;
-  runs.forEach((run,i) => {
-    ctx.font=run.font;run.width=ctx.measureText(run.text).width;
-    // A subscript directly after a superscript (or vice versa) stacks, as in χ²₁.
-    const stacked=run.script && runs[i-1]?.script && runs[i-1].script!==run.script;
-    starts.push(stacked ? starts[i-1] : cursor);
-    cursor=Math.max(cursor,starts[i]+run.width);
-  });
-  const origin=align==='center' ? x-cursor/2 : align==='right' ? x-cursor : x;
-  ctx.save();ctx.textAlign='left';if (color) ctx.fillStyle=color;
-  runs.forEach((run,i) => { ctx.font=run.font;ctx.fillText(run.text,origin+starts[i],y+run.dy); });
+  ctx.save();ctx.font=uiFont(size,weight);ctx.textAlign='left';
+  if (color) ctx.fillStyle=color;
+  const mathSize=size*1.08;
+  const runs=text.split('$').map((part,k)=>({text:part,math:k%2===1,
+    width:k%2===1 ? measureTex(part,mathSize).width : ctx.measureText(part).width}));
+  const width=runs.reduce((sum,run)=>sum+run.width,0);
+  let cursor=align==='center' ? x-width/2 : align==='right' ? x-width : x;
+  for (const run of runs) {
+    if (run.math) drawTex(ctx,run.text,cursor,y,{size:mathSize,weight,color:ctx.fillStyle});
+    else ctx.fillText(run.text,cursor,y);
+    cursor+=run.width;
+  }
   ctx.restore();
-  return cursor;
+  return width;
 }
 
 function drawGrid(ctx,box,xs,ys,color) {
@@ -70,11 +43,30 @@ function metreTicks(min,max) {
   return Array.from({length:Math.max(0,Math.floor(max/10)-first+1)},(_,i)=>(first+i)*10);
 }
 
-// White-based sequential colors affect drawing only; zero stays transparent.
+// Light-mode palettes are preserved byte for byte. Palette selection affects drawing only.
 const palettes = {
   Dbar: [[255,255,255],[255,225,143],[255,172,66],[239,100,29],[184,41,20]],
   betaHat: [[255,255,255],[214,233,249],[145,195,229],[61,142,196],[8,81,156]],
 };
+const darkPalettes = {
+  Dbar: [[22,38,48],[96,62,37],[161,88,35],[221,130,46],[255,206,122]],
+  betaHat: [[22,38,48],[27,72,102],[34,112,155],[72,163,203],[152,219,242]],
+};
+function fieldPalette(field='Dbar') {
+  const root=document.documentElement,background=getComputedStyle(root).getPropertyValue('--color-plot-bg').trim();
+  const hex=background.match(/^#([a-f\d]{3}|[a-f\d]{6})$/i);
+  const channels=hex ? (hex[1].length===3 ? [...hex[1]].map(c=>parseInt(c+c,16)) : hex[1].match(/../g).map(c=>parseInt(c,16)))
+    : background.match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/)?.slice(1).map(Number);
+  const explicit=root.dataset?.theme;
+  // The actual plot background takes precedence over the system preference when
+  // no explicit theme is selected. A system event cannot override explicit light.
+  const dark=explicit==='dark' || (explicit!=='light' && (channels
+    ? .2126*channels[0]+.7152*channels[1]+.0722*channels[2]<128
+    : matchMedia('(prefers-color-scheme: dark)').matches));
+  const key=field in palettes ? field : 'Dbar';
+  const colors=dark ? [channels ?? darkPalettes[key][0],...darkPalettes[key].slice(1)] : palettes[key];
+  return {key:`${dark ? 'dark' : 'light'}:${key}:${colors[0].join(',')}`,colors};
+}
 const colorAt = (t, palette) => {
   const p = Math.max(0,Math.min(1,t)) * (palette.length-1), i = Math.min(palette.length-2,Math.floor(p));
   return palette[i].map((v,k) => Math.round(v+(palette[i+1][k]-v)*(p-i)));
@@ -102,8 +94,13 @@ export class DrfMap {
     resize.observe(canvas);
     const dashboard=canvas.closest?.('.map-panel')?.parentElement;
     if (dashboard) resize.observe(dashboard);
-    new MutationObserver(() => this.draw()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.draw());
+    const refreshTheme=()=>{
+      const palette=fieldPalette(this.state.heatField);
+      if (palette.key!==this.paletteKey) this.buildHeat(palette);
+      this.draw();
+    };
+    new MutationObserver(refreshTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", refreshTheme);
     canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
       // At the limiting axis, another zoom-out restores the view; simulation state is untouched.
@@ -136,19 +133,20 @@ export class DrfMap {
     if (state.frame !== previous.frame || state.grid !== previous.grid || state.heatField !== previous.heatField || state.scaleMode !== previous.scaleMode) this.buildHeat();
     this.draw();
   }
-  buildHeat() {
+  buildHeat(palette=fieldPalette(this.state.heatField)) {
+    this.paletteKey=palette.key;this.heatPalette=palette.colors;
     const {grid:g,frame,heatField="Dbar",scaleMode="linear"}=this.state;
     if (!g) {this.heat.width=1;this.heat.height=1;this.maxValue=0;return;}
     this.heat.width=g.nx; this.heat.height=g.ny;
     const values=frame?.[heatField], ctx=this.heat.getContext("2d"), data=ctx.createImageData(g.nx,g.ny);
     this.maxValue=0;
     if (values) for (const v of values) if (Number.isFinite(v) && v>this.maxValue) this.maxValue=v;
-    const denominator=scaleMode === "log" ? Math.log1p(this.maxValue) : this.maxValue, palette=palettes[heatField] ?? palettes.Dbar;
+    const denominator=scaleMode === "log" ? Math.log1p(this.maxValue) : this.maxValue;
     // Formula: image row = ny-1-iy. World y is never reordered in inference data.
     for (let iy=0;iy<g.ny;iy++) for (let ix=0;ix<g.nx;ix++) {
       const value=Math.max(0,values?.[iy*g.nx+ix] ?? 0), t=denominator>0 ? (scaleMode === "log" ? Math.log1p(value) : value)/denominator : 0;
       const at=4*((g.ny-1-iy)*g.nx+ix);
-      data.data.set([...colorAt(t,palette),values && Number.isFinite(value) && value>0 ? 255 : 0],at);
+      data.data.set([...colorAt(t,this.heatPalette),values && Number.isFinite(value) && value>0 ? 255 : 0],at);
     }
     ctx.putImageData(data,0,0);
   }
@@ -168,6 +166,9 @@ export class DrfMap {
   paint(target,ratio) {
     const width=this.canvas.clientWidth,height=this.canvas.clientHeight;
     if (width<1 || height<1) return;
+    // Also refresh synchronously for export or a draw before the theme observer fires.
+    const palette=fieldPalette(this.state.heatField);
+    if (palette.key!==this.paletteKey) this.buildHeat(palette);
     target.width=Math.round(width*ratio); target.height=Math.round(height*ratio);
     const ctx=target.getContext("2d"), css=getComputedStyle(document.documentElement), token=(name,fallback) => css.getPropertyValue(`--color-${name}`).trim() || fallback;
     const ink=token("ink"),muted=token("ink-muted"),line=token("line"),evalColor=token("eval"),reflectionColor=token("reflection"),background=token("plot-bg");
@@ -327,30 +328,31 @@ export class DrfMap {
     const labelStepX=Math.max(1,Math.ceil(48/(c.scaleX*10))),labelStepY=Math.max(1,Math.ceil(24/(c.scaleY*10)));
     for (const x of xs) if ((x/10)%labelStepX===0) { const sx=screen([x,0])[0];ctx.textAlign="center";ctx.fillText(String(x),sx,box.y+box.h+20); }
     for (const y of ys) if ((y/10)%labelStepY===0) { const sy=screen([0,y])[1];ctx.textAlign="right";ctx.fillText(String(y),box.x-9,sy+5); }
-    drawRich(ctx,"$x$ [m]",box.x+box.w/2,height-8,{align:"center",color:muted});
-    ctx.save();ctx.translate(17,box.y+box.h/2);ctx.rotate(-Math.PI/2);drawRich(ctx,"$y$ [m]",0,0,{align:"center",color:muted});ctx.restore();
+    drawRich(ctx,String.raw`$x\,[\mathrm{m}]$`,box.x+box.w/2,height-8,{align:"center",color:muted});
+    ctx.save();ctx.translate(17,box.y+box.h/2);ctx.rotate(-Math.PI/2);drawRich(ctx,String.raw`$y\,[\mathrm{m}]$`,0,0,{align:"center",color:muted});ctx.restore();
     ctx.font=uiFont(14);ctx.fillStyle=muted;
     if (geometry) {
       if (!this.state.frame) { ctx.fillStyle=muted;ctx.textAlign="center";ctx.fillText(layers.showTruth ? "Wall preview · evaluation only" : "Run to show measured ranges and trajectories.",box.x+box.w/2,box.y+box.h/2); }
       return;
     }
     // Colour bar spans the plot height minus its two end labels.
-    const palette=palettes[this.state.heatField ?? "Dbar"],barX=width-42,barY=box.y+22,barH=Math.max(1,box.h-44),gradient=ctx.createLinearGradient(0,barY+barH,0,barY);
-    palette.forEach((value,i) => gradient.addColorStop(i/(palette.length-1),rgb(value)));
+    const colors=this.heatPalette,barX=width-42,barY=box.y+22,barH=Math.max(1,box.h-44),gradient=ctx.createLinearGradient(0,barY+barH,0,barY);
+    colors.forEach((value,i) => gradient.addColorStop(i/(colors.length-1),rgb(value)));
     ctx.fillStyle=gradient;ctx.fillRect(barX,barY,12,barH);ctx.strokeStyle=line;ctx.strokeRect(barX,barY,12,barH);ctx.fillStyle=muted;ctx.textAlign="center";
     ctx.fillText(numberLabel(this.maxValue),barX+6,barY-7);ctx.fillText("0",barX+6,barY+barH+17);
     if (!this.state.frame) { ctx.fillStyle=muted;ctx.textAlign="center";ctx.fillText("No accumulated field yet.",box.x+box.w/2,box.y+box.h/2); }
   }
   async png() {
+    await prepareCanvasMath();
     const plot=document.createElement("canvas"),out=document.createElement("canvas"),ratio=300/96;
     this.paint(plot,ratio);out.width=plot.width;out.height=plot.height+Math.round(86*ratio);
     const ctx=out.getContext("2d"),css=getComputedStyle(document.documentElement);
     ctx.fillStyle=css.getPropertyValue('--color-plot-bg').trim();ctx.fillRect(0,0,out.width,out.height);ctx.drawImage(plot,0,86*ratio);ctx.scale(ratio,ratio);
     ctx.fillStyle=css.getPropertyValue('--color-ink').trim();ctx.font='600 14px -apple-system, Arial';
-    ctx.fillText(this.state.heatField==='betaHat' ? 'β̂ [dimensionless]' : 'D̄ [1/m²]',12,18);
-    ctx.font='14px -apple-system, Arial';ctx.fillText(`snapshot ${this.state.frame?.t ?? 0} · ${this.state.scaleMode==='log' ? 'log(1 + value)' : 'linear'} color scale`,12,38);
-    ctx.fillText('Dashed wall: evaluation only',12,58);
-    ctx.fillText(this.state.aspectMode==='equal' ? 'Axes: equal metres' : 'Axes: independent x/y scale',12,78);
+    drawRich(ctx,this.state.heatField==='betaHat' ? String.raw`$\hat{\beta}$ [dimensionless]` : String.raw`$\bar{D}\,[\mathrm{m}^{-2}]$`,12,18,{weight:600});
+    drawRich(ctx,`snapshot ${this.state.frame?.t ?? 0} · ${this.state.scaleMode==='log' ? String.raw`$\log(1+\mathrm{value})$` : 'linear'} color scale`,12,38);
+    ctx.font=uiFont(14);ctx.fillText('Dashed wall: evaluation only',12,58);
+    drawRich(ctx,this.state.aspectMode==='equal' ? 'Axes: equal metres' : String.raw`Axes: independent $x/y$ scale`,12,78);
     return new Promise((resolve,reject) => out.toBlob((blob) => blob ? resolve(blob) : reject(Error("PNG rendering failed.")),"image/png"));
   }
 }
@@ -424,7 +426,7 @@ export function drawMetricHistory(canvas,evaluations,selection='all',snapshots=e
   metrics.forEach(([key,title,unit],k) => {
     const points=evaluations.map(e => ({x:e.t,y:e[key]==null ? NaN : e[key]*(unit==="%" ? 100 : 1)})),[ymin,ymax]=unit==="%" ? [0,100] : extent(points);
     // A single selected metric is already named by the card's selector.
-    const axes=chartAxes(surface,{title:metrics.length>1 ? title : '',xLabel:"snapshot",yLabel:unit,xmin:0,xmax:Math.max(1,snapshots),ymin,ymax,top:k*surface.height/metrics.length,height:surface.height/metrics.length,compact:surface.height<420});
+    const axes=chartAxes(surface,{title:metrics.length>1 ? title.replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`) : '',xLabel:"snapshot",yLabel:unit==="%" ? String.raw`$\%$` : String.raw`$\mathrm{m}$`,xmin:0,xmax:Math.max(1,snapshots),ymin,ymax,top:k*surface.height/metrics.length,height:surface.height/metrics.length,compact:surface.height<420});
     chartLine(surface,axes,points,surface.color("eval"),[],false,false,true);
   });
 }
@@ -434,7 +436,7 @@ export function drawSweep(canvas,aggregates,reference=[],metric='medianError') {
   const scale=metric==='recall' ? 100 : 1, metricLabel=metric==='recall' ? 'Observed recall' : 'Median distance';
   const all=aggregates.map(a => ({x:a.sigmaD,y:a[metric].mean == null ? NaN : scale*a[metric].mean,sd:a[metric].sd == null ? null : scale*a[metric].sd})),[ymin,ymax]=metric==='recall' ? [0,100] : extent([...all,...reference.map(a=>({y:a.medianError}))]);
   const xmin=Math.min(.05,...aggregates.map(a=>a.sigmaD)),xmax=Math.max(.3,...aggregates.map(a=>a.sigmaD));
-  const axes=chartAxes(surface,{title:aggregates.some(a => a[metric].failed) ? `${aggregates.filter(a => a[metric].failed).length} failed conditions · see table` : `${metricLabel} · mean ± 1 SD`,xLabel:"$σ_d$ [m]",yLabel:metric==='recall' ? "%" : "m",xmin,xmax,ymin,ymax,top:36,height:surface.height-36});
+  const axes=chartAxes(surface,{title:aggregates.some(a => a[metric].failed) ? `${aggregates.filter(a => a[metric].failed).length} failed conditions · see table` : `${metricLabel} · mean ${String.raw`$\pm$`} 1 SD`,xLabel:String.raw`$\sigma_d\,[\mathrm{m}]$`,yLabel:metric==='recall' ? String.raw`$\%$` : String.raw`$\mathrm{m}$`,xmin,xmax,ymin,ymax,top:36,height:surface.height-36});
   const {ctx}=surface;let legendX=14;
   roughness.forEach((r,k) => {
     const color=colors[k%colors.length],points=aggregates.filter(a=>a.roughness===r).sort((a,b)=>a.sigmaD-b.sigmaD).map(a=>({x:a.sigmaD,y:a[metric].mean == null ? NaN : scale*a[metric].mean,sd:a[metric].sd == null ? null : scale*a[metric].sd}));
@@ -442,7 +444,7 @@ export function drawSweep(canvas,aggregates,reference=[],metric='medianError') {
     chartLine(surface,axes,reference.filter(a=>a.roughness===r).map(a=>({x:a.sigmaD,y:a.medianError})),color,[5,5]);
     // Legend: coloured line key, text in ink (identity never rides on text colour alone).
     ctx.save();ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(legendX,19);ctx.lineTo(legendX+18,19);ctx.stroke();ctx.restore();
-    legendX+=26+drawRich(ctx,`$σ$ = ${r}°`,legendX+26,24,{size:15,color:surface.color("ink")})+22;
+    legendX+=26+drawRich(ctx,String.raw`$\sigma$ = `+r+'${}^\\circ$',legendX+26,24,{size:15,color:surface.color("ink")})+22;
   });
 }
 export function drawHistogram(canvas,ratios) {
@@ -452,23 +454,23 @@ export function drawHistogram(canvas,ratios) {
   const density=counts.map((n,k) => ({x:xmin+(k+.5)*step,y:finite.length ? n/(finite.length*step) : 0}));
   const theoretical=Array.from({length:160},(_,k) => {const x=Math.max(.02,xmin+(xmax-xmin)*(k+.5)/160);return{x,y:Math.exp(-x/2)/Math.sqrt(2*Math.PI*x)};});
   const [,ymax]=extent([...density,...theoretical]);
-  const axes=chartAxes(surface,{title:"Ratio density · dashed $χ^2_1$",xLabel:"$z = (ρ − ρ^*) / ς$",yLabel:"density",xmin,xmax,ymin:0,ymax});
+  const axes=chartAxes(surface,{title:String.raw`Ratio density · dashed $\chi^2_1$`,xLabel:String.raw`$z=(\rho-\rho^*)/\varsigma$`,yLabel:"density",xmin,xmax,ymin:0,ymax});
   const {ctx}=surface;ctx.save();ctx.beginPath();ctx.rect(axes.box.x,axes.box.y,axes.box.w,axes.box.h);ctx.clip();ctx.fillStyle=surface.color("eval");
   for (const p of density) ctx.fillRect(axes.x(p.x-step*.45),axes.y(p.y),(axes.x(xmin+step)-axes.x(xmin))*.9,axes.y(0)-axes.y(p.y));
   ctx.restore();chartLine(surface,axes,theoretical,surface.color("ink"),[6,5]);
 }
 export function drawProfile(canvas,cells,xRange=[0,60]) {
   const surface=chartSurface(canvas);if (!surface) return;
-  const fields=[["delta","$δ$ [deg]","deg",180/Math.PI],["w","$w(s)$ · dimensionless","w",1],["lambda","$Λ(s)$ · expected count / cell","count",1]];
+  const fields=[["delta",String.raw`$\delta\,[\mathrm{deg}]$`,String.raw`$\mathrm{deg}$`,180/Math.PI],["w","$w(s)$ · dimensionless","$w$",1],["lambda",String.raw`$\Lambda(s)$ · expected count / cell`,"count",1]];
   fields.forEach(([key,title,unit,multiplier],k) => {
-    const all=cells.map(c=>({x:c.s[0],y:c[key]*multiplier})),[ymin,ymax]=extent(all),axes=chartAxes(surface,{title,xLabel:"$x$ [m] · lower solid / upper dashed",yLabel:unit,xmin:xRange[0],xmax:xRange[1],ymin,ymax,top:k*surface.height/3,height:surface.height/3,metreX:true});
+    const all=cells.map(c=>({x:c.s[0],y:c[key]*multiplier})),[ymin,ymax]=extent(all),axes=chartAxes(surface,{title,xLabel:String.raw`$x\,[\mathrm{m}]$ · lower solid / upper dashed`,yLabel:unit,xmin:xRange[0],xmax:xRange[1],ymin,ymax,top:k*surface.height/3,height:surface.height/3,metreX:true});
     for (const wall of [0,1]) chartLine(surface,axes,cells.filter(c=>c.wall===wall).map(c=>({x:c.s[0],y:c[key]*multiplier})),surface.color("eval"),wall ? [6,4] : []);
   });
 }
 export function drawCounts(canvas,counts,predicted) {
   const surface=chartSurface(canvas);if (!surface) return;
   const points=counts.map((n,k)=>({x:predicted[k],y:n})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),maximum=Math.max(1,...points.flatMap(p=>[p.x,p.y]))*1.1;
-  const axes=chartAxes(surface,{title:"Diffuse count · dashed $y = x$",xLabel:"Locally predicted count",yLabel:"Actual count",xmin:0,xmax:maximum,ymin:0,ymax:maximum});
+  const axes=chartAxes(surface,{title:"Diffuse count · dashed $y=x$",xLabel:"Locally predicted count",yLabel:"Actual count",xmin:0,xmax:maximum,ymin:0,ymax:maximum});
   chartLine(surface,axes,[{x:0,y:0},{x:maximum,y:maximum}],surface.color("ink"),[5,5]);
   chartLine(surface,axes,points,surface.color("eval"),[],false,true);
 }
@@ -486,7 +488,7 @@ export function drawComparisonHistory(canvas,evaluations,selection='recall',snap
   // Short runs still show their endpoint; longer runs retain the fixed 20-snapshot scale.
   if (xmax<20) xTicks.push(xmax);
   const metricLabels={precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
-  const yLabel=metricLabels[selection]?.[surface.height<170?1:0] ?? (percent?'%':'m');
+  const yLabel=(metricLabels[selection]?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
   const axes=chartAxes(surface,{xLabel:'',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks:percent?[0,25,50,75,100]:undefined,hideXZero:true,showYLabel:true,topInset:16,bottomInset:26});
   chartLine(surface,axes,series[0],surface.color('accent'),[],false,false,true);
   chartLine(surface,axes,series[1],surface.color('baseline'),[6,4],false,false,true);

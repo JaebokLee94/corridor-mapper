@@ -1,13 +1,16 @@
+import { renderMath } from './latex.mjs';
+import { setMathText } from './dom-math.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261103-defaults1';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261103-defaults1';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261104-compact4';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261104-latex2';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs';
 
+renderMath();
 const $ = id => document.getElementById(id), form = $('settings');
 const state = { mode: 'idle', protocol: null, scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0, generatedSnapshots: 0, measurementTotal: 0,
   busy: false, replay: false, replayAt: 0, generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
@@ -83,7 +86,7 @@ function fillSettings(input) {
   }
 }
 function settings() {
-  if (Number(form.elements.namedItem('sigmaD').value) === 0) throw new Error('Both methods require range SD σd > 0. Zero range noise can make the joint pose update singular.');
+  if (Number(form.elements.namedItem('sigmaD').value) === 0) throw new Error('Both methods require a range standard deviation greater than zero. Zero range noise can make the joint pose update singular.');
   if (!form.reportValidity()) throw new Error('Check the input values and their allowed ranges.');
   const values = Object.fromEntries(new FormData(form)); values.specular = form.elements.namedItem('specular').checked;
   return normalizeInput(values);
@@ -306,7 +309,13 @@ const inspect = point => {
         for (const wall of state.scenario.walls) for (const p of wall) distance = Math.min(distance, Math.hypot(x - p[0], y - p[1]));
         wallDistance = ` · Wall-sample distance ${fmt(distance)} m · evaluation only`;
       }
-      $('inspector').textContent = `snapshot ${value.t} · grid (${fmt(x, 2)}, ${fmt(y, 2)}) m · D ${fmt(value.D)} · A ${fmt(value.A)} [1/m²] · Q ${value.Q} · D̄ ${fmt(value.Dbar)} · β̂ ${fmt(value.betaHat)}${wallDistance}`;
+      setMathText($('inspector'), [
+        `snapshot ${value.t} · grid (${fmt(x, 2)}, ${fmt(y, 2)}) m · `,
+        { tex: 'D' }, ` ${fmt(value.D)} · `, { tex: 'A' }, ` ${fmt(value.A)} [`,
+        { tex: String.raw`\mathrm{m}^{-2}` }, '] · ', { tex: 'Q' }, ` ${value.Q} · `,
+        { tex: String.raw`\bar{D}` }, ` ${fmt(value.Dbar)} · `,
+        { tex: String.raw`\hat{\beta}` }, ` ${fmt(value.betaHat)}${wallDistance}`,
+      ]);
     } catch (error) { if (error.message !== 'Cancelled') $('inspector').textContent = `Inspection stopped: ${error.message}`; }
   }, 100);
 };
@@ -366,7 +375,7 @@ function renderSelected() {
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
   drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),$('historyMetric').value,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value));
   if (diag) {
-    $('diagnosticSummary').textContent = `diffuse / configuration ${fmt(diag.diffusePerConfig, 1)} · duplicate ranges ${diag.duplicateFraction == null ? '—' : fmt(100 * diag.duplicateFraction, 1) + '%'} · Theorem 2: mean ${fmt(diag.theoremMean)}, median ${fmt(diag.theoremMedian)}, n=${diag.ratios.length}, negative=${diag.theoremNegative} · fold prediction ${fmt(diag.foldPrediction)} m`;
+    setMathText($('diagnosticSummary'), [`diffuse / configuration ${fmt(diag.diffusePerConfig, 1)} · duplicate ranges ${diag.duplicateFraction == null ? '—' : fmt(100 * diag.duplicateFraction, 1) + '%'} · Theorem 2: mean ${fmt(diag.theoremMean)}, median ${fmt(diag.theoremMedian)}, `, { tex: 'n' }, ` = ${diag.ratios.length}, negative = ${diag.theoremNegative} · fold prediction ${fmt(diag.foldPrediction)} m`]);
     if (!$('diagnosticPanel').hidden) {
       drawHistogram($('diagnosticChart'), diag.ratios); drawCounts($('countChart'), diag.diffuseCounts, diag.predictedCounts); updateProfile();
     }
@@ -476,7 +485,11 @@ function renderSweep() {
   for (const row of aggregates) {
     const tr = document.createElement('tr');
     for (const value of [METHOD_PROTOCOL[row.method].name, row.roughness, row.sigmaD, row.n, statistic(row.precision, row.n, 100, 1), statistic(row.recall, row.n, 100, 1), statistic(row.p95, row.n), statistic(row.offwall, row.n, 100, 1)]) {
-      const cell = document.createElement('td'); cell.textContent = value; tr.append(cell);
+      const cell = document.createElement('td');
+      const terms = String(value).split(' ± ');
+      if (terms.length === 2) setMathText(cell, [terms[0] + ' ', { tex: String.raw`\pm` }, ' ' + terms[1]]);
+      else cell.textContent = value;
+      tr.append(cell);
     }
     body.append(tr);
   }

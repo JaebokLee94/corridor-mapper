@@ -1,0 +1,26 @@
+// Exact LaTeX expressions used in canvas labels and the PNG export.
+// Compiled to self-contained SVG paths by build-latex.mjs.
+export const CANVAS_TEX = [
+  String.raw`x\,[\mathrm{m}]`,
+  String.raw`y\,[\mathrm{m}]`,
+  String.raw`\bar{D}\,[\mathrm{m}^{-2}]`,
+  String.raw`\hat{\beta}`,
+  String.raw`\log(1+\mathrm{value})`,
+  String.raw`x/y`,
+  String.raw`\sigma_d\,[\mathrm{m}]`,
+  String.raw`\sigma`,
+  String.raw`{}^\circ`,
+  String.raw`\chi^2_1`,
+  String.raw`\pm`,
+  String.raw`z=(\rho-\rho^*)/\varsigma`,
+  String.raw`\delta\,[\mathrm{deg}]`,
+  String.raw`w(s)`,
+  String.raw`\Lambda(s)`,
+  String.raw`y=x`,
+  String.raw`[\%]`,
+  String.raw`[\mathrm{m}]`,
+  String.raw`\%`,
+  String.raw`\mathrm{m}`,
+  String.raw`\mathrm{deg}`,
+  String.raw`w`,
+];
