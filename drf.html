@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261104-compact-controls1" />
+  <link rel="stylesheet" href="drf/style.css?v=20261104-map-heading2" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -55,7 +55,7 @@
             <label class="field"><span>Range σ<sub>d</sub> <small>m</small></span><input name="sigmaD" type="number" min="0.01" max="2" step="0.01" value="0.1" required /></label>
           </div>
         </fieldset>
-        <details class="sidebar-section"><summary>Wall geometry</summary><p class="note">Both walls: independent shapes, ≥6 m vertical gap</p><div class="prop-grid">
+        <details class="sidebar-section"><summary>Wall geometry</summary><p class="note geometry-note" title="Both walls have independent shapes and a minimum vertical gap of 6 m.">Independent walls · Δy ≥6 m</p><div class="prop-grid geometry-fields">
           <label class="field"><span>Shape amplitude <small>m</small></span><input name="sigmaM" type="number" min="0" max="12" step="0.1" value="6" required /></label>
           <label class="field"><span>Shape spacing <small>m</small></span><input name="deltaM" type="number" min="4" max="60" step="1" value="20" required /></label>
           <label class="field"><span>Roughness height <small>m</small></span><input name="sigmaDGeometry" type="number" min="0" max="3" step="0.01" value="0.33" required /></label>
@@ -68,7 +68,7 @@
           <label class="field"><span>Cell Δs <small>m</small></span><input name="cellStep" type="number" min="0.005" max="0.2" step="0.005" value="0.02" required /></label>
           <label class="field"><span>Merge ε<sub>res</sub> <small>m</small></span><input name="resolution" type="number" min="0" max="2" step="0.01" value="0" required /></label>
         </div></details>
-        <details class="sidebar-section"><summary>Display-field numerics</summary><p class="note">Both estimators use a fixed 100 × 100 grid, 4σ band and exact perimeter.</p><div class="prop-grid">
+        <details class="sidebar-section numerics-settings"><summary>Display-field numerics</summary><p class="note numerics-note">Both estimators: 100 × 100 grid,<br />4σ band, exact perimeter.</p><div class="prop-grid">
           <label class="field"><span>Display grid</span><select name="grid"><option value="100">100 × 100</option><option value="150" selected>150 × 150</option><option value="200">200 × 200</option></select></label>
           <label class="field"><span>Residual band</span><select name="band"><option value="3">3σ</option><option value="4" selected>4σ</option><option value="5">5σ</option><option value="full">Full grid</option></select></label>
           <label class="field span-2"><span>Ellipse perimeter</span><select name="perimeter"><option value="exact">Exact integration</option><option value="ramanujan">Ramanujan approximation</option></select></label>
@@ -82,17 +82,17 @@
         </fieldset>
         <fieldset class="toggle-list evaluation"><legend>Ground truth · evaluation only</legend>
           <label class="toggle"><input id="showTruth" type="checkbox" checked /><span class="swatch swatch-truth" aria-hidden="true"></span>True walls</label>
-          <label class="toggle"><input id="showSpecular" type="checkbox" />Specular points</label>
-          <label class="toggle"><input id="showDiffuse" type="checkbox" />Diffuse points</label>
-          <label class="toggle"><input id="showObserved" type="checkbox" />Observed-wall mask</label>
+          <label class="toggle"><input id="showSpecular" type="checkbox" /><span class="swatch swatch-specular" aria-hidden="true"></span>Specular points</label>
+          <label class="toggle"><input id="showDiffuse" type="checkbox" /><span class="swatch swatch-diffuse" aria-hidden="true"></span>Diffuse points</label>
+          <label class="toggle"><input id="showObserved" type="checkbox" /><span class="swatch swatch-observed" aria-hidden="true"></span>Observed-wall mask</label>
         </fieldset>
       </details>
-      <details class="sidebar-section"><summary>Field appearance</summary><div class="prop-grid">
+      <details class="sidebar-section appearance-settings"><summary>Field appearance</summary><div class="prop-grid">
         <label class="field"><span>Axes</span><select id="aspectMode"><option value="equal" selected>Equal metres</option><option value="fill">Fill panel</option></select></label>
         <label class="field"><span>Colour scale</span><select id="scaleMode"><option value="linear">Linear</option><option value="log">log(1 + value)</option></select></label>
         <label class="field span-2"><span>PNG export field</span><select id="heatField"><option value="Dbar">D̄ · mean density</option><option value="betaHat">β̂ · field contrast</option></select></label>
       </div></details>
-      <p class="sidebar-foot">Estimation receives measured positions, covariances and ranges only.</p>
+      <p class="sidebar-foot">Inputs: measured positions,<br />covariances and ranges only.</p>
       </details>
     </aside>
     <div class="content">
@@ -100,10 +100,8 @@
       <section class="dashboard" aria-label="Mapping experiment">
         <div class="main-grid">
           <figure class="view map-panel" id="viewMain">
-            <figcaption><div class="map-heading"><h2 id="mapTitle">Wall reconstruction</h2><div class="map-toolbar" aria-label="Map controls"><button id="fitView" type="button">Fit domain</button><button id="zoomOut" type="button" aria-label="Zoom map out">−</button><button id="zoomIn" type="button" aria-label="Zoom map in">+</button><button id="firstSnapshot" type="button">Reset view</button></div></div>
-              <div class="method-switch" role="group" aria-label="Displayed estimator"><button id="methodCompare" type="button" aria-pressed="true" data-method="compare">Compare both</button><button id="methodGuarded" type="button" aria-pressed="false" data-method="guarded">Guarded PSPT</button><button id="methodBaseline" type="button" aria-pressed="false" data-method="baseline">Fixed-fragment B</button><span class="view-meta">x, y in metres · 1:1</span></div>
-            </figcaption>
-            <div class="map-pair" id="mapPair" data-mode="compare"><div class="map-pane"><h3 class="map-name" id="primaryMapName">Guarded PSPT</h3><div class="view-body"><canvas id="mapCanvas" class="dashboard-canvas" role="img" aria-label="Candidate map. Numerical results for both methods appear in the comparison table.">Canvas support is required to display the map. Numerical results are available in the comparison table.</canvas></div></div><div class="map-pane" id="baselinePane"><h3 class="map-name baseline-name">Fixed-fragment B</h3><div class="view-body"><canvas id="baselineCanvas" class="dashboard-canvas" role="img" aria-label="Fixed-fragment B candidate map, sharing the PSPT camera and snapshot"></canvas></div></div></div>
+            <figcaption class="map-heading"><div class="map-heading-main"><h2 id="mapTitle">Wall reconstruction</h2><div class="method-switch" role="group" aria-label="Displayed estimator"><button id="methodCompare" type="button" aria-pressed="true" data-method="compare">Compare both</button><button id="methodGuarded" type="button" aria-pressed="false" data-method="guarded">Guarded PSPT</button><button id="methodBaseline" type="button" aria-pressed="false" data-method="baseline">Fixed-fragment B</button></div></div><div class="map-toolbar" aria-label="Map controls"><button id="fitView" type="button">Fit domain</button><button id="zoomOut" type="button" aria-label="Zoom map out">−</button><button id="zoomIn" type="button" aria-label="Zoom map in">+</button><button id="firstSnapshot" type="button">Reset view</button></div></figcaption>
+            <div class="map-pair" id="mapPair" data-mode="compare"><div class="map-pane"><div class="map-pane-heading"><h3 class="map-name" id="primaryMapName">Guarded PSPT</h3><span class="view-meta map-units">x, y in metres · 1:1</span></div><div class="view-body"><canvas id="mapCanvas" class="dashboard-canvas" role="img" aria-label="Candidate map. Numerical results for both methods appear in the comparison table.">Canvas support is required to display the map. Numerical results are available in the comparison table.</canvas></div></div><div class="map-pane" id="baselinePane"><div class="map-pane-heading"><h3 class="map-name baseline-name">Fixed-fragment B</h3><span class="view-meta map-units">x, y in metres · 1:1</span></div><div class="view-body"><canvas id="baselineCanvas" class="dashboard-canvas" role="img" aria-label="Fixed-fragment B candidate map, sharing the PSPT camera and snapshot"></canvas></div></div></div>
             <div class="legend-row" aria-label="Map legend"><ul class="legend"><li data-layer="proxy"><span class="swatch swatch-supported" aria-hidden="true"></span>Supported</li><li data-layer="proxy"><span class="swatch swatch-pending" aria-hidden="true"></span>Held</li><li data-layer="proxy"><span class="swatch swatch-contradicted" aria-hidden="true"></span>Rejected</li><li data-layer="truth"><span class="swatch swatch-truth" aria-hidden="true"></span>True wall</li><li data-layer="vehicles"><span class="swatch swatch-track" aria-hidden="true"></span>Trajectory</li><li data-layer="ellipses"><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipse</li></ul><span id="ellipseStats" class="view-meta">No measurements yet</span></div>
           </figure>
           <section class="view results-panel" aria-labelledby="resultsTitle">
@@ -121,14 +119,14 @@
               <tr><th scope="row">Rejected</th><td id="contradictedValue">0</td><td id="bContradictedValue">—</td></tr>
             </tbody></table>
             <p class="comparison-note"><span id="thresholdSummary">Exploratory tuning · 200 scenes</span><br>Fixed scores; no certified error bound.</p>
-            <details class="run-diagnostics"><summary>Counts &amp; computation</summary><dl class="metrics"><div><dt>Accumulated paths Q<sub>t</sub></dt><dd id="qValue">0</dd></div><div><dt>Admitted / rejected</dt><dd><span id="acceptedValue">0</span> / <span id="rejectedValue">0</span></dd></div><div><dt>Generated paths</dt><dd id="pathValue">—</dd></div><div><dt>Compute time</dt><dd id="timingValue">—</dd></div></dl></details>
+            <dl class="metrics run-counts"><div><dt>Accumulated paths Q<sub>t</sub></dt><dd id="qValue">0</dd></div><div><dt>Admitted / rejected</dt><dd><span id="acceptedValue">0</span> / <span id="rejectedValue">0</span></dd></div><div class="generated-count"><dt>Generated paths</dt><dd id="pathValue">—</dd></div><div><dt>Compute time</dt><dd id="timingValue">—</dd></div></dl>
           </section>
         </div>
         <div class="playback-bar"><div class="timeline"><button id="replayButton" type="button" disabled aria-label="Replay computed snapshots">Replay</button><label class="time-label" for="timeSlider">Snapshot <output id="snapshotLabel">0 / 120</output></label><input id="timeSlider" type="range" min="1" max="120" step="1" value="1" disabled /><label class="speed-label">Speed<select id="playbackSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div><p class="keyboard-note"><kbd>Space</kbd> replay <kbd>←</kbd><kbd>→</kbd> step</p></div>
         <div class="field-grid">
           <figure class="view" id="viewDensity"><figcaption class="vlabel"><div class="field-heading"><h2>D̄ · Mean residual density</h2><p class="view-meta">m⁻² · shared by both methods</p></div><div class="map-toolbar"><button id="densityZoomOut" type="button" aria-label="Zoom density out">−</button><button id="densityZoomIn" type="button" aria-label="Zoom density in">+</button><button id="densityResetView" type="button" aria-label="Reset density view">↺</button></div></figcaption><div class="view-body"><canvas id="densityCanvas" class="dashboard-canvas" role="img" aria-label="Mean accumulated residual density"></canvas></div></figure>
           <figure class="view" id="viewContrast"><figcaption class="vlabel"><div class="field-heading"><h2>β̂ · Field contrast</h2><p class="view-meta">Dimensionless · not a probability</p></div><div class="map-toolbar"><button id="contrastZoomOut" type="button" aria-label="Zoom contrast out">−</button><button id="contrastZoomIn" type="button" aria-label="Zoom contrast in">+</button><button id="contrastResetView" type="button" aria-label="Reset contrast view">↺</button></div></figcaption><div class="view-body"><canvas id="contrastCanvas" class="dashboard-canvas" role="img" aria-label="Dimensionless field contrast"></canvas></div></figure>
-          <figure class="view" id="viewMetrics"><figcaption class="vlabel"><h2>Performance over time</h2><select id="historyMetric" aria-label="Metric over time"><option value="precision">Centre precision [%]</option><option value="recall" selected>Observed recall [%]</option><option value="firstSupportPrecision">First support [%]</option><option value="holdRate">Held / unselected [%]</option><option value="p95">P95 distance [m]</option><option value="offwall">Off-wall centres [%]</option></select></figcaption><div class="history-legend"><span><i class="line-pspt"></i>PSPT</span><span><i class="line-baseline"></i>B</span></div><div class="view-body"><canvas id="metricChart" class="dashboard-canvas compact-chart" role="img" aria-label="Comparison of both methods over computed snapshots. Export CSV for all numerical values."></canvas></div></figure>
+          <figure class="view" id="viewMetrics"><figcaption class="vlabel"><h2>Performance over time</h2><select id="historyMetric" aria-label="Metric over time"><option value="precision">Centre precision [%]</option><option value="recall" selected>Observed recall [%]</option><option value="firstSupportPrecision">First support [%]</option><option value="holdRate">Held / unselected [%]</option><option value="p95">P95 distance [m]</option><option value="offwall">Off-wall centres [%]</option></select></figcaption><div class="view-body"><canvas id="metricChart" class="dashboard-canvas compact-chart" role="img" aria-label="Comparison of both methods over computed snapshots. Export CSV for all numerical values."></canvas></div><div class="history-legend"><span><i class="line-pspt"></i>PSPT</span><span><i class="line-baseline"></i>B</span></div></figure>
         </div>
         <p id="inspector" class="inspector"></p>
       </section>
@@ -155,8 +153,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-compact-controls1';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-compact-controls1';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-map-heading2';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-map-heading2';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>
