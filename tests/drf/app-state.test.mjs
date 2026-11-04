@@ -102,6 +102,7 @@ test('full runs and single steps send exactly one start command with the request
     const scenario={input,domain:[0,80,-20,50]},grid={nx:150,ny:150,domain:scenario.domain};
     await context.receiveRunMessage({type:'prepared',requestId:state.generation,scenario,grid},state.generation);
     assert.equal(state.scenario,scenario);assert.equal(state.grid,grid,'Use the grid supplied by the autonomous worker');
+    assert.equal(state.generatedSnapshots,requested);assert.equal(state.measurementTotal,requested);
     assert.equal(state.valid,true);assert.equal(state.mode,'running');assert.equal(state.busy,true);
     assert.equal(posted.length,1,'Prepared notifications need no acknowledgement to continue');
     assert.equal(inspections.length,1);assert.equal(inspections[0][0],'eval');assert.equal(inspections[0][1].type,'init');
@@ -217,11 +218,14 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   assert.equal(state.mode,'running');assert.equal(state.followLive,true);
   assert.equal(state.busy,true,'Run remains busy until the worker confirms a pause or completion');assert.equal(pending.size,0);
   state.workers=[{stop(){stoppedWorkers++;}}];
+  state.generatedSnapshots=3;state.measurementTotal=3;
   $('inspector').textContent='old D/A/Q';$('diagnosticSummary').textContent='old Theorem 2';
   vm.runInContext("$('resetButton').onclick();",context);
   for (const [id,callback] of [...pending]) {pending.delete(id);callback(400);}
   assert.equal(pending.size,0);assert.equal(stoppedWorkers,1);assert.equal(cancelledSweeps,1);
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.scenario,null);assert.equal(state.valid,false);
+  assert.equal($('generationProgress').value,0);assert.equal($('runProgress').value,0);
+  assert.equal(state.generatedSnapshots,0);assert.equal(state.measurementTotal,0);
   assert.equal(Number($('timeSlider').max),1);assert.equal(Number($('timeSlider').value),0);assert.equal($('timeSlider').disabled,true);
   assert.equal($('snapshotLabel').textContent,'0 / 60');
   assert.equal($('sweepStatus').textContent,'No results yet.');
@@ -247,6 +251,25 @@ function runUiContext(total=120) {
   vm.runInContext(section('function controls()','function cancel(')+section('async function receiveRunMessage(','async function hashField('),context);
   return {context,state,$,posted,drawn,errors};
 }
+
+test('generation progress fills the rear bar before computation fills the foreground bar',async()=>{
+  const {context,state,$,posted,errors}=runUiContext(120);state.scenario=null;
+  context.makeWorker=()=>({request:async()=>({})});
+  context.controls();
+  assert.equal($('generationProgress').max,120);assert.equal($('generationProgress').value,0);assert.equal($('runProgress').value,0);
+  await context.receiveRunMessage({type:'progress',requestId:1,t:49,total:120},1);
+  assert.equal($('generationProgress').value,49);assert.equal($('runProgress').value,0);
+  assert.equal(state.frames.length,0,'Generated measurements are not completed estimates');
+  await context.receiveRunMessage({type:'progress',requestId:0,t:100,total:120},0);
+  assert.equal($('generationProgress').value,49,'Ignore stale jobs');
+  await context.receiveRunMessage({type:'prepared',requestId:1,scenario:{input:{snapshots:120}},grid:{}},1);
+  assert.equal($('generationProgress').value,120);assert.equal($('runProgress').value,0);
+  for (let t=1;t<=45;t++) await context.receiveRunMessage({type:'frame',requestId:1,frame:{t},evaluation:{},next:t},1);
+  assert.equal($('generationProgress').value,120);assert.equal($('runProgress').value,45);
+  await context.receiveRunMessage({type:'status',requestId:1,mode:'paused',next:45,total:120},1);
+  assert.equal($('generationProgress').value,120);assert.equal($('runProgress').value,45);
+  assert.deepEqual(posted,[],'Displaying progress cannot schedule further computation');assert.deepEqual(errors,[]);
+});
 
 test('UI receives every background result without requesting or acknowledging any next snapshot',async()=>{
   const {context,state,$,posted,errors}=runUiContext();

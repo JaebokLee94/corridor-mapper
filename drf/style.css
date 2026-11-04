@@ -6,6 +6,7 @@
   --color-eval:#80550d; --color-danger:#aa3c30; --color-plot-bg:#fff;
   --color-track:#296ba1; --color-ellipse:#409bd1; --color-proxy:#007b60; --color-truth:#263d4b;
   --color-field-track:#1a3850; --color-field-casing:#fff; --color-baseline:#b06718;
+  --color-progress-generated:#7d98b3; --color-progress-computed:#244d73;
   --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
   --font-math:"STIX Two Math","Cambria Math",math;
   --sidebar:284px; --header-height:72px; --radius:6px;
@@ -18,6 +19,7 @@
   --color-eval:#e8be7e; --color-danger:#ff9b8b; --color-plot-bg:#162630;
   --color-track:#6ab0e5; --color-ellipse:#7dc9f3; --color-proxy:#64d9b6; --color-truth:#d1dce5;
   --color-field-track:#18364c; --color-field-casing:#fff; --color-baseline:#efb366;
+  --color-progress-generated:#9ab1c9; --color-progress-computed:#4979a7;
 }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--color-bg); color:var(--color-ink); font:14px/1.5 var(--font-ui); -webkit-font-smoothing:antialiased; }
@@ -68,10 +70,13 @@ math { font-family:var(--font-math); }
 .run-actions button:not(.run-button) { padding:7px 4px; }
 .status { margin-top:12px; min-height:0; color:var(--color-ink-muted); overflow-wrap:anywhere; }
 #status { white-space:nowrap; overflow-wrap:normal; overflow:hidden; text-overflow:ellipsis; }
-progress { display:block; width:100%; height:4px; margin-top:6px; border:0; background:var(--color-surface-2); appearance:none; border-radius:3px; overflow:hidden; }
-progress::-webkit-progress-bar { background:var(--color-surface-2); }
-progress::-webkit-progress-value { background:var(--color-accent); }
-progress::-moz-progress-bar { background:var(--color-accent); }
+.run-progress { position:relative; height:4px; margin-top:6px; background:var(--color-surface-2); border-radius:3px; overflow:hidden; }
+.run-progress progress { position:absolute; inset:0; display:block; width:100%; height:100%; margin:0; border:0; background:transparent; appearance:none; }
+.run-progress progress::-webkit-progress-bar { background:transparent; }
+.run-progress progress::-webkit-progress-value { background:var(--progress-fill); }
+.run-progress progress::-moz-progress-bar { background:var(--progress-fill); }
+#generationProgress { --progress-fill:var(--color-progress-generated); }
+#runProgress { --progress-fill:var(--color-progress-computed); }
 .settings-summary { display:none; }
 .sidebar-section { min-width:0; margin:0; padding:18px 20px; border:0; border-top:1px solid var(--color-line); }
 fieldset { min-width:0; border:0; padding:0; margin:0; }

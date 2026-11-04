@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261104-status2" />
+  <link rel="stylesheet" href="drf/style.css?v=20261104-progress3" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -31,7 +31,10 @@
         <div class="sidebar-title"><h2>Experiment</h2><button id="resetButton" class="ghost" type="button" title="Restore defaults and clear results">Reset</button></div>
         <div class="run-actions"><button id="runButton" class="primary run-button" type="button" disabled>Run comparison</button><button id="pauseButton" type="button" disabled>Pause</button><button id="stepButton" type="button" disabled>Step</button><button id="cancelButton" type="button" disabled>Cancel</button></div>
         <p id="status" class="status" role="status" aria-live="polite">Press Run comparison to start.</p>
-        <progress id="runProgress" max="120" value="0" aria-label="Computed snapshots"></progress>
+        <div class="run-progress">
+          <progress id="generationProgress" max="120" value="0" aria-label="Generated measurement snapshots"></progress>
+          <progress id="runProgress" max="120" value="0" aria-label="Computed snapshots"></progress>
+        </div>
       </section>
       <details id="settingsDetails" open><summary class="settings-summary">Parameters &amp; layers</summary>
       <form id="settings">
@@ -147,8 +150,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-status2';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-status2';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-progress3';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-progress3';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

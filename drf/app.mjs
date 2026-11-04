@@ -8,7 +8,7 @@ import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs';
 
 const $ = id => document.getElementById(id), form = $('settings');
-const state = { mode: 'idle', scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0,
+const state = { mode: 'idle', scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0, generatedSnapshots: 0, measurementTotal: 0,
   busy: false, replay: false, replayAt: 0, generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
 let runWorker, evalWorker, hoverWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
 $('thresholdSummary').textContent = `Tuning 200 · PSPT ${METHOD_PROTOCOL.guarded.threshold.toFixed(4)} · B ${METHOD_PROTOCOL.baseline.threshold.toFixed(4)}`;
@@ -59,7 +59,7 @@ function controls() {
   $('sweepButton').disabled = active || sweeping || !!state.connecting; $('sweepCancel').disabled = !sweeping;
   $('timeSlider').max = Math.max(1, state.frames.length); $('timeSlider').value = state.selected; $('timeSlider').disabled = !state.frames.length;
   $('replayButton').disabled = !state.frames.length;
-  $('runProgress').max = state.scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value || DEFAULT_INPUT.snapshots); $('runProgress').value = state.frames.length;
+  updateRunProgress();
   $('firstSnapshot').disabled = false;
   $('exportJson').disabled = (!state.valid || !state.frames.length) && !state.sweepRuns.length;
   for (const id of ['exportCsv', 'exportPng']) $(id).disabled = !state.valid || !state.frames.length;
@@ -67,6 +67,11 @@ function controls() {
   $('runState').textContent = ({idle:'Ready',running:'Computing',paused:'Paused',cancelled:'Partial run',done:'Complete'})[state.mode] ?? 'Stopped';
   if (state.server) $('runState').textContent += ' · Server';
   $('newSeed').disabled = active || sweeping;
+}
+function updateRunProgress() {
+  const total = state.measurementTotal || state.scenario?.input.snapshots || state.pendingInput?.snapshots || Number(form.elements.namedItem('snapshots').value || DEFAULT_INPUT.snapshots);
+  $('generationProgress').max = total; $('generationProgress').value = state.generatedSnapshots ?? 0;
+  $('runProgress').max = total; $('runProgress').value = state.frames.length;
 }
 function cancel(clear = false) {
   state.generation++; hoverGeneration++; clearTimeout(hoverTimer); stopReplay();
@@ -82,6 +87,7 @@ function cancel(clear = false) {
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
     state.pendingInput = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
+    state.generatedSnapshots = 0; state.measurementTotal = 0;
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
     for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
@@ -149,9 +155,13 @@ async function receiveRunMessage(data, generation) {
       if (!data.connected) notice('Reconnecting to the server. The server job continues independently.');
       return;
     }
-    if (data.type === 'progress') { notice(`Generating measurements ${data.t} / ${data.total}`); return; }
+    if (data.type === 'progress') {
+      state.measurementTotal = data.total; state.generatedSnapshots = Math.max(state.generatedSnapshots ?? 0, data.t);
+      updateRunProgress(); notice(`Generating measurements ${data.t} / ${data.total}`); return;
+    }
     if (data.type === 'prepared') {
       state.scenario = data.scenario; state.grid = data.grid; state.valid = true;
+      state.measurementTotal = data.scenario.input.snapshots; state.generatedSnapshots = state.measurementTotal;
       if (state.server) { fillSettings(data.scenario.input); location.hash = `v1=${encodeURIComponent(JSON.stringify(data.scenario.input))}`; }
       // Inspection is separate from the run and cannot hold up its progress.
       hoverWorker = makeWorker('field'); evalWorker = makeWorker('eval');
