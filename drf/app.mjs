@@ -4,7 +4,7 @@ import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261103-defaults1';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261104-labels1';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261104-compact1';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs';
 
@@ -359,7 +359,8 @@ function renderSelected() {
     : 'B retains fixed fragments that crossed its threshold in a past qualified snapshot; unselected fragments are held.';
   $('qValue').textContent = frame?.Q ?? 0; $('acceptedValue').textContent = frame?.admitted ?? 0; $('rejectedValue').textContent = frame?.rejected ?? 0;
   const diag = evaluation?.diagnostics;
-  $('pathValue').textContent = diag ? `Specular ${diag.specularCount} / diffuse ${diag.diffuseCount}` : '—';
+  $('pathValue').textContent = diag ? `Spec. ${diag.specularCount} / diff. ${diag.diffuseCount}` : '—';
+  $('pathValue').title = diag ? `Specular paths: ${diag.specularCount}; diffuse paths: ${diag.diffuseCount}` : 'Specular / diffuse paths';
   const times = state.frames.slice(0,state.selected).map(f=>f.ms+(f.methods?.guarded.ms ?? 0)+(f.methods?.baseline.ms ?? 0));
   $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';

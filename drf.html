@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261104-labels1" />
+  <link rel="stylesheet" href="drf/style.css?v=20261104-compact1" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -91,7 +91,6 @@
         <label class="field"><span>Colour scale</span><select id="scaleMode"><option value="linear">Linear</option><option value="log">log(1 + value)</option></select></label>
         <label class="field span-2"><span>PNG export field</span><select id="heatField"><option value="Dbar">D̄ · mean density</option><option value="betaHat">β̂ · field contrast</option></select></label>
       </div></details>
-      <p class="sidebar-foot">Inputs: measured positions,<br />covariances and ranges only.</p>
       </details>
     </aside>
     <div class="content">
@@ -118,6 +117,7 @@
               <tr><th scope="row">Rejected</th><td id="contradictedValue">0</td><td id="bContradictedValue">—</td></tr>
             </tbody></table>
             <p class="comparison-note"><span id="thresholdSummary">Exploratory tuning · 200 scenes</span><br>Fixed scores; no certified error bound.</p>
+            <h3 class="counts-heading">Counts &amp; computation</h3>
             <dl class="metrics run-counts"><div><dt>Accumulated paths Q<sub>t</sub></dt><dd id="qValue">0</dd></div><div><dt>Admitted / rejected</dt><dd><span id="acceptedValue">0</span> / <span id="rejectedValue">0</span></dd></div><div class="generated-count"><dt>Generated paths</dt><dd id="pathValue">—</dd></div><div><dt>Compute time</dt><dd id="timingValue">—</dd></div></dl>
           </section>
         </div>
@@ -125,7 +125,7 @@
         <div class="field-grid">
           <figure class="view" id="viewDensity"><figcaption class="vlabel"><div class="field-heading"><h2>D̄ · Mean residual density</h2><p class="view-meta">m⁻² · shared by both methods</p></div><div class="map-toolbar"><button id="densityZoomOut" type="button" aria-label="Zoom density out">−</button><button id="densityZoomIn" type="button" aria-label="Zoom density in">+</button><button id="densityResetView" type="button" aria-label="Reset density view">↺</button></div></figcaption><div class="view-body"><canvas id="densityCanvas" class="dashboard-canvas" role="img" aria-label="Mean accumulated residual density"></canvas></div></figure>
           <figure class="view" id="viewContrast"><figcaption class="vlabel"><div class="field-heading"><h2>β̂ · Field contrast</h2><p class="view-meta">Dimensionless · not a probability</p></div><div class="map-toolbar"><button id="contrastZoomOut" type="button" aria-label="Zoom contrast out">−</button><button id="contrastZoomIn" type="button" aria-label="Zoom contrast in">+</button><button id="contrastResetView" type="button" aria-label="Reset contrast view">↺</button></div></figcaption><div class="view-body"><canvas id="contrastCanvas" class="dashboard-canvas" role="img" aria-label="Dimensionless field contrast"></canvas></div></figure>
-          <figure class="view" id="viewMetrics"><figcaption class="vlabel"><h2>Performance over time</h2><select id="historyMetric" aria-label="Metric over time"><option value="precision">Centre precision [%]</option><option value="recall" selected>Observed recall [%]</option><option value="firstSupportPrecision">First support [%]</option><option value="holdRate">Held / unselected [%]</option><option value="p95">P95 distance [m]</option><option value="offwall">Off-wall centres [%]</option></select></figcaption><div class="view-body"><canvas id="metricChart" class="dashboard-canvas compact-chart" role="img" aria-label="Comparison of both methods over computed snapshots. Export CSV for all numerical values."></canvas></div><div class="history-legend"><span><i class="line-pspt"></i>PSPT</span><span><i class="line-baseline"></i>B</span></div></figure>
+          <figure class="view" id="viewMetrics"><figcaption class="vlabel"><h2>Performance over time</h2><select id="historyMetric" aria-label="Metric over time"><option value="precision">Centre precision [%]</option><option value="recall" selected>Observed recall [%]</option><option value="firstSupportPrecision">First support [%]</option><option value="holdRate">Held / unselected [%]</option><option value="p95">P95 distance [m]</option><option value="offwall">Off-wall centres [%]</option></select></figcaption><div class="view-body"><canvas id="metricChart" class="dashboard-canvas compact-chart" role="img" aria-label="Comparison of both methods over computed snapshots. Export CSV for all numerical values."></canvas></div><div class="history-footer"><div class="history-legend"><span><i class="line-pspt"></i>PSPT</span><span><i class="line-baseline"></i>B</span></div><span class="history-axis-title">Snapshot</span></div></figure>
         </div>
         <p id="inspector" class="inspector"></p>
       </section>
@@ -152,8 +152,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-labels1';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-labels1';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-compact1';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-compact1';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

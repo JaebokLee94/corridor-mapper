@@ -272,7 +272,7 @@ export class DrfMap {
             points.push([c.center[0]+u*tx-b*ty,c.center[1]+u*ty+b*tx]); }
           supportedPatches.push(points);
         } else if (pending) marker(c.center,{r:2.5,stroke:color,lineWidth:1.25});
-        else { const [x,y]=screen(c.center);ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.moveTo(x-2.5,y-2.5);ctx.lineTo(x+2.5,y+2.5);ctx.moveTo(x-2.5,y+2.5);ctx.lineTo(x+2.5,y-2.5);ctx.stroke(); }
+        else { const [x,y]=screen(c.center);ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.moveTo(x-2,y-2);ctx.lineTo(x+2,y+2);ctx.moveTo(x-2,y+2);ctx.lineTo(x+2,y-2);ctx.stroke(); }
       }
     }
     if (layers.showSpecular || layers.showDiffuse) for (const config of truth?.configs ?? []) {
@@ -366,28 +366,28 @@ function chartSurface(canvas) {
   return {ctx,width,height,color};
 }
 // Title is optional: when the card header already names the metric, the plot takes its space.
-function chartAxes(surface,{title='',xLabel,yLabel,xmin,xmax,ymin,ymax,top=0,height=surface.height,compact=false,metreX=false}) {
+function chartAxes(surface,{title='',xLabel,yLabel,xmin,xmax,ymin,ymax,top=0,height=surface.height,compact=false,metreX=false,xTicks,yTicks,hideXZero=false,showYLabel=false,bottomInset}) {
   compact ||= height<420;
   // Margins keep tick labels, axis titles and the chart title on separate lines.
-  const {ctx,width,color}=surface,padTop=compact ? (title ? 27 : 14) : (title ? 36 : 18),padBottom=compact ? 36 : 46,left=compact ? 58 : 72;
+  const {ctx,width,color}=surface,padTop=compact ? (title ? 27 : 14) : (title ? 36 : 18),padBottom=bottomInset ?? (compact ? 36 : 46),left=compact && !showYLabel ? 58 : 72;
   const box={x:left,y:top+padTop,w:Math.max(1,width-left-14),h:Math.max(1,height-padTop-padBottom)};
   if (!(xmax>xmin)) xmax=xmin+1;
   if (!(ymax>ymin)) ymax=ymin+1;
   const x=(v) => box.x+(v-xmin)/(xmax-xmin)*box.w,y=(v) => box.y+box.h-(v-ymin)/(ymax-ymin)*box.h;
-  const xs=metreX ? metreTicks(xmin,xmax) : Array.from({length:5},(_,i)=>xmin+(xmax-xmin)*i/4);
-  drawGrid(ctx,box,xs.map(x),Array.from({length:5},(_,i)=>box.y+box.h*i/4),color('grid'));
+  const xs=xTicks ?? (metreX ? metreTicks(xmin,xmax) : Array.from({length:5},(_,i)=>xmin+(xmax-xmin)*i/4));
+  drawGrid(ctx,box,xs.map(x),yTicks ? yTicks.map(y) : Array.from({length:5},(_,i)=>box.y+box.h*i/4),color('grid'));
   if (title) drawRich(ctx,title,12,top+(compact ? 17 : 24),{size:compact ? 15 : 16,weight:600,color:color("ink")});
   ctx.strokeStyle=color("line");ctx.lineWidth=1;ctx.strokeRect(box.x,box.y,box.w,box.h);
   const tickSize=compact ? 14 : 15;ctx.font=uiFont(tickSize);ctx.fillStyle=color("ink-muted");
-  for (const xx of metreX ? xs : [xmin,(xmin+xmax)/2,xmax]) {
+  for (const xx of xTicks ?? (metreX ? xs : [xmin,(xmin+xmax)/2,xmax])) {
+    if (hideXZero && xx===0) continue;
     ctx.textAlign="center";ctx.fillText(numberLabel(xx),x(xx),box.y+box.h+(compact ? 16 : 20));
   }
-  for (let i=0;i<=2;i++) {
-    const yy=ymin+(ymax-ymin)*i/2;
+  for (const yy of yTicks ?? [ymin,(ymin+ymax)/2,ymax]) {
     ctx.textAlign="right";ctx.fillText(numberLabel(yy),box.x-9,y(yy)+5);
   }
-  drawRich(ctx,xLabel,box.x+box.w/2,top+height-(compact ? 3 : 6),{size:tickSize,align:"center",color:color("ink-muted")});
-  if (!compact) { ctx.save();ctx.translate(20,box.y+box.h/2);ctx.rotate(-Math.PI/2);drawRich(ctx,yLabel,0,0,{size:tickSize,align:"center",color:color("ink-muted")});ctx.restore(); }
+  if (xLabel) drawRich(ctx,xLabel,box.x+box.w/2,top+height-(compact ? 3 : 6),{size:tickSize,align:"center",color:color("ink-muted")});
+  if (!compact || showYLabel) { ctx.save();ctx.translate(20,box.y+box.h/2);ctx.rotate(-Math.PI/2);drawRich(ctx,yLabel,0,0,{size:tickSize,align:"center",color:color("ink-muted")});ctx.restore(); }
   return {box,x,y};
 }
 function chartLine(surface,axes,points,color,dash=[],errorBars=false,dots=false,endDot=false) {
@@ -482,7 +482,12 @@ export function drawComparisonHistory(canvas,evaluations,selection='recall',snap
     const value=e.methods?.[method]?.[selection];return {x:e.t,y:value==null ? NaN : value*(percent?100:1)};
   }));
   const [ymin,ymax]=percent?[0,100]:extent(series.flat());
-  const axes=chartAxes(surface,{xLabel:'Snapshot',yLabel:percent?'%':'m',xmin:0,xmax:Math.max(1,snapshots),ymin,ymax,compact:true});
+  const xmax=Math.max(1,snapshots),xTicks=Array.from({length:Math.floor(xmax/20)+1},(_,i)=>20*i);
+  // Short runs still show their endpoint; longer runs retain the fixed 20-snapshot scale.
+  if (xmax<20) xTicks.push(xmax);
+  const metricLabels={precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
+  const yLabel=metricLabels[selection]?.[surface.height<170?1:0] ?? (percent?'%':'m');
+  const axes=chartAxes(surface,{xLabel:'',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks:percent?[0,25,50,75,100]:undefined,hideXZero:true,showYLabel:true,bottomInset:28});
   chartLine(surface,axes,series[0],surface.color('accent'),[],false,false,true);
   chartLine(surface,axes,series[1],surface.color('baseline'),[6,4],false,false,true);
 }
