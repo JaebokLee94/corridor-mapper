@@ -4,7 +4,7 @@ import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261103-defaults1';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261103-defaults1';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261104-labels1';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs';
 
@@ -122,7 +122,7 @@ function controls() {
   if (completedReplay) {
     completedReplay.hidden = !completed;
     completedReplay.disabled = !completed || !!state.connecting;
-    completedReplay.textContent = state.replay ? 'Stop replay' : 'Replay';
+    completedReplay.textContent = state.replay ? 'Stop' : 'Replay';
     $('runButton').textContent = completed ? 'Reset & run' : 'Run comparison';
     $('runButton').title = completed ? 'Clear previous results and run with the current settings' : 'Run comparison';
     $('runActions').dataset.mode = completed ? 'complete' : active ? 'active' : 'idle';
@@ -328,7 +328,7 @@ function renderSelected() {
   hoverGeneration++;
   $('inspector').textContent = '';
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
-  const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse', 'showObserved'].map(id => [id, $(id).checked]));
+  const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse'].map(id => [id, $(id).checked]));
   const display={ grid: state.grid, domain: state.scenario?.domain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls: scenario?.walls ?? previewWalls(),cameraBounds:scenario?.cameraBounds ?? previewBounds,
     candidates: frame?.methods?.[state.method]?.candidates ?? frame?.candidates ?? [], observed: evaluation?.observed, layers, heatField: $('heatField').value, scaleMode: $('scaleMode').value,
     history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
@@ -404,7 +404,7 @@ function toggleReplay() {
   if (['running', 'paused'].includes(state.mode) || !state.frames.length) return;
   if (state.replay) stopReplay(); else {
     state.followLive = false; state.replay = true; state.replayAt = 0;
-    for (const id of ['replayButton', 'completedReplayButton']) if ($(id)) $(id).textContent = 'Stop replay';
+    for (const id of ['replayButton', 'completedReplayButton']) if ($(id)) $(id).textContent = 'Stop';
     replayFrame = requestAnimationFrame(replayTick);
   }
 }
@@ -443,7 +443,7 @@ document.addEventListener('keydown', event => {
     $('timeSlider').value = state.selected; renderSelected();
   }
 });
-for (const id of ['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse', 'showObserved', 'heatField', 'scaleMode','historyMetric','aspectMode']) $(id).onchange = renderSelected;
+for (const id of ['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse', 'heatField', 'scaleMode','historyMetric','aspectMode']) $(id).onchange = renderSelected;
 $('fitView').onclick = () => { for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit(true); }; $('zoomIn').onclick = () => map.zoom(1.3); $('zoomOut').onclick = () => map.zoom(1 / 1.3);
 for (const [prefix,view] of [['density',densityMap],['contrast',contrastMap]]) {
   $(prefix+'ZoomIn').onclick = () => view.zoom(1.3);

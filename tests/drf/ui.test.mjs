@@ -8,16 +8,19 @@ import { createWalls, sampleWalls } from '../../drf/wall.mjs';
 
 test('DRF DOM contract and readable stylesheet', () => {
   const html=readFileSync(new URL('../../drf.html',import.meta.url),'utf8');
-  const ids='settings runButton pauseButton stepButton resetButton cancelButton status generationProgress runProgress mapCanvas fitView zoomIn zoomOut firstSnapshot ellipseStats aspectMode densityCanvas densityZoomOut densityZoomIn densityResetView contrastCanvas contrastZoomOut contrastZoomIn contrastResetView historyMetric timeSlider snapshotLabel replayButton playbackSpeed heatField scaleMode themeButton showEllipses showVehicles showProxy showTruth showSpecular showDiffuse showObserved qValue acceptedValue rejectedValue precisionValue recallValue firstPrecisionValue p95Value offwallValue f1Value supportedValue pendingValue contradictedValue timingValue pathValue inspector metricChart sweepPanel diagnosticPanel exportPanel sweepSettings sweepButton sweepCancel sweepStatus sweepChart sweepTable configSelect diagnosticChart profileChart countChart diagnosticSummary exportJson exportCsv exportPng aboutButton aboutDialog closeAbout provenanceCommit provenanceCore'.split(' ');
+  const ids='settings runButton pauseButton stepButton resetButton cancelButton status generationProgress runProgress mapCanvas fitView zoomIn zoomOut firstSnapshot ellipseStats aspectMode densityCanvas densityZoomOut densityZoomIn densityResetView contrastCanvas contrastZoomOut contrastZoomIn contrastResetView historyMetric timeSlider snapshotLabel replayButton playbackSpeed heatField scaleMode themeButton showEllipses showVehicles showProxy showTruth showSpecular showDiffuse qValue acceptedValue rejectedValue precisionValue recallValue firstPrecisionValue p95Value offwallValue f1Value supportedValue pendingValue contradictedValue timingValue pathValue inspector metricChart sweepPanel diagnosticPanel exportPanel sweepSettings sweepButton sweepCancel sweepStatus sweepChart sweepTable configSelect diagnosticChart profileChart countChart diagnosticSummary exportJson exportCsv exportPng aboutButton aboutDialog closeAbout provenanceCommit provenanceCore'.split(' ');
   for (const id of ids) assert.equal([...html.matchAll(new RegExp(`id="${id}"`,'g'))].length,1,id);
   for (const removed of ['medianValue','msdValue','hd95Value']) assert.ok(!html.includes(`id="${removed}"`),'Legacy-only metric removed: '+removed);
+  assert.doesNotMatch(html,/id="showObserved"/,'The observed-wall mask is no longer a selectable layer');
   assert.match(html,/First support/);assert.match(html,/Precision is undefined when no candidates are supported/);
   const historySelect=html.match(/<select id="historyMetric"[\s\S]*?<\/select>/)[0];
   for (const metric of ['precision','recall','firstSupportPrecision','holdRate','p95','offwall']) assert.ok(historySelect.includes(`value="${metric}"`));
   assert.ok(!historySelect.includes('value="all"'),'The compact dashboard renders one metric at a time');
   for (const name of 'scene vehicles snapshots sigmaP sigmaD roughness lambda0 cellStep resolution specular grid band perimeter seed'.split(' ')) assert.ok(html.includes(`name="${name}"`),name);
   assert.ok(!html.includes('장면'));
-  assert.match(html,/Both walls: independent shapes, ≥6 m vertical gap/);
+  const geometryNote=html.match(/<p[^>]*class="note geometry-note"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? '';
+  assert.match(geometryNote,/>Independent walls · Δy ≥6 m<\/p>/,'The compact note retains wall independence and the minimum gap');
+  assert.match(geometryNote,/title="Both walls have independent shapes and a minimum vertical gap of 6 m\."/,'The tooltip defines the vertical gap in full');
   assert.match(html,/input name="scene" type="hidden" value="layered"/);
   assert.doesNotMatch(html,/<select[^>]*name="scene"/);
   assert.match(html,/<select name="wallSide"><option value="both">Both walls<\/option><option value="upper">Upper only<\/option><option value="lower">Lower only<\/option>/);

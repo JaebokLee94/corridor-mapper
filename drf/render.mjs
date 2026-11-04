@@ -170,7 +170,7 @@ export class DrfMap {
     if (width<1 || height<1) return;
     target.width=Math.round(width*ratio); target.height=Math.round(height*ratio);
     const ctx=target.getContext("2d"), css=getComputedStyle(document.documentElement), token=(name,fallback) => css.getPropertyValue(`--color-${name}`).trim() || fallback;
-    const ink=token("ink"),muted=token("ink-muted"),line=token("line"),evalColor=token("eval"),background=token("plot-bg");
+    const ink=token("ink"),muted=token("ink-muted"),line=token("line"),evalColor=token("eval"),reflectionColor=token("reflection"),background=token("plot-bg");
     const trackColor=token("track","#1c5cab"),ellipseColor=token("ellipse","#1d9b79"),proxyColor=token("proxy","#b8237a"),truthColor=token("truth",ink);
     ctx.scale(ratio,ratio); ctx.fillStyle=background; ctx.fillRect(0,0,width,height);
     ctx.font=uiFont(14);
@@ -276,8 +276,8 @@ export class DrfMap {
       }
     }
     if (layers.showSpecular || layers.showDiffuse) for (const config of truth?.configs ?? []) {
-      if (layers.showSpecular) for (const q of config.specular ?? []) marker(q.s,{r:4.5,stroke:evalColor,lineWidth:1.75});
-      if (layers.showDiffuse) for (const q of config.diffuse ?? []) marker(q.s,{r:2.25,fill:evalColor});
+      if (layers.showSpecular) for (const q of config.specular ?? []) marker(q.s,{r:4.5,stroke:reflectionColor,lineWidth:1.75});
+      if (layers.showDiffuse) for (const q of config.diffuse ?? []) marker(q.s,{r:2.25,fill:reflectionColor});
     }
     if (layers.showVehicles) {
       const tracks=new Map();
@@ -311,7 +311,7 @@ export class DrfMap {
         const [lx,ly]=position,left=lx-tw/2-6;
         labels.push({left,right:lx+tw/2+6,top:ly-18,bottom:ly+6});
         if (lx!==x || ly!==y-15) { ctx.beginPath();ctx.strokeStyle=muted;ctx.lineWidth=1;ctx.moveTo(x,y);ctx.lineTo(Math.max(left,Math.min(lx+tw/2+6,x)),ly-6);ctx.stroke(); }
-        ctx.beginPath();ctx.roundRect?.(left,ly-18,tw+12,24,7);ctx.globalAlpha=.92;ctx.fillStyle=background;ctx.fill();ctx.globalAlpha=1;
+        ctx.beginPath();ctx.roundRect?.(left,ly-18,tw+12,24,7);ctx.globalAlpha=.75;ctx.fillStyle=background;ctx.fill();ctx.globalAlpha=1;
         ctx.lineWidth=1;ctx.strokeStyle=line;ctx.stroke();
         ctx.textAlign="center";ctx.fillStyle=ink;ctx.fillText(text,lx,ly);
       }

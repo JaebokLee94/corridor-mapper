@@ -309,14 +309,14 @@ test('completed replay starts at the first cached snapshot, waits one interval, 
   $('completedReplayButton').onclick();
   assert.equal(state.selected,1);assert.equal(Number($('timeSlider').value),1);assert.equal(drawn.at(-1),1);
   assert.equal(state.replay,true);assert.equal(state.followLive,false);assert.equal(pending.size,1);
-  assert.equal($('replayButton').textContent,'Stop replay');assert.equal($('completedReplayButton').textContent,'Stop replay');
+  assert.equal($('replayButton').textContent,'Stop');assert.equal($('completedReplayButton').textContent,'Stop');
   const tick=time=>{const [id,callback]=pending.entries().next().value;pending.delete(id);callback(time);};
   tick(1000);tick(1249);assert.equal(state.selected,1,'Do not skip the first snapshot on the first animation callback');
   tick(1250);assert.equal(state.selected,2);
   $('completedReplayButton').onclick();
   assert.equal(state.replay,false);assert.equal(pending.size,0);
   assert.equal($('replayButton').textContent,'Replay');assert.equal($('completedReplayButton').textContent,'Replay');
-  $('replayButton').onclick();assert.equal($('completedReplayButton').textContent,'Stop replay');
+  $('replayButton').onclick();assert.equal($('completedReplayButton').textContent,'Stop');
   context.stopReplay();assert.equal($('completedReplayButton').textContent,'Replay');
   assert.equal(state.frames,frames);assert.equal(state.evaluations,evaluations);assert.equal(state.scenario,scenario);assert.equal(state.next,3);
   assert.deepEqual(posted,[],'Playback sends no run or worker commands');

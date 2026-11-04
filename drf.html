@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261104-map-heading2" />
+  <link rel="stylesheet" href="drf/style.css?v=20261104-labels1" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -84,7 +84,6 @@
           <label class="toggle"><input id="showTruth" type="checkbox" checked /><span class="swatch swatch-truth" aria-hidden="true"></span>True walls</label>
           <label class="toggle"><input id="showSpecular" type="checkbox" /><span class="swatch swatch-specular" aria-hidden="true"></span>Specular points</label>
           <label class="toggle"><input id="showDiffuse" type="checkbox" /><span class="swatch swatch-diffuse" aria-hidden="true"></span>Diffuse points</label>
-          <label class="toggle"><input id="showObserved" type="checkbox" /><span class="swatch swatch-observed" aria-hidden="true"></span>Observed-wall mask</label>
         </fieldset>
       </details>
       <details class="sidebar-section appearance-settings"><summary>Field appearance</summary><div class="prop-grid">
@@ -153,8 +152,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-map-heading2';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-map-heading2';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-labels1';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-labels1';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>
