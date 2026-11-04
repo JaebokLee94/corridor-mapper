@@ -1,4 +1,4 @@
-import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-truthcache2';
+import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-background2';
 self.onmessage = async ({ data }) => {
   if (data.type !== 'generate') return;
   try {

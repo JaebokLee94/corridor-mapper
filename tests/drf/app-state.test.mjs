@@ -524,6 +524,27 @@ test('hidden charts defer rendering and visibility return refreshes the current 
   assert.deepEqual(drawn,[17]);assert.deepEqual(sweeps,['refreshed']);assert.equal(state.mode,'paused');
 });
 
+test('hidden result receipt keeps every frame while deferring controls, progress and status DOM work',async()=>{
+  const {context,state,$,posted,errors}=runUiContext(4),events=new Map();
+  context.document.hidden=true;
+  context.document.addEventListener=(name,fn)=>events.set(name,fn);
+  context.renderSweep=()=>{};
+  context.$=()=>assert.fail('A hidden per-snapshot update must not touch controls or status');
+  vm.runInContext(section('const notice =','function installSidebarControls()')
+    +section("document.addEventListener('visibilitychange'","document.addEventListener('keydown'"),context);
+  await context.receiveRunMessage({type:'progress',requestId:1,t:4,total:4},1);
+  for(let t=1;t<=4;t++) await context.receiveRunMessage({type:'frame',requestId:1,frame:{t},evaluation:{t},next:t},1);
+  assert.deepEqual(errors,[]);assert.deepEqual(posted,[]);
+  assert.equal(state.generatedSnapshots,4);assert.equal(state.next,4);
+  assert.deepEqual(state.evaluations.map(e=>e.t),[1,2,3,4]);
+  assert.equal(state.notice,'Comparing methods 4 / 4');
+  context.$=$;context.document.hidden=false;
+  events.get('visibilitychange')();
+  assert.equal($('runProgress').value,4);assert.equal($('generationProgress').value,4);
+  assert.equal($('status').textContent,'Comparing methods 4 / 4');
+  assert.equal($('timeSlider').disabled,true,'Visibility changes must not unlock an unfinished run');
+});
+
 test('server connection failure blocks both comparison and sweep instead of using browser computation',()=>{
   const {context,state,$}=runUiContext();
   state.mode='idle';state.connecting=true;context.controls();

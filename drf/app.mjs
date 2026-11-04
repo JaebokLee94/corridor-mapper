@@ -7,11 +7,11 @@ import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-truthcache2';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-background2';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261104-diagnostics1';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
-import { createRunPreloader } from './run-preloader.mjs?v=20261104-startup1';
+import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 
 renderMath();
 const $ = id => document.getElementById(id), form = $('settings');
@@ -33,7 +33,11 @@ function renderThresholdProtocol(protocol = METHOD_PROTOCOL) {
 renderThresholdProtocol();
 const fmt = (v, places = 3) => typeof v !== 'number' ? '—' : Number.isFinite(v) ? v.toFixed(places) : v === Infinity ? 'Failed (∞)' : v === -Infinity ? 'Failed (−∞)' : 'Failed (NaN)';
 // Keep the full message in the tooltip when the single status line is truncated.
-const notice = text => { $('status').textContent = text; $('status').title = text; };
+const notice = text => {
+  state.notice = text;
+  if (document.hidden) return;
+  $('status').textContent = text; $('status').title = text;
+};
 function installSidebarControls() {
   const sidebar = $('experimentSidebar'), workspace = $('workspace'), toggle = $('sidebarToggle'),
     controls = $('sidebarControls'), quickRun = $('sidebarRunButton'), run = $('runButton'),
@@ -96,7 +100,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = name === 'run' ? '20261104-startup1' : '20261104-truthcache2';
+  const revision = '20261104-background2';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -132,6 +136,9 @@ function stopReplay() {
   for (const id of ['replayButton', 'completedReplayButton']) if ($(id)) $(id).textContent = 'Replay';
 }
 function controls() {
+  // Result receipt updates state even when hidden. Rebuild controls once when
+  // the tab returns, rather than mutating every input/select for every snapshot.
+  if (document.hidden) return;
   const active = ['running', 'paused'].includes(state.mode), sweeping = !!state.sweep, preparing = active && !state.scenario;
   const completed = state.mode === 'done' && state.valid && state.frames.length > 0;
   $('runButton').disabled = active || sweeping || !!state.connecting; $('pauseButton').disabled = !active || preparing || !!state.pendingCommand;
@@ -187,6 +194,7 @@ function renderExportControls() {
     : 'The selected density or contrast field at the current snapshot.';
 }
 function updateRunProgress() {
+  if (document.hidden) return;
   const total = state.measurementTotal || state.scenario?.input.snapshots || state.pendingInput?.snapshots || Number(form.elements.namedItem('snapshots').value || DEFAULT_INPUT.snapshots);
   $('generationProgress').max = total; $('generationProgress').value = state.generatedSnapshots ?? 0;
   $('runProgress').max = total; $('runProgress').value = state.frames.length;
@@ -488,7 +496,10 @@ $('timeSlider').oninput = () => {
 $('replayButton').onclick = toggleReplay;
 if ($('completedReplayButton')) $('completedReplayButton').onclick = replayFromStart;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { controls(); renderSelected(); renderSweep(); }
+  if (!document.hidden) {
+    controls(); renderSelected(); renderSweep();
+    if (state.notice) notice(state.notice);
+  }
 });
 document.addEventListener('keydown', event => {
   if (event.target.matches('input,select,textarea,button') || $('aboutDialog').open || $('shareDialog').open || $('analysisDialog').open) return;

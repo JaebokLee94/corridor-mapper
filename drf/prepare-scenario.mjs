@@ -1,4 +1,4 @@
-import { normalizeInput, createSceneGeometry, generateTruthSnapshot, measureTruthSnapshot, generateScenario } from './scenario.mjs?v=20261104-truthcache1';
+import { normalizeInput, createSceneGeometry, generateTruthSnapshot, measureTruthSnapshot, generateSnapshot } from './scenario.mjs?v=20261104-truthcache1';
 import { getTruthBundle } from './truth-cache.mjs';
 
 const eligible = input => input.seed >= 1 && input.seed <= 10 && input.vehicles <= 10;
@@ -26,6 +26,22 @@ function yieldGeneration() {
   });
 }
 
+/** The uncached composition matches generateScenario, with worker-task scheduling
+ * instead of a timer after each snapshot. Keep this small orchestration wrapper
+ * here: scenario.mjs and its numerical dependencies fingerprint the raw bank.
+ * Input: normalized settings. Output: unchanged geometry/truth/wire contract.
+ * Work and memory are unchanged; generateSnapshot owns all numerical operations.
+ */
+async function prepareUncached(input, progress, yieldTask) {
+  const started = performance.now(), geometry = createSceneGeometry(input), truth = [], wire = [];
+  for (let t = 1; t <= input.snapshots; t++) {
+    const result = generateSnapshot(input, geometry.spans, t, geometry.wallModel);
+    truth.push(result.truth); wire.push(result.wire); progress(t, input.snapshots);
+    await yieldTask();
+  }
+  return { input, ...geometry, truth, wire, simulatorMs: performance.now() - started };
+}
+
 /** Build physical paths only. Cost is the original scattering/root calculation
  * for every requested pair and time; memory is proportional to the raw paths.
  * It stores no measured positions, range noise, decisions or fitted thresholds.
@@ -46,13 +62,13 @@ export async function buildTruthBundle(raw, progress = () => {}) {
  * consumers still receive only wire[t]; truth remains simulator/evaluator data.
  * onCache is an optional diagnostic callback, not part of the scenario schema.
  */
-export function createScenarioPreparer({ cache = { getTruthBundle } } = {}) {
+export function createScenarioPreparer({ cache = { getTruthBundle }, yieldTask = yieldGeneration } = {}) {
   return async function prepare(raw, progress = () => {}, { onCache = () => {}, onPhase = () => {} } = {}) {
     const started = performance.now(), input = normalizeInput(raw);
     if (!eligible(input)) {
       onPhase('generating');
       onCache({ source: 'uncached', vehicles: input.vehicles, snapshots: input.snapshots });
-      return generateScenario(input, progress);
+      return prepareUncached(input, progress, yieldTask);
     }
     let latest = 0;
     const report = t => { latest = Math.max(latest, t); progress(latest, input.snapshots); };
@@ -69,7 +85,7 @@ export function createScenarioPreparer({ cache = { getTruthBundle } } = {}) {
       report(t);
       const measured = measureTruthSnapshot(input, bundle.truth[t - 1]);
       truth.push(measured.truth); wire.push(measured.wire);
-      if (t % 8 === 0) await yieldGeneration();
+      if (t % 8 === 0) await yieldTask();
     }
     return { input, ...structuredClone(bundle.geometry), truth, wire, simulatorMs: performance.now() - started };
   };

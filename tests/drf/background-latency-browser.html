@@ -1,0 +1,112 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Background simulation timing QA</title>
+<style>body{font:15px/1.5 system-ui;margin:24px;max-width:1200px}input{width:560px}input[type=number]{width:75px}button,select{padding:7px;margin:8px 8px 8px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{margin-right:20px}table{border-collapse:collapse}th,td{padding:7px;border:1px solid #bbb;text-align:right}</style>
+<h1>Background simulation timing QA</h1>
+<p>Local manual test only; excluded from the public Pages artifact. Press Run, then leave this tab hidden for a background run. Return after completion. No run starts automatically. Compare repeated foreground/hidden runs with identical settings. This page does not render simulation charts.</p>
+<label>Source base URL <input id="base"></label><br>
+<label>Seed <input id="seed" type="number" value="5"></label>
+<label>Vehicles <input id="vehicles" type="number" value="10"></label>
+<label>Snapshots <input id="snapshots" type="number" value="120"></label>
+<label>Run label <input id="label" value="foreground" style="width:160px"></label><br>
+<button id="instrumented">Run profiled engine</button><button id="hidden">Run profiled when hidden</button><button id="production">Run production worker</button>
+<button id="stop" disabled>Cancel</button><button id="download">Download timing JSON</button>
+<p><a href="background-latency-browser.html?companion=1" target="_blank">Open quiet companion tab</a></p>
+<p id="status" role="status">Ready. Cache is warmed before each run, excluded from run time.</p>
+<table><thead><tr><th>Label</th><th>Mode</th><th>Worker elapsed ms</th><th>Page elapsed ms</th><th>Hidden ms</th><th>Yield sum ms</th><th>Post sum ms</th><th>Digest</th></tr></thead><tbody id="rows"></tbody></table>
+<pre id="details">[]</pre>
+<script type="module">
+const $ = id => document.getElementById(id), results = [];
+$('base').value = new URL('../../', location.href).href;
+let worker, current, startedAt, lastFrame, objectUrl, beginWhenHidden;
+const now = () => performance.timeOrigin + performance.now();
+const numerical = value => {
+  if (ArrayBuffer.isView(value)) return Array.from(value);
+  if (Array.isArray(value)) return value.map(numerical);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !['ms', 'psptMs', 'simulatorMs'].includes(key)).map(([key, item]) => [key, numerical(item)]));
+  return value;
+};
+const hash = async data => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(numerical(data)))))]
+  .map(n => n.toString(16).padStart(2, '0')).join('');
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && beginWhenHidden) { const start = beginWhenHidden; beginWhenHidden = null; start(); return; }
+  if (current && startedAt) current.visibility.push({ atMs: now() - startedAt, state: document.visibilityState });
+});
+async function finish(error) {
+  if (!current) return;
+  const result = current; current = null; beginWhenHidden = null;
+  if (error) result.error = String(error);
+  worker?.terminate(); worker = null; if (objectUrl) URL.revokeObjectURL(objectUrl);
+  result.hiddenMs = 0;
+  const stops = [...result.visibility, { atMs: result.pageElapsedMs, state: 'end' }];
+  for (let i = 0; i < stops.length - 1; i++) if (stops[i].state === 'hidden') result.hiddenMs += Math.max(0, stops[i + 1].atMs - stops[i].atMs);
+  if (lastFrame) {
+    result.finalDigest = await hash({ frame: lastFrame.frame, evaluation: lastFrame.evaluation });
+    result.finalMetrics = Object.fromEntries(Object.entries(lastFrame.evaluation.methods).map(([method, metrics]) =>
+      [method, Object.fromEntries(Object.entries(metrics).filter(([, value]) => typeof value === 'number'))]));
+  }
+  results.push(result); $('details').textContent = JSON.stringify(results, null, 2);
+  const tr = document.createElement('tr');
+  for (const value of [result.label, result.mode, result.profile?.workerElapsedMs, result.pageElapsedMs, result.hiddenMs,
+    result.profile?.yieldMs.total, result.profile?.postMs.total, result.finalDigest?.slice(0, 12)]) {
+    const td = document.createElement('td'); td.textContent = typeof value === 'number' ? value.toFixed(1) : value ?? '—'; tr.append(td);
+  }
+  $('rows').append(tr); $('instrumented').disabled = $('production').disabled = $('hidden').disabled = false; $('stop').disabled = true;
+  $('status').textContent = error ? `Failed: ${error}` : `Completed ${result.receivedFrames} snapshots. Timing JSON is ready.`;
+}
+async function run(mode, waitHidden = false) {
+  if (current) return;
+  $('instrumented').disabled = $('production').disabled = $('hidden').disabled = true; $('stop').disabled = false;
+  const input = { seed: Number($('seed').value), vehicles: Number($('vehicles').value), snapshots: Number($('snapshots').value) };
+  const base = $('base').value;
+  current = { label: $('label').value, mode, base, input, userAgent: navigator.userAgent,
+    startedUTC: new Date().toISOString(), visibility: [], receivedFrames: 0, messageLagsMs: [] };
+  startedAt = undefined; lastFrame = undefined;
+  if (mode === 'instrumented') {
+    worker = new Worker(new URL('./background-latency.worker.mjs', location.href), { type: 'module' });
+    worker.postMessage({ type: 'init', base });
+  } else {
+    const entry = new URL('drf/run.worker.mjs?v=20261104-background2', base).href;
+    objectUrl = URL.createObjectURL(new Blob([`import(${JSON.stringify(entry)}).then(()=>postMessage({type:'qa-ready'})).catch(e=>postMessage({type:'error',message:e.message}));`], { type: 'text/javascript' }));
+    worker = new Worker(objectUrl, { type: 'module' });
+  }
+  worker.onerror = event => finish(event.message);
+  worker.onmessage = ({ data }) => {
+    if (!current) return;
+    const at = now();
+    if (data.type === 'error') { finish(data.message); return; }
+    if (data.type === 'qa-ready') { $('status').textContent = 'Warming existing physical-path cache…'; worker.postMessage({ type: 'warm-truth', input }); return; }
+    if (data.type === 'truth-warmed') {
+      current.cacheHit = data.hit;
+      const start = () => {
+        startedAt = now(); current.visibility.push({ atMs: 0, state: document.visibilityState });
+        worker.postMessage({ type: 'start', requestId: 1, input }); $('status').textContent = 'Running…';
+      };
+      if (waitHidden && !document.hidden) { beginWhenHidden = start; $('status').textContent = 'Armed. Select the quiet companion tab to start hidden.'; } else start();
+      return;
+    }
+    if (data.qaEmittedAt) current.messageLagsMs.push({ type: data.type, ms: at - data.qaEmittedAt });
+    if (data.type === 'prepared') current.pagePreparedMs = at - startedAt;
+    if (data.type === 'frame') {
+      current.firstFrameMs ??= at - startedAt; current.receivedFrames++; lastFrame = data;
+      if (!document.hidden && data.next % 10 === 0) $('status').textContent = `${data.next} / ${input.snapshots}`;
+    }
+    if (data.type === 'status' && data.mode === 'done') {
+      current.pageElapsedMs = at - startedAt;
+      if (mode === 'production') finish();
+    }
+    if (data.type === 'qa-profile') { current.profile = data.profile; finish(); }
+  };
+}
+$('hidden').onclick = () => run('instrumented', true);
+$('instrumented').onclick = () => run('instrumented'); $('production').onclick = () => run('production');
+$('stop').onclick = () => { if (current) { current.pageElapsedMs = startedAt ? now() - startedAt : 0; finish('Cancelled manually'); } };
+$('download').onclick = () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = 'background-simulation-timings.json'; a.click(); URL.revokeObjectURL(url);
+};
+if (new URLSearchParams(location.search).has('companion')) {
+  document.body.replaceChildren(Object.assign(document.createElement('p'), { textContent: 'Quiet companion tab. Keep this tab selected while the simulation timing tab runs in the background.' }));
+}
+</script>
