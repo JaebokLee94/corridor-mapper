@@ -75,7 +75,7 @@ math { font-family:var(--font-math); }
 .run-progress progress::-webkit-progress-bar { background:transparent; }
 .run-progress progress::-webkit-progress-value { background:var(--progress-fill); }
 .run-progress progress::-moz-progress-bar { background:var(--progress-fill); }
-#generationProgress { --progress-fill:var(--color-progress-generated); }
+#generationProgress { --progress-fill:var(--color-progress-generated); opacity:.4; }
 #runProgress { --progress-fill:var(--color-progress-computed); }
 .settings-summary { display:none; }
 .sidebar-section { min-width:0; margin:0; padding:18px 20px; border:0; border-top:1px solid var(--color-line); }
