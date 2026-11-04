@@ -456,7 +456,7 @@ function renderSweep() {
 }
 async function runSweep(jobs, resumeId) {
   if (state.connecting) { $('sweepStatus').textContent = 'The compute server is not connected. Reload after restarting the server.'; return; }
-  const generation = state.generation; let handle;
+  const generation = state.generation; let handle, statusTimer;
   try {
     if (state.server && !resumeId) {
       state.connecting = true; controls();
@@ -464,18 +464,26 @@ async function runSweep(jobs, resumeId) {
       if (job) { resumeId = job.id; jobs = job.jobs; fillSettings(jobs[0]); }
       state.connecting = false;
     }
-    const base = jobs[0] ?? settings();
     state.sweepRuns = []; $('sweepButton').disabled = true; $('sweepCancel').disabled = false;
-    $('sweepStatus').textContent = `0 / ${jobs.length} · ${base.snapshots} snapshots · Both methods use the fixed tuning-200 thresholds.`;
+    const status = $('sweepStatus');
+    let completedCount = 0;
+    status.textContent = `Running sweep · 0 / ${jobs.length} complete`;
+    // Parallel experiments emit interleaved snapshot updates. Show only the
+    // aggregate completed count, at most once per second; never pace computation.
+    statusTimer = setInterval(() => {
+      if (generation !== state.generation) { clearInterval(statusTimer); return; }
+      const text = `Running sweep · ${completedCount} / ${jobs.length} complete`;
+      if (status.textContent !== text) status.textContent = text;
+    }, 1000);
     const onProgress = ({ completed, total, results, progress }) => {
       if (generation !== state.generation) return;
       state.sweepRuns = results;
       if (progress?.type === 'command-error') {
-        $('sweepStatus').textContent = `${completed} / ${total} complete · Cancellation was not confirmed: ${progress.message}. The server job may still be running; retry Cancel sweep.`;
+        clearInterval(statusTimer);
+        status.textContent = `${completed} / ${total} complete · Cancellation was not confirmed: ${progress.message}. The server job may still be running; retry Cancel sweep.`;
         return;
       }
-      const current = progress?.type === 'sweep-progress' ? ` · experiment ${progress.id + 1}: ${progress.t} / ${progress.total} snapshots` : '';
-      $('sweepStatus').textContent = `${completed} / ${total} complete${current} · paired methods · mean ± 1 sample SD`;
+      completedCount = completed;
       if (!progress || progress.type === 'sweep-result') renderSweep();
     };
     handle = state.sweep = state.server ? startServerSweep(state.server, jobs, onProgress, { resumeId }) : startSweep(jobs, onProgress);
@@ -483,10 +491,10 @@ async function runSweep(jobs, resumeId) {
     const result = await handle.promise;
     if (generation !== state.generation) return;
     state.sweepRuns = result.results;
-    $('sweepStatus').textContent = `${result.cancelled ? 'Cancelled' : 'Complete'} · ${result.results.length} / ${jobs.length} · ${base.snapshots} snapshots · paired methods · tuning-200 thresholds`;
+    status.textContent = `${result.cancelled ? 'Cancelled' : 'Complete'} · ${result.results.length} / ${jobs.length} experiments`;
     renderSweep();
   } catch (error) { if (generation === state.generation) $('sweepStatus').textContent = `Sweep stopped: ${error.message}`; }
-  finally { state.connecting = false; if (state.sweep === handle) state.sweep = null; controls(); }
+  finally { clearInterval(statusTimer); state.connecting = false; if (state.sweep === handle) state.sweep = null; controls(); }
 }
 $('sweepButton').onclick = () => {
   try {

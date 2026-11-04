@@ -70,6 +70,7 @@ math { font-family:var(--font-math); }
 .experiment-tools button { white-space:nowrap; }
 #openParameters { flex:none; color:var(--color-ink); min-height:32px; }
 .status { color:var(--color-ink-muted); }
+#sweepStatus { font-variant-numeric:tabular-nums; }
 .run-progress { position:relative; width:100%; height:3px; margin:0; background:var(--color-surface-2); border-radius:0; overflow:hidden; }
 .run-progress progress { position:absolute; inset:0; width:100%; height:100%; display:block; margin:0; border:0; background:transparent; appearance:none; }
 .run-progress progress::-webkit-progress-bar { background:transparent; }
