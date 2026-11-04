@@ -1,18 +1,29 @@
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261103-defaults1';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
-import { METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
+import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
+import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261103-defaults1';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261103-defaults1';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs';
 
 const $ = id => document.getElementById(id), form = $('settings');
-const state = { mode: 'idle', scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0, generatedSnapshots: 0, measurementTotal: 0,
+const state = { mode: 'idle', protocol: null, scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0, generatedSnapshots: 0, measurementTotal: 0,
   busy: false, replay: false, replayAt: 0, generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
 let runWorker, evalWorker, hoverWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
-$('thresholdSummary').textContent = `Tuning 200 · PSPT ${METHOD_PROTOCOL.guarded.threshold.toFixed(4)} · B ${METHOD_PROTOCOL.baseline.threshold.toFixed(4)}`;
-$('thresholdDetails').textContent = `Fixed tuning log-score thresholds: PSPT ${METHOD_PROTOCOL.guarded.threshold}; B ${METHOD_PROTOCOL.baseline.threshold}. They replace the earlier dev values ${METHOD_PROTOCOL.guarded.previousDevThreshold} and ${METHOD_PROTOCOL.baseline.previousDevThreshold}.`;
+function renderThresholdProtocol(protocol = METHOD_PROTOCOL) {
+  const { guarded, baseline } = protocol;
+  $('thresholdSummary').textContent = `Tuning ${guarded.tuning.scenes} · PSPT ${guarded.threshold.toFixed(4)} · B ${baseline.threshold.toFixed(4)}`;
+  const refinement = guarded.refinement === 'shared-pose'
+    ? 'Candidate refinement accounts for shared vehicle position error.'
+    : guarded.refinement === 'independent-pairs' ? 'Candidate refinement treats pair errors independently.' : 'Candidate refinement is not specified in this run metadata.';
+  const clustering = guarded.clustering === 'bounded-span'
+    ? 'Each echo cluster is limited to the existing distance gate.'
+    : guarded.clustering === 'single-link' ? 'Echo clusters use single-link distance grouping.' : 'Echo clustering is not specified in this run metadata.';
+  $('thresholdDetails').textContent = `Fixed tuning log-score thresholds: PSPT ${guarded.threshold}; B ${baseline.threshold}. ${refinement} ${clustering} ${guarded.thresholdStatus ?? 'These development thresholds are not certified.'}`;
+}
+renderThresholdProtocol();
 const fmt = (v, places = 3) => typeof v !== 'number' ? '—' : Number.isFinite(v) ? v.toFixed(places) : v === Infinity ? 'Failed (∞)' : v === -Infinity ? 'Failed (−∞)' : 'Failed (NaN)';
 // Keep the full message in the tooltip when the single status line is truncated.
 const notice = text => { $('status').textContent = text; $('status').title = text; };
@@ -139,8 +150,9 @@ function cancel(clear = false) {
   runWorker = null; evalWorker = null; hoverWorker = null;
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
-    state.pendingInput = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
+    state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
     state.generatedSnapshots = 0; state.measurementTotal = 0;
+    renderThresholdProtocol();
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
     for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
@@ -213,6 +225,8 @@ async function receiveRunMessage(data, generation) {
       updateRunProgress(); notice(`Generating measurements ${data.t} / ${data.total}`); return;
     }
     if (data.type === 'prepared') {
+      state.protocol = structuredClone(data.protocol ?? LEGACY_RUN_PROTOCOL);
+      renderThresholdProtocol(state.protocol);
       state.scenario = data.scenario; state.grid = data.grid; state.valid = true;
       state.measurementTotal = data.scenario.input.snapshots; state.generatedSnapshots = state.measurementTotal;
       if (state.server) { fillSettings(data.scenario.input); location.hash = `v1=${encodeURIComponent(JSON.stringify(data.scenario.input))}`; }
@@ -483,7 +497,7 @@ $('sweepButton').onclick = () => {
 $('sweepCancel').onclick = () => state.sweep?.cancel();
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
 $('exportJson').onclick = () => {
-  const data = { schema: 'echomap-drf/5', estimators: METHOD_PROTOCOL, selectedMethod: state.method, toleranceM: 0.4, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
+  const data = { schema: 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, toleranceM: 0.4, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
     grid: state.grid ? { ...state.grid, arrayOrder: 'iy*nx+ix; ascending y; cell centers' } : null,
     input: state.scenario?.input ?? state.sweepRuns[0]?.input, measurement: state.scenario?.wire.slice(0, state.frames.length) ?? [], result: state.frames,
     evaluation: state.evaluations, truth: { role: 'evaluation only', wallModel: state.scenario?.wallModel, wallGeneration: state.scenario?.wallGeneration, walls: state.scenario?.walls ?? [], snapshots: state.scenario?.truth.slice(0, state.frames.length) ?? [] },
@@ -491,13 +505,17 @@ $('exportJson').onclick = () => {
   download(new Blob([JSON.stringify(data, jsonValue)], { type: 'application/json' }), 'echomap-drf.json');
 };
 $('exportCsv').onclick = () => {
+  const protocol = state.protocol;
+  const csvValue = value => /[\",\r\n]/.test(String(value)) ? '"'+String(value).replaceAll('"','""')+'"' : String(value);
   const rows=[];let header;
   for (const method of ['guarded','baseline']) {
     const frames=state.frames.map(f=>({...f,candidates:f.methods[method].candidates,psptMs:f.methods[method].ms}));
     const lines=psptSnapshotCsv(frames,state.evaluations.map(e=>e.methods[method])).replace(/^\ufeff/,'').trim().split('\r\n');
-    header=lines[0].replace('pspt_ms','estimator_ms');rows.push(...lines.slice(1).map(line=>[method,METHOD_PROTOCOL[method].threshold,METHOD_PROTOCOL[method].tuning.id,line].join(',')));
+    header=lines[0].replace('pspt_ms','estimator_ms');
+    const loaded = protocol[method], revision = loaded.revision ?? 'legacy-unversioned';
+    rows.push(...lines.slice(1).map(line=>[method,loaded.threshold,csvValue(loaded.tuning.id),line,csvValue(revision)].join(',')));
   }
-  download(new Blob(['\ufeffmethod,selection_threshold,threshold_source,'+header+'\r\n'+rows.join('\r\n')+'\r\n'],{type:'text/csv;charset=utf-8'}),'echomap-method-comparison.csv');
+  download(new Blob(['\ufeffmethod,selection_threshold,threshold_source,'+header+',implementation_revision\r\n'+rows.join('\r\n')+'\r\n'],{type:'text/csv;charset=utf-8'}),'echomap-method-comparison.csv');
 };
 $('exportPng').onclick = async () => { try { const field=$('heatField').value;download(await png300dpi(await (field==='betaHat' ? contrastMap : densityMap).png()), `echomap-drf-${field}-300dpi.png`); } catch (error) { notice(`PNG export failed: ${error.message}`); } };
 const chartResize = new ResizeObserver(() => { renderSelected(); renderSweep(); });

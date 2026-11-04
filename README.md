@@ -6,17 +6,17 @@
 
 A research workbench for seeing how measurements become surface hypotheses, and when those hypotheses remain ambiguous.
 
-[![Tests and deployment](https://github.com/woqhrl9494-cell/corridor-mapper/actions/workflows/pages.yml/badge.svg)](https://github.com/woqhrl9494-cell/corridor-mapper/actions/workflows/pages.yml)
-[![Live workbench](https://img.shields.io/badge/Live_workbench-Open-1e6386?style=flat-square)](https://woqhrl9494-cell.github.io/corridor-mapper/drf.html)
+[![Tests and deployment](https://github.com/JaebokLee94/corridor-mapper/actions/workflows/pages.yml/badge.svg)](https://github.com/JaebokLee94/corridor-mapper/actions/workflows/pages.yml)
+[![Live workbench](https://img.shields.io/badge/Live_workbench-Open-1e6386?style=flat-square)](https://jaeboklee94.github.io/corridor-mapper/drf.html)
 [![License](https://img.shields.io/badge/License-CC_BY--NC--ND_4.0-66727d?style=flat-square)](LICENSE)
 
-[**Open the workbench**](https://woqhrl9494-cell.github.io/corridor-mapper/drf.html) · [**Comparison protocol**](THRESHOLD_PROTOCOL.md) · [**Reproduce locally**](#reproduce-locally)
+[**Open the workbench**](https://jaeboklee94.github.io/corridor-mapper/drf.html) · [**Comparison protocol**](THRESHOLD_PROTOCOL.md) · [**Reproduce locally**](#reproduce-locally)
 
 </div>
 
 ![EchoMap: Guarded PSPT and Fixed-fragment B on the same measurement sequence](assets/echomap-comparison.png)
 
-*One synthetic scene with independently shaped walls, two causal estimators. The screenshot uses seed 549028359, 10 vehicles, 120 snapshots, and position/range SD 0.1 m. It illustrates the interface, not aggregate performance. [Replay these settings](https://woqhrl9494-cell.github.io/corridor-mapper/drf.html#v1=%7B%22vehicles%22%3A10%2C%22snapshots%22%3A120%2C%22sigmaP%22%3A0.1%2C%22sigmaD%22%3A0.1%2C%22seed%22%3A549028359%7D).*
+*One synthetic scene with independently shaped walls, two causal estimators. The screenshot uses seed 549028359, 10 vehicles, 120 snapshots, and position/range SD 0.1 m. It illustrates the interface, not aggregate performance. [Replay these settings](https://jaeboklee94.github.io/corridor-mapper/drf.html#v1=%7B%22vehicles%22%3A10%2C%22snapshots%22%3A120%2C%22sigmaP%22%3A0.1%2C%22sigmaD%22%3A0.1%2C%22seed%22%3A549028359%7D).*
 
 EchoMap is developed by **Jaebok Lee, Wireless Systems Laboratory, Hanyang University**. It studies a question in collaborative sensing: can noisy, unlabeled path lengths distinguish a wall patch from a plausible geometric alternative?
 
@@ -87,7 +87,7 @@ D̄ is the mean residual density in m⁻². β̂ is a dimensionless field-contra
 
 ## Run and share an experiment
 
-1. [Open EchoMap](https://woqhrl9494-cell.github.io/corridor-mapper/drf.html), choose settings, and select **Run comparison**.
+1. [Open EchoMap](https://jaeboklee94.github.io/corridor-mapper/drf.html), choose settings, and select **Run comparison**.
 2. Use **Compare both** or enlarge either method. Replay completed snapshots to inspect when support first appears.
 3. Open **Experiments, diagnostics & exports** for paired sweeps and post-hoc scattering diagnostics.
 4. Choose **Share experiment** to copy a seeded settings URL, or download JSON/CSV to retain results.
@@ -103,7 +103,7 @@ The layered wall spans x = 0–80 m. Vehicles advance ⅔ m in x per snapshot, s
 The recorded development environment is **Node.js 26.7.0**. Install the pinned development dependencies, build the offline bundle, and run the full reference checks:
 
 ```sh
-git clone https://github.com/woqhrl9494-cell/corridor-mapper.git
+git clone https://github.com/JaebokLee94/corridor-mapper.git
 cd corridor-mapper
 npm ci
 npm run build:drf-offline
@@ -158,7 +158,7 @@ Mirror ambiguity, insufficient noncollinear geometry and noisy pose information 
 | [`DRF_METHOD.md`](DRF_METHOD.md), [`DRF_VALIDATION.md`](DRF_VALIDATION.md) | Archived field-method evidence under older protocols |
 | [`build-pages.mjs`](build-pages.mjs) | Runtime-only Pages package; excludes old pages and legacy peak evaluation |
 
-For a reproducible issue, include the shared URL or JSON, repository commit, browser/OS, and first snapshot where the result differs from your expectation. Numerical counterexamples and clear reproduction steps are especially useful. [Report an issue](https://github.com/woqhrl9494-cell/corridor-mapper/issues).
+For a reproducible issue, include the shared URL or JSON, repository commit, browser/OS, and first snapshot where the result differs from your expectation. Numerical counterexamples and clear reproduction steps are especially useful. [Report an issue](https://github.com/JaebokLee94/corridor-mapper/issues).
 
 If you use EchoMap in research, cite this repository with its commit hash and access date, and report the method thresholds, generator settings and evaluation definitions. A browser screenshot alone is not a reproducibility record.
 

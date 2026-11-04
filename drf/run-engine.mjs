@@ -1,6 +1,6 @@
 import { generateScenario, normalizeInput } from './scenario.mjs';
 import { createGrid, createField } from './field.mjs';
-import { MethodComparison } from './comparison.mjs';
+import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
@@ -86,7 +86,7 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask } = {}) {
       run.estimator = new MethodComparison({ sigmaR: input.sigmaD });
       run.guardedEvaluator = createPSPTEvaluator(scenario, run.grid);
       run.baselineEvaluator = createPSPTEvaluator(scenario, run.grid);
-      send(run, 'prepared', { scenario, grid: run.grid });
+      send(run, 'prepared', { scenario, grid: run.grid, protocol: METHOD_PROTOCOL });
       await pump(run);
     } catch (error) { failed(run, error); }
   }

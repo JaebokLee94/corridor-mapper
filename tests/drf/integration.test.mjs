@@ -198,7 +198,7 @@ test('actual JSON export handler separates truth, wire, and completed results wi
     start = source.indexOf('const jsonValue ='), end = source.indexOf("$('exportCsv').onclick", start);
   assert.ok(start >= 0 && end > start, 'JSON handler bounds must be present');
   const button = {}, downloads = [], state = { scenario: scene, grid: manual.grid, frames: manual.frames,
-    evaluations: manual.evaluations, sweepRuns: [] }, provenance = { baseCommit: 'integration fixture' };
+    evaluations: manual.evaluations, sweepRuns: [], protocol: METHOD_PROTOCOL }, provenance = { baseCommit: 'integration fixture' };
   // Execute the shipped pure export handler with a download stub; no browser DOM is required.
   new Function('state', 'provenance', 'aggregateRuns', 'download', 'Blob', '$', 'METHOD_PROTOCOL', source.slice(start, end))(
     state, provenance, aggregateRuns, (blob, name) => downloads.push({ blob, name }), Blob, () => button, METHOD_PROTOCOL);
@@ -232,15 +232,15 @@ test('actual CSV download exports distinct per-method rows and leaves missing pr
   const frames=manual.frames.map(f=>({...f,methods:{guarded:{candidates:f.candidates,ms:2},baseline:{candidates:[],ms:3}}}));
   const evaluations=manual.evaluations.map(e=>({methods:{guarded:e,baseline:{...e,precision:null,supportedCount:0}}}));
   new Function('state','psptSnapshotCsv','download','Blob','$','METHOD_PROTOCOL',handler)(
-    {frames,evaluations},psptSnapshotCsv,(blob,name)=>downloads.push({blob,name}),Blob,()=>button,METHOD_PROTOCOL);
+    {frames,evaluations,protocol:METHOD_PROTOCOL},psptSnapshotCsv,(blob,name)=>downloads.push({blob,name}),Blob,()=>button,METHOD_PROTOCOL);
   button.onclick();
   assert.equal(downloads[0].name,'echomap-method-comparison.csv');
   const rows=(await downloads[0].blob.text()).trim().split('\r\n').map(line=>line.split(','));
-  assert.equal(rows.length,5);assert.equal(rows[0].length,21);assert.equal(rows[0][0],'method');assert.equal(rows[0].at(-1),'estimator_ms');
+  assert.equal(rows.length,5);assert.equal(rows[0].length,22);assert.equal(rows[0][0],'method');assert.equal(rows[0].at(-2),'estimator_ms');assert.equal(rows[0].at(-1),'implementation_revision');
   assert.deepEqual(rows.slice(1).map(row=>row[0]),['guarded','guarded','baseline','baseline']);
   assert.equal(rows[3][10],'','Undefined precision must not become zero');
   assert.equal(Number(rows[1][1]),METHOD_PROTOCOL.guarded.threshold);assert.equal(rows[3][2],METHOD_PROTOCOL.baseline.tuning.id);
-  assert.equal(rows[1].at(-1),'2');assert.equal(rows[3].at(-1),'3');
+  assert.equal(rows[1].at(-2),'2');assert.equal(rows[3].at(-2),'3');assert.equal(rows[1].at(-1),METHOD_PROTOCOL.guarded.revision);
   assert.equal(snapshotCsv(manual.frames,manual.evaluations).trim().split('\r\n')[0].split(',').length,12);
 });
 

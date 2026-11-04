@@ -79,6 +79,25 @@ test('guarded selection uses the tuning breakpoint, including equality',()=>{
   }
 });
 
+test('comparison explanations follow its log-score threshold, not the reference weight gate',()=>{
+  const g={gid:0,L:[0,6.5,0,6.5],nobs:2,qualified_active:[2,2],qualified_matched:[2,1]};
+  const oldReason='composite score and local evidence requirements passed';
+  const rows=selectGuarded({groups:[g]},[0,1].map(side=>({gid:0,side,status:'supported',reason:oldReason})));
+  assert.equal(rows[0].status,'pending');
+  assert.equal(rows[0].reason,'current log-score below the fixed selection threshold');
+  assert.equal(rows[0].originalReason,oldReason);
+  assert.equal(rows[1].reason,'fewer than two own-patch range matches');
+});
+
+test('live comparison declares shared-pose refinement without retuning thresholds',()=>{
+  const comparison=new MethodComparison();
+  assert.equal(comparison.guarded.refinement,'shared-pose');
+  assert.equal(comparison.guarded.clustering,'bounded-span');
+  assert.equal(METHOD_PROTOCOL.guarded.refinement,'shared-pose');
+  assert.match(METHOD_PROTOCOL.guarded.thresholdStatus,/not retuned/);
+  assert.equal(METHOD_PROTOCOL.guarded.threshold,6.650397183049193);
+});
+
 
 test('published tuning provenance matches the exact runtime thresholds and dataset role',()=>{
   const record=JSON.parse(fs.readFileSync(new URL('../../validation/threshold-tuning-20261020.json',import.meta.url)));

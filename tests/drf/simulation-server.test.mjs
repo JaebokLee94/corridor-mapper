@@ -7,6 +7,7 @@ import http from 'node:http';
 import { createSimulationServer } from '../../tools/simulation-server.mjs';
 import { encodePacket, decodePacket, createMessageEncoder, createMessageDecoder } from '../../drf/simulation-codec.mjs';
 import { createRunEngine } from '../../drf/run-engine.mjs';
+import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 
 const input = { scene: 'reference', vehicles: 2, snapshots: 3, grid: 100,
   roughness: 0, specular: false, lambda0: 0, cellStep: .2, seed: 42, sigmaP: .1, sigmaD: .1 };
@@ -100,6 +101,7 @@ test('job finishes without any browser/event consumer; late reconnect recovers i
   const state = await waitFor(base, job, value => value.status === 'done');
   const messages = await readMessages(base, job, state.seq), frames = messages.filter(value => value.type === 'frame');
   assert.deepEqual(frames.map(value => value.next), [1, 2, 3]);
+  assert.deepEqual(messages.find(value => value.type === 'prepared').protocol, METHOD_PROTOCOL, 'late reconnect must retain the worker implementation protocol');
   const expected = [];
   await createRunEngine({ emit: message => { if (message.type === 'frame') expected.push(message); } }).command({ type: 'start', input, requestId: 1 });
   for (let i = 0; i < frames.length; i++) {

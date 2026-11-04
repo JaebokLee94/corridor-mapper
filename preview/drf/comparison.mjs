@@ -12,7 +12,9 @@ const tuning = Object.freeze({
 });
 export const METHOD_PROTOCOL = Object.freeze({
   guarded: Object.freeze({ name:'Guarded PSPT', threshold:6.650397183049193, previousDevThreshold:6.4615384615384635,
-    score:'current four-hypothesis marginal log-odds', grid:Object.freeze([100,100]), calibrated:false, tuning }),
+    score:'current four-hypothesis marginal log-odds', grid:Object.freeze([100,100]), calibrated:false, tuning,
+    revision:'guarded45-shared-pose-bounded-clusters-20261104', refinement:'shared-pose', clustering:'bounded-span',
+    thresholdStatus:'Inherited development threshold; not retuned or certified for this refinement and clustering revision.' }),
   baseline: Object.freeze({ name:'Fixed-fragment B', threshold:29.108623616301394, previousDevThreshold:12,
     score:'maximum qualified Gaussian log-score through the current snapshot', grid:Object.freeze([100,100]), calibrated:false, tuning }),
 });
@@ -22,12 +24,20 @@ export function selectGuarded(estimator,rows=estimator.report()) {
   return rows.map(r=>{
     const g=groups.get(r.gid),k=r.side,selectionLogit=logadd(g.L[k+1],g.L[3])-logadd(g.L[0],g.L[2-k]);
     const eligible=g.nobs>0 && g.qualified_active[k]>=2 && g.qualified_matched[k]>=2;
-    return {...r,selectionLogit,eligible,originalStatus:r.status,
-      status:eligible && selectionLogit>=METHOD_PROTOCOL.guarded.threshold ? 'supported' : r.status==='contradicted' ? 'contradicted' : 'pending'};
+    const status=eligible && selectionLogit>=METHOD_PROTOCOL.guarded.threshold ? 'supported' : r.status==='contradicted' ? 'contradicted' : 'pending';
+    // The displayed decision uses the development log-score threshold, not the
+    // reference estimator's 0.99 weight gate. Its explanation must use that gate.
+    const reason=status==='supported' ? 'fixed log-score threshold and local evidence requirements passed'
+      : status==='contradicted' ? r.reason
+      : g.nobs===0 ? 'no predictive observation'
+      : g.qualified_active[k]<2 ? 'pose geometry not distinguished from noise in two active snapshots'
+      : g.qualified_matched[k]<2 ? 'fewer than two own-patch range matches'
+      : 'current log-score below the fixed selection threshold';
+    return {...r,selectionLogit,eligible,originalStatus:r.status,originalReason:r.reason,status,reason};
   });
 }
 export class MethodComparison {
-  constructor(options={}) {this.guarded=new PSPT();this.baseline=new Baseline(options);}
+  constructor(options={}) {this.guarded=new PSPT({refinement:METHOD_PROTOCOL.guarded.refinement,clustering:METHOD_PROTOCOL.guarded.clustering});this.baseline=new Baseline(options);}
   step(wire) {
     let start=performance.now();const guarded=selectGuarded(this.guarded,this.guarded.step(wire)),guardedMs=performance.now()-start;
     start=performance.now();const baseline=this.baseline.step(wire,METHOD_PROTOCOL.baseline.threshold),baselineMs=performance.now()-start;

@@ -142,11 +142,71 @@ export function gate(surface, derivative, poseVariance, rangeVariance, k = 3, mi
   return Math.max(minimum, k * Math.sqrt(dot(derivative, matVec(surface.P, derivative)) + poseVariance + rangeVariance));
 }
 
+/** Joint-pose normal equations for one snapshot, without a pair-by-pair inverse.
+ * matches[M]: {config:{i,j,Si[2,2],Sj[2,2]}, derivative[3], ei[2], ej[2],
+ * rangeVariance>0 [m^2], residual [m]}. Covariances share the wire's PSD contract.
+ * Returns H[3,3]=A'R^-1 A and b[3]=A'R^-1 r. R=D+UU', where each U row has
+ * at most four nonzero values. Woodbury reduces the solve from M pairs to K<=2V
+ * pose-noise dimensions. O(M+K^3), O(K^2+M) memory; no K-time stacking or jitter.
+ */
+export function sharedPoseNormalEquations(matches) {
+  const vehicles = new Map(), sparse = [];
+  let dimensions = 0;
+  const factorsFor = (id, covariance) => {
+    if (vehicles.has(id)) return vehicles.get(id);
+    const [[xx, xy], [, yy]] = covariance;
+    // Square root also works for zero and rank-one PSD covariance. The clamp
+    // removes only Cholesky roundoff; no observation noise is added.
+    const a = Math.sqrt(xx), b = a > 0 ? xy / a : 0,
+      c = Math.sqrt(Math.max(0, yy - b * b)), factors = [];
+    if (a !== 0 || b !== 0) factors.push([dimensions++, a, b]);
+    if (c !== 0) factors.push([dimensions++, 0, c]);
+    vehicles.set(id, factors);
+    return factors;
+  };
+  for (const match of matches) {
+    if (!(match.rangeVariance > 0) || !Number.isFinite(match.rangeVariance))
+      throw new RangeError("invalid refinement variance");
+    const entries = [];
+    for (const [id, direction, covariance] of [[match.config.i, match.ei, match.config.Si], [match.config.j, match.ej, match.config.Sj]])
+      for (const [column, x, y] of factorsFor(id, covariance)) entries.push([column, direction[0] * x + direction[1] * y]);
+    sparse.push(entries);
+  }
+  const B = Array.from({ length: dimensions }, (_, i) => Array.from({ length: dimensions }, (_, j) => Number(i === j))),
+    W = Array.from({ length: dimensions }, () => [0, 0, 0, 0]),
+    N = Array.from({ length: 4 }, () => [0, 0, 0, 0]);
+  for (let row = 0; row < matches.length; row++) {
+    const match = matches[row], z = [...match.derivative, match.residual], weight = 1 / match.rangeVariance, entries = sparse[row];
+    for (const [i, u] of entries) {
+      for (let j = 0; j < 4; j++) W[i][j] += weight * u * z[j];
+      for (const [j, v] of entries) B[i][j] += weight * u * v;
+    }
+  }
+  const weighted = dimensions ? solve(B, W) : [];
+  // Equivalent to Z'D^-1Z-W'B^-1W, but this residual-plus-prior form avoids
+  // subtracting almost equal large terms when range noise is much smaller
+  // than shared pose noise: N=(Z-UY)'D^-1(Z-UY)+Y'Y, Y=B^-1W.
+  for (let row = 0; row < matches.length; row++) {
+    const match = matches[row], residual = [...match.derivative, match.residual], weight = 1 / match.rangeVariance;
+    for (const [column, value] of sparse[row]) for (let j = 0; j < 4; j++) residual[j] -= value * weighted[column][j];
+    for (let i = 0; i < 4; i++) for (let j = i; j < 4; j++) N[i][j] += weight * residual[i] * residual[j];
+  }
+  for (const row of weighted) for (let i = 0; i < 4; i++) for (let j = i; j < 4; j++) N[i][j] += row[i] * row[j];
+  return { H: Array.from({ length: 3 }, (_, i) => Array.from({ length: 3 }, (_, j) => N[Math.min(i,j)][Math.max(i,j)])),
+    b: [N[0][3], N[1][3], N[2][3]] };
+}
+
 /** Gauss-Newton MAP refinement using only the supplied creation-window configs.
  * Each config: pi/pj[2], Si/Sj[2,2], cl[J,3]=[mean,count,scatter], sr2[m²].
- * O(iters * configs * (nuGrid+clusters) + iters*3³); covariance stays 3x3.
+ * independent-pairs preserves the frozen Python diagonal observation model.
+ * shared-pose uses joint vehicle covariance per snapshot. The state stays 3x3;
+ * its extra solve has at most 2V pose dimensions, never K times all pairs.
+ * O(iters * K * (C*(nuGrid+clusters) + V^3)), O(C+V^2) scratch for shared-pose.
  */
-export function refine(surface, snapshots, { iters = 6, ext = 1 } = {}) {
+export function refine(surface, snapshots, { iters = 6, ext = 1, refinement = "independent-pairs" } = {}) {
+  if (refinement === "shared-pose") return refineSharedPose(surface, snapshots, { iters, ext });
+  if (refinement !== "independent-pairs") throw new RangeError("invalid refinement covariance mode");
+  // Keep the frozen Python arithmetic for explicit legacy/reference runs.
   const priorInverse = inverse(surface.P0), limits = [0.5, Math.PI / 18, 0.1];
   let rows = 0;
   for (let iteration = 0; iteration < iters; iteration++) {
@@ -167,6 +227,43 @@ export function refine(surface, snapshots, { iters = 6, ext = 1 } = {}) {
         for (let j = 0; j < 3; j++) H[i][j] += derivative[i] * derivative[j] / variance;
       }
       rows++;
+    }
+    const change = solve(H, b).map((value, i) => Math.max(-limits[i], Math.min(limits[i], value)));
+    surface.x = add(surface.x, change);
+    surface.P = inverse(H);
+  }
+  return rows;
+}
+
+function refineSharedPose(surface, snapshots, { iters, ext }) {
+  const priorInverse = inverse(surface.P0), limits = [0.5, Math.PI / 18, 0.1];
+  let rows = 0;
+  for (let iteration = 0; iteration < iters; iteration++) {
+    const H = priorInverse.map((row) => row.slice());
+    const b = matVec(priorInverse, add(surface.x, surface.x0, -1)).map((value) => -value);
+    rows = 0;
+    // Only pairs within the same measured snapshot share pose errors. Never
+    // combine K snapshots into a dense (K*C)^2 covariance matrix.
+    for (const snapshot of snapshots) {
+      const matches = [];
+      for (const config of snapshot) {
+        const prediction = surface.predict(config.pi, config.pj, { ext });
+        if (prediction === null) continue;
+        const [rho, , derivative, ei, ej] = prediction;
+        const poseVariance = dot(ei, matVec(config.Si, ei)) + dot(ej, matVec(config.Sj, ej));
+        const m = nearestCluster(config.cl, rho);
+        if (m < 0 || Math.abs(config.cl[m][0] - rho) > gate(surface, derivative, poseVariance, config.sr2)) continue;
+        const rangeVariance = config.sr2 / config.cl[m][1];
+        if (!(rangeVariance > 0) || !Number.isFinite(rangeVariance)) throw new RangeError("invalid refinement variance");
+        matches.push({ config, derivative, ei, ej, rangeVariance, residual: config.cl[m][0] - rho });
+      }
+      if (!matches.length) continue;
+      const normal = sharedPoseNormalEquations(matches);
+      for (let i = 0; i < 3; i++) {
+        b[i] += normal.b[i];
+        for (let j = 0; j < 3; j++) H[i][j] += normal.H[i][j];
+      }
+      rows += matches.length;
     }
     const change = solve(H, b).map((value, i) => Math.max(-limits[i], Math.min(limits[i], value)));
     surface.x = add(surface.x, change);

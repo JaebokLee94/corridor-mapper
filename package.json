@@ -19,16 +19,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/woqhrl9494-cell/corridor-mapper.git"
+    "url": "git+https://github.com/JaebokLee94/corridor-mapper.git"
   },
   "keywords": [],
   "author": "",
   "license": "CC-BY-NC-ND-4.0",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/woqhrl9494-cell/corridor-mapper/issues"
+    "url": "https://github.com/JaebokLee94/corridor-mapper/issues"
   },
-  "homepage": "https://github.com/woqhrl9494-cell/corridor-mapper#readme",
+  "homepage": "https://github.com/JaebokLee94/corridor-mapper#readme",
   "devDependencies": {
     "esbuild": "0.28.2",
     "jsdom": "30.0.1"

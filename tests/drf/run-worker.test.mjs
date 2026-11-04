@@ -6,7 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createRunEngine } from '../../drf/run-engine.mjs';
 import { generateScenario } from '../../drf/scenario.mjs';
 import { createGrid, createField } from '../../drf/field.mjs';
-import { MethodComparison } from '../../drf/comparison.mjs';
+import { MethodComparison, METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 import { createPSPTEvaluator } from '../../drf/pspt-evaluate.mjs';
 
 const input = { scene: 'reference', vehicles: 3, snapshots: 3, grid: 100,
@@ -49,6 +49,7 @@ test('autonomous engine matches the existing foreground kernels for every measur
   const prepared = messages.find(message => message.type === 'prepared'), frames = messages.filter(message => message.type === 'frame');
   const scene = await generateScenario(input), grid = createGrid(100, 100, scene.domain);
   assert.deepEqual(numerical(prepared.scenario), numerical(scene)); assert.deepEqual(prepared.grid, grid);
+  assert.deepEqual(prepared.protocol, METHOD_PROTOCOL);
   const field = createField(grid, { band: scene.input.band, perimeter: scene.input.perimeter });
   const estimator = new MethodComparison({ sigmaR: scene.input.sigmaD });
   const guardedEvaluator = createPSPTEvaluator(scene, grid), baselineEvaluator = createPSPTEvaluator(scene, grid);

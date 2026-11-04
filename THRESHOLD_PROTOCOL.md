@@ -1,6 +1,6 @@
 # Comparison protocol and evidence provenance
 
-**Current browser protocol: `tuning-200-20261020`, integrated 2026-10-22.**
+**Threshold source: `tuning-200-20261020`. Current PSPT revision: `guarded45-shared-pose-bounded-clusters-20261104`.**
 
 This document distinguishes threshold selection, historical evaluation and the current interactive experiment. The executable source of truth is [`drf/comparison.mjs`](drf/comparison.mjs). The [machine-readable tuning record](validation/threshold-tuning-20261020.json) contains the selected source aggregates, generator settings, condition counts and SHA-256 hashes of the original analysis/plan files. The full external raw tuning archive is not included.
 
@@ -16,6 +16,25 @@ The previous B value was the upper endpoint of a 40-point grid over [−12, 12].
 PSPT also requires its geometry and own-patch evidence guards. B's score is eligible after at least two matched snapshots; a fragment is scored over 20 subsequent snapshots, and regeneration uses a 5-snapshot cooldown. B retains a past qualified crossing even after expiry, while PSPT uses its current hypothesis weights. Their numerical scores and computational budgets are not interchangeable.
 
 The historical `Baseline.report()` default remains 12 solely to reproduce frozen Python checkpoints. Every current comparison and sweep passes the current threshold explicitly. The native PSPT's historical 0.99 gate is also retained internally for reference parity; current support selection is applied by the comparison wrapper, with the exact log-score threshold above.
+
+## PSPT revision on 2026-11-04
+
+The live comparison and sweep now account for shared vehicle position error during initial candidate refinement. Pairs that share a vehicle have correlated range prediction errors; treating these pairs as independent understated candidate uncertainty. A pose-space Woodbury solve includes those correlations without forming one dense matrix across the creation window.
+
+Echo grouping also changes from single-link clustering to a bounded-diameter rule. A chain of individually close returns could previously combine widely separated ranges, including returns from different walls, into one overconfident mean. Each new cluster's maximum-minus-minimum range is limited by the existing noise-based gate. This is a grouping-model revision, not a guarantee that every cluster represents one physical reflector. The shared range simulator, truth-side evaluator and Fixed-fragment B are unchanged.
+
+The frozen `new PSPT()` reference retains `independent-pairs` refinement and `single-link` clustering. `MethodComparison` explicitly selects `shared-pose` and `bounded-span`. **The threshold above is inherited, not retuned or certified for this revision.** No displayed truth enters either estimator or selects its threshold.
+
+The reported seed and three additional diagnostic seeds use identical settings within each before/after pair. [Inputs, wire hashes and scalar results](validation/pspt-repair-20261104.json) are recorded separately.
+
+| Seed | Observed recall, before → after | Surface F1, before → after |
+|:--|--:|--:|
+| 3143081491, reported case | 61.74% → 74.55% | 76.00% → 84.86% |
+| 1 | 71.85% → 73.82% | 83.59% → 84.77% |
+| 42 | 89.05% → 92.14% | 94.20% → 95.91% |
+| 874230748 | 71.97% → 77.63% | 83.70% → 87.00% |
+
+Centre precision remains 100% in these four cases. Across the three additional seeds, mean surface precision falls from 99.97% to 99.50%; seed 874230748's centre-error P95 rises from 0.0549 m to 0.1287 m. These are diagnostic observations, not a claim of uniform error reduction or generalisation. The geometric distance metrics do not certify correct tangents or curvature.
 
 ## Dataset roles and distribution
 
@@ -65,7 +84,7 @@ An empty estimate has undefined precision/P95; its recall is zero if some wall h
 
 Both views use `MethodComparison` and `createPSPTEvaluator`. Each sweep job generates one scene and replays identical measured snapshots through both methods. It inherits the current duration and other settings, changing only range SD, roughness and seed. Aggregation separates methods, full non-seed inputs and method protocols, so different durations or thresholds are not silently pooled.
 
-JSON schema **`echomap-drf/5`** includes full estimator threshold metadata, measured prefixes, per-method candidate decisions, post-hoc evaluation, and separately labelled truth. Sweep records include both method summaries and their protocol. CSV adds `selection_threshold` and `threshold_source` to each method/snapshot row. Physical duration per snapshot remains unspecified.
+JSON schema **`echomap-drf/5`** includes full estimator threshold and revision metadata, measured prefixes, per-method candidate decisions, post-hoc evaluation, and separately labelled truth. Sweep records include both method summaries and their protocol. CSV adds `selection_threshold`, `threshold_source` and `implementation_revision` to each method/snapshot row. Reconnected runs retain their recorded protocol; packets from the earlier unversioned server are labelled as legacy. Physical duration per snapshot remains unspecified.
 
 The old `evaluate.mjs` outer-peak extractor uses a y = 15 wall split and an x ∈ [10, 50] column window. Those assumptions are unsuitable for general layered scenes. It is now labelled **legacy only**, excluded from the Pages package and live runtime, and retained solely for historical tests. Current exports do not contain its `offset`, `observedColumns`, `caMsd` or `caHd95` fields. Scattering counts and local-theorem diagnostics use a separate reflection-only module with explicit generator wall identities.
 

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput } from '../../drf/scenario.mjs';
+import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
+import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
 
 const source=readFileSync(process.env.DRF_APP_SOURCE || new URL('../../drf/app.mjs',import.meta.url),'utf8');
 const section=(start,end)=>{
@@ -10,6 +12,15 @@ const section=(start,end)=>{
   assert.ok(a>=0 && b>a,`Actual app source section: ${start}`);
   return source.slice(a,b);
 };
+
+// VM contexts do not inherit the browser's structuredClone global. Use the
+// actual protocol view with the same metadata dependencies as the loaded app.
+function attachProtocolView(context) {
+  const nodes=new Map();
+  Object.assign(context,{structuredClone,METHOD_PROTOCOL,LEGACY_RUN_PROTOCOL});
+  context.$ ??= id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);};
+  vm.runInContext(section('function renderThresholdProtocol','const fmt ='),context);
+}
 
 test('shared URLs preserve the exact seed and snapshot count across reloads; only unseeded visits randomise',()=>{
   const initial={...DEFAULT_INPUT,scene:'layered',seed:0xffffffff,vehicles:7,snapshots:80};
@@ -93,6 +104,7 @@ test('full runs and single steps send exactly one start command with the request
       makeWorker:name=>({request:async message=>{inspections.push([name,message]);return {};}}),
       fail:error=>{throw error;},
     });
+    attachProtocolView(context);
     vm.runInContext(section('async function prepare(','function fail(')+section('async function receiveRunMessage(','async function hashField('),context);
     await context.prepare(single);
     assert.equal(posted.length,1,'Starting the run must not dispatch any per-snapshot request');
@@ -101,6 +113,7 @@ test('full runs and single steps send exactly one start command with the request
     assert.deepEqual(JSON.parse(decodeURIComponent(location.hash.slice(3))),input);
     const scenario={input,domain:[0,80,-20,50]},grid={nx:150,ny:150,domain:scenario.domain};
     await context.receiveRunMessage({type:'prepared',requestId:state.generation,scenario,grid},state.generation);
+    assert.deepEqual(state.protocol,LEGACY_RUN_PROTOCOL);
     assert.equal(state.scenario,scenario);assert.equal(state.grid,grid,'Use the grid supplied by the autonomous worker');
     assert.equal(state.generatedSnapshots,requested);assert.equal(state.measurementTotal,requested);
     assert.equal(state.valid,true);assert.equal(state.mode,'running');assert.equal(state.busy,true);
@@ -160,6 +173,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
     drawProfile:(canvas,data)=>charts.set(canvas.id,data),drawCounts:(canvas,a,b)=>charts.set(canvas.id,[a,b]),
     fillSettings:input=>{snapshots.value=String(input.snapshots);},renderSweep(){},notice:text=>{$('status').textContent=text;},
   });
+  attachProtocolView(context);
   const reset=source.match(/^\$\('resetButton'\)\.onclick = .*;$/m)?.[0];assert.ok(reset,'Actual reset handler exists');
   const viewReset=source.match(/^\$\('firstSnapshot'\)\.onclick = .*;$/m)?.[0];assert.ok(viewReset,'Actual view reset handler exists');
   vm.runInContext([
@@ -248,6 +262,7 @@ function runUiContext(total=120) {
     hashField:async()=> 'completed-hash',requestAnimationFrame:()=>assert.fail('UI receipt must not depend on a repaint'),
     fail:error=>errors.push(error),makeWorker:()=>assert.fail('Only prepared messages create inspection workers'),
   });
+  attachProtocolView(context);
   vm.runInContext(section('function controls()','function cancel(')+section('async function receiveRunMessage(','async function hashField('),context);
   return {context,state,$,posted,drawn,errors};
 }

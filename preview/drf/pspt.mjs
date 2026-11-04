@@ -1,4 +1,8 @@
-/** Guarded PSPT, ported from the frozen Python guarded45 implementation.
+/** Guarded PSPT, with the frozen Python guarded45 reference mode preserved.
+ * refinement="shared-pose" fixes shared-vehicle covariance at candidate birth;
+ * independent-pairs remains the default for explicit historical reproduction.
+ * clustering="bounded-span" limits each range cluster's diameter to the existing
+ * noise gate; single-link remains the default for historical reproduction.
  * Input: one measured snapshot; no wall geometry, labels, seed, or future data.
  * Supported measurements require sigmaD>0; zero-range-noise joint-pose updates
  * can have singular innovation covariance and are rejected before state changes.
@@ -15,7 +19,8 @@ import { DRF } from "./pspt-ridges.mjs";
 import { Surfel, refine, mirrored, dot, cov3, eigen2, matVec, matMul, transpose, solve } from "./pspt-math.mjs";
 
 const DEFAULTS = Object.freeze({ nx: 100, ny: 100, ell: 1, K: 12, frac: 0.15, sep: 1.5, dup: 1,
-  alpha: 0.01, ext: 1.5, p_miss: 0.05, R_span: 40, max_range: 25, explain_away: true,
+  alpha: 0.01, ext: 1.5, p_miss: 0.05, refinement: "independent-pairs", clustering: "single-link",
+  R_span: 40, max_range: 25, explain_away: true,
   temper: true, mirror: true, win: null, max_inc_deg: 45, geometry_alpha: 0.001, min_evidence_steps: 2 });
 // scipy.stats.chi2.isf(.001, df), df=1..18; vehicle counts 3..20.
 const CHI2_001 = Object.freeze([10.827566170662733, 13.815510557964274, 16.26623619623813,
@@ -24,7 +29,8 @@ const CHI2_001 = Object.freeze([10.827566170662733, 13.815510557964274, 16.26623
   32.90949040736022, 34.52817897487089, 36.123273680398135, 37.69729821835383,
   39.25235479076847, 40.79021670690252, 42.31239633167997]);
 const SNAP_KEYS = new Set(["t", "configs"]), CONFIG_KEYS = new Set(["i", "j", "pHat_i", "pHat_j", "Sigma_i", "Sigma_j", "paths"]),
-  PATH_KEYS = new Set(["dHat", "sigmaD"]), OPTION_KEYS = new Set(Object.keys(DEFAULTS));
+  PATH_KEYS = new Set(["dHat", "sigmaD"]), OPTION_KEYS = new Set(Object.keys(DEFAULTS)),
+  PREPARE_KEYS = new Set(["clustering"]);
 const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const quad = (v, M) => dot(v, matVec(M, v));
 const key = (gid, side) => `${gid}:${side}`;
@@ -41,7 +47,21 @@ function allowKeys(object, allowed, name) {
   }
 }
 
-export function prepareMeasuredSnapshot(snapshot) {
+function validateClustering(clustering) {
+  if (clustering !== "single-link" && clustering !== "bounded-span")
+    throw new RangeError("invalid range clustering mode");
+}
+
+/** Measured wire -> per-pair clusters [mean m, count, squared scatter m²].
+ * Bounded-span partitions sorted ranges with max(range)-min(range) <= gap;
+ * this prevents a chain of close neighbours from spanning an arbitrarily wide
+ * interval, but does not certify that a cluster comes from one physical wall.
+ * Per pair: O(P log P) sorting, O(P) partitioning and temporary memory.
+ */
+export function prepareMeasuredSnapshot(snapshot, options = {}) {
+  allowKeys(options, PREPARE_KEYS, "preparation options");
+  const clustering = Object.hasOwn(options, "clustering") ? options.clustering : "single-link";
+  validateClustering(clustering);
   allowKeys(snapshot, SNAP_KEYS, "snapshot");
   if (!Array.isArray(snapshot.configs) || !snapshot.configs.length) throw new RangeError("snapshot needs at least one measured configuration");
   for (const c of snapshot.configs) {
@@ -69,7 +89,8 @@ export function prepareMeasuredSnapshot(snapshot) {
     if (ranges.length) {
       const gap = 3 * Math.sqrt(sr2 + 0.5 * (Si[0][0] + Si[1][1] + Sj[0][0] + Sj[1][1]));
       let begin = 0;
-      for (let end = 1; end <= ranges.length; end++) if (end === ranges.length || ranges[end] - ranges[end - 1] > gap) {
+      for (let end = 1; end <= ranges.length; end++) if (end === ranges.length
+          || ranges[end] - ranges[clustering === "bounded-span" ? begin : end - 1] > gap) {
         const segment = ranges.slice(begin, end), mean = sum(segment) / segment.length;
         cl.push([mean, segment.length, sum(segment.map((v) => (v - mean) ** 2))]);
         begin = end;
@@ -93,6 +114,9 @@ export class PSPT {
   constructor(options = {}) {
     allowKeys(options, OPTION_KEYS, "options");
     const o = { ...DEFAULTS, ...options };
+    validateClustering(o.clustering);
+    if (o.refinement !== "independent-pairs" && o.refinement !== "shared-pose")
+      throw new RangeError("invalid refinement covariance mode");
     for (const name of ["nx", "ny", "K", "min_evidence_steps"])
       if (!Number.isSafeInteger(o[name]) || o[name] < (name === "nx" || name === "ny" ? 3 : 1)) throw new RangeError(`${name} is out of range`);
     for (const name of ["ell", "sep", "dup", "ext", "R_span", "max_range"])
@@ -171,7 +195,7 @@ export class PSPT {
 
   step(snapshot) {
     // Validate/copy all input before mutating state, including rejected time order.
-    const { wire, pre, veh } = prepareMeasuredSnapshot(snapshot), t = wire.t;
+    const { wire, pre, veh } = prepareMeasuredSnapshot(snapshot, { clustering: this.clustering }), t = wire.t;
     if (t !== (this.last_t ?? 0) + 1) throw new RangeError("snapshots must be processed once in causal t=1,2,... order");
     const byId = new Map(this.groups.map((g) => [g.gid, g]));
     if (byId.size !== this.groups.length) throw new RangeError("group IDs must be unique");
@@ -291,9 +315,9 @@ export class PSPT {
       const q = [x, y];
       if (centers.some((c) => distance(q, c) < this.dup)) continue;
       const h = new Surfel(q, phi, vehicleMean.map((v, i) => v - q[i]), this.ell), c = mirrored(h, m, Rm, theta);
-      if (refine(h, snaps) < 3) continue;
+      if (refine(h, snaps, { refinement: this.refinement }) < 3) continue;
       if (centers.some((center) => distance(h.center, center) < .5)) continue;
-      refine(c, snaps);
+      refine(c, snaps, { refinement: this.refinement });
       const g = newGroup(gid++, h, c, t, [this.hist[0][0], t]);
       this._status(g, t); this.groups.push(g); centers.push(h.center, c.center);
     }
