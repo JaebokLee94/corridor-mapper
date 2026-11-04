@@ -355,8 +355,8 @@ test('the actual app unload handler detaches server jobs and stops only browser-
     { stop: () => calls.push('browser stopped') },
   ], sweep: { detach: () => calls.push('sweep detached'), cancel: () => assert.fail('Unloading must not cancel a server sweep') } };
   let unload;
-  vm.runInNewContext(source.slice(begin, end), { state, window: { addEventListener: (name, callback) => { assert.equal(name, 'beforeunload'); unload = callback; } } });
-  unload(); assert.deepEqual(calls, ['server detached', 'browser stopped', 'sweep detached']);
+  vm.runInNewContext(source.slice(begin, end), { state, runPreloader: { dispose: () => calls.push('idle preload stopped') }, window: { addEventListener: (name, callback) => { assert.equal(name, 'beforeunload'); unload = callback; } } });
+  unload(); assert.deepEqual(calls, ['idle preload stopped', 'server detached', 'browser stopped', 'sweep detached']);
   calls.length = 0; state.sweep = { cancel: () => calls.push('browser sweep stopped') };
-  unload(); assert.deepEqual(calls, ['server detached', 'browser stopped', 'browser sweep stopped']);
+  unload(); assert.deepEqual(calls, ['idle preload stopped', 'server detached', 'browser stopped', 'browser sweep stopped']);
 });

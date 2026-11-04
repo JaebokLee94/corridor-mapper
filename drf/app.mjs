@@ -11,12 +11,14 @@ import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261104-diagnostics1';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
+import { createRunPreloader } from './run-preloader.mjs?v=20261104-startup1';
 
 renderMath();
 const $ = id => document.getElementById(id), form = $('settings');
 const state = { mode: 'idle', protocol: null, scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0, generatedSnapshots: 0, measurementTotal: 0,
   busy: false, replay: false, replayAt: 0, generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
 let runWorker, evalWorker, hoverWorker, diagnosticWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
+const runPreloader = createRunPreloader({ createWorker: () => createLocalWorker('run') });
 function renderThresholdProtocol(protocol = METHOD_PROTOCOL) {
   const { guarded, baseline } = protocol;
   $('thresholdSummary').textContent = `Tuning ${guarded.tuning.scenes} · PSPT ${guarded.threshold.toFixed(4)} · B ${baseline.threshold.toFixed(4)}`;
@@ -93,9 +95,22 @@ function settings() {
   const values = Object.fromEntries(new FormData(form)); values.specular = form.elements.namedItem('specular').checked;
   return normalizeInput(values);
 }
+function createLocalWorker(name) {
+  const revision = name === 'run' ? '20261104-startup1' : '20261104-truthcache2';
+  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
+}
+function warmSelectedInput(input) {
+  // Download/decode one selected raw bank record, never generate measurements or
+  // start a run. Local Node computation already reads this bank from disk.
+  if (globalThis.__drfOffline || document.querySelector('meta[name="echomap-compute"]')?.content === 'server'
+    || ['running', 'paused'].includes(state.mode) || state.sweep) return;
+  if (!form.checkValidity()) { runPreloader.dispose(); return; }
+  try { runPreloader.schedule(input ?? settings()); } catch { runPreloader.dispose(); }
+}
 function createWorker(name, options = {}) {
   if (name === 'run' && state.server) return createServerRunWorker(state.server, options);
-  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261104-truthcache2`, import.meta.url), { type: 'module' });
+  if (name === 'run') return runPreloader.take(options.input) ?? createLocalWorker(name);
+  return createLocalWorker(name);
 }
 function makeWorker(name, onProgress = () => {}) {
   const worker = createWorker(name), pending = new Map(); let id = 0, stopped = false;
@@ -228,8 +243,8 @@ async function prepare(single = false, resumeId) {
     cancel(true); state.pendingInput=input; state.mode = 'running'; state.busy = true;
     const generation = state.generation; controls();
     location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`;
-    notice('Generating wall geometry and measurements.');
-    const worker = createWorker('run', { resumeId }); runWorker = worker;
+    notice('Preparing measurements.');
+    const worker = createWorker('run', { resumeId, input }); runWorker = worker;
     state.workers.push({ stop: () => worker.terminate(), detach: worker.detach ? () => worker.detach() : null });
     worker.onmessage = ({ data }) => { void receiveRunMessage(data, generation); };
     worker.onerror = event => { if (generation === state.generation) fail(new Error(event.message || 'Could not load the simulation worker. Reload and run again.')); };
@@ -263,6 +278,12 @@ async function receiveRunMessage(data, generation) {
     if (data.type === 'progress') {
       state.measurementTotal = data.total; state.generatedSnapshots = Math.max(state.generatedSnapshots ?? 0, data.t);
       updateRunProgress(); notice(`Generating measurements ${data.t} / ${data.total}`); return;
+    }
+    if (data.type === 'preparation') {
+      const label = { loading: 'Loading saved paths…', generating: 'Generating wall geometry and measurements.',
+        measuring: 'Applying measurement noise…' }[data.phase];
+      if (label) notice(label);
+      return;
     }
     if (data.type === 'prepared') {
       state.protocol = structuredClone(data.protocol ?? LEGACY_RUN_PROTOCOL);
@@ -458,6 +479,8 @@ $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
 $('resetButton').onclick = () => { state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(DEFAULT_INPUT); renderSelected(); location.hash = ''; renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.'); };
 form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { location.hash = `v1=${encodeURIComponent(JSON.stringify(settings()))}`; } catch (e) { notice(e.message); } });
+form.addEventListener('change', () => warmSelectedInput());
+$('resetButton').addEventListener('click', () => warmSelectedInput());
 $('timeSlider').oninput = () => {
   if (['running', 'paused'].includes(state.mode)) { $('timeSlider').value = state.selected; return; }
   stopReplay(); state.followLive = false; state.selected = Number($('timeSlider').value); hoverGeneration++; renderSelected();
@@ -565,6 +588,7 @@ async function runSweep(jobs, resumeId) {
 $('sweepButton').onclick = () => {
   try {
     const base = settings(), values = Object.fromEntries(new FormData($('sweepSettings')));
+    runPreloader.dispose();
     return runSweep(sweepJobs(base, parseValues(values.sweepNoise), parseValues(values.sweepRoughness), parseValues(values.sweepSeeds, true)));
   } catch (error) { $('sweepStatus').textContent = `Sweep stopped: ${error.message}`; }
 };
@@ -614,6 +638,7 @@ chartResize.observe($('analysis-panel') ?? $('sweepPanel'));
 chartResize.observe($('metricChart'));
 window.addEventListener('resize', () => { renderSelected(); renderSweep(); });
 window.addEventListener('beforeunload', () => {
+  runPreloader.dispose();
   for (const worker of state.workers) worker.detach ? worker.detach() : worker.stop();
   if (state.sweep?.detach) state.sweep.detach(); else state.sweep?.cancel();
 });
@@ -650,6 +675,7 @@ if (document.querySelector('meta[name="echomap-compute"]')?.content === 'server'
 }
 
 // Switching the displayed method never recomputes or mutates either estimator.
+warmSelectedInput(initialInput);
 for (const button of document.querySelectorAll('[data-method]')) button.onclick=()=>{state.method=button.dataset.method;map.fit();baselineMap.fit();renderSelected();};
 $('newSeed').onclick=()=>{
   const seedField=form.elements.namedItem('seed'),old=Number(seedField.value);

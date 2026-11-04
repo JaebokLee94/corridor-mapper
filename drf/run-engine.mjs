@@ -1,5 +1,5 @@
 import { normalizeInput } from './scenario.mjs?v=20261104-truthcache1';
-import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-truthcache2';
+import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-startup1';
 import { createGrid, createField } from './field.mjs';
 import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs';
@@ -79,7 +79,7 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask } = {}) {
       const scenario = await generateScenario(input, (t, total) => {
         if (active !== run || run.epoch !== epoch) throw new Error('Cancelled');
         send(run, 'progress', { t, total });
-      });
+      }, { onPhase: phase => send(run, 'preparation', { phase }) });
       if (active !== run || run.epoch !== epoch) return;
       run.scenario = scenario;
       run.grid = createGrid(input.grid, input.grid, scenario.domain);

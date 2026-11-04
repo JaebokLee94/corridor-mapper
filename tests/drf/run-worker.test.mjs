@@ -141,6 +141,6 @@ test('cancellation during generation suppresses prepared data and all inference 
     if (message.type === 'progress') engine.command({ type: 'cancel', requestId: 22 });
   } });
   await engine.command({ type: 'start', requestId: 22, input });
-  assert.deepEqual(messages.map(message => message.type), ['status', 'progress', 'status']);
+  assert.deepEqual(messages.map(message => message.type), ['status', 'preparation', 'progress', 'status']);
   assert.equal(messages.at(-1).mode, 'cancelled');
 });

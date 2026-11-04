@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Run startup latency checks</title>
+<style>body{font:15px/1.5 system-ui;margin:30px;max-width:1200px}input{width:600px}button{padding:8px 12px;margin:10px 8px 10px 0}pre{white-space:pre-wrap}td,th{padding:8px;border:1px solid #ccd}table{border-collapse:collapse}</style>
+<h1>Run startup latency checks</h1>
+<p>Manual local check, excluded from Pages. Same seed 9, 10 vehicles, 120 snapshots; stop after the first computed snapshot. Warmup only reads saved physical paths. No work starts before a button is pressed.</p>
+<label>Worker base URL <input id="base"></label>
+<div><button id="cold">Measure cold start</button><button id="warm">Preload, then Run</button><button id="immediate">Run during preload</button></div>
+<p id="status" role="status">Ready</p>
+<table><thead><tr><th>Mode</th><th>Module load ms</th><th>Preload ms</th><th>Run to progress ms</th><th>Run to prepared ms</th><th>Run to first frame ms</th><th>Same measurements</th></tr></thead><tbody id="rows"></tbody></table>
+<pre id="details">[]</pre>
+<script type="module">
+const $=id=>document.getElementById(id),rows=[],input={seed:9,vehicles:10,snapshots:120};
+$('base').value=new URL('../../',location.href).href;
+let expectedWire,expectedFrame;
+const rounded=x=>Math.round(x*10)/10;
+const stable=value=>JSON.stringify(value, (key,item)=>['ms','psptMs','simulatorMs'].includes(key)?undefined:item);
+async function run(mode){
+  const controls=['cold','warm','immediate'].map($);controls.forEach(b=>b.disabled=true);
+  const entry=new URL('drf/run.worker.mjs?v=20261104-startup1',$('base').value).href;
+  const blob=URL.createObjectURL(new Blob([`import(${JSON.stringify(entry)}).then(()=>postMessage({type:'qa-ready'})).catch(e=>postMessage({type:'error',message:e.message}));`],{type:'text/javascript'}));
+  const created=performance.now(),worker=new Worker(blob,{type:'module'}),events=[];
+  let runAt,preloadAt,prepared,firstFrame,finished=false;
+  const result={mode,input,base:$('base').value,events};
+  const start=()=>{runAt=mode==='cold'?created:performance.now();worker.postMessage({type:'start',requestId:1,input,single:true});};
+  const finish=error=>{
+    if(finished)return;finished=true;clearTimeout(timeout);worker.terminate();URL.revokeObjectURL(blob);
+    controls.forEach(b=>b.disabled=false);
+    if(error){result.error=String(error);$('status').textContent=`Failed: ${error}`;}
+    else{
+      const wire=JSON.stringify(prepared.scenario.wire),frame=stable(firstFrame);
+      result.sameMeasurements=expectedWire===undefined||wire===expectedWire;
+      result.sameFirstFrame=expectedFrame===undefined||frame===expectedFrame;
+      expectedWire??=wire;expectedFrame??=frame;
+      $('status').textContent=`Finished ${mode}; measurements ${result.sameMeasurements?'match':'DIFFER'}, first frame ${result.sameFirstFrame?'matches':'DIFFERS'}`;
+    }
+    rows.push(result);$('details').textContent=JSON.stringify(rows,null,2);
+    const tr=document.createElement('tr');
+    for(const value of [mode,result.moduleMs,result.preloadMs??'—',result.progressMs,result.preparedMs,result.frameMs,result.error??`${result.sameMeasurements}/${result.sameFirstFrame}`]){const td=document.createElement('td');td.textContent=value??'—';tr.append(td);}
+    $('rows').append(tr);
+  };
+  const timeout=setTimeout(()=>finish('Timed out after 60 seconds'),60000);
+  worker.onerror=e=>finish(e.message);
+  worker.onmessage=({data})=>{
+    if(data.type==='error'){finish(data.message);return;}
+    if(data.type==='qa-ready'){
+      result.moduleMs=rounded(performance.now()-created);
+      if(mode==='cold')start();
+      else {preloadAt=performance.now();worker.postMessage({type:'warm-truth',input});if(mode==='immediate')start();}
+      return;
+    }
+    if(data.type==='truth-warmed'){
+      result.preloadMs=rounded(performance.now()-preloadAt);result.cacheHit=data.hit;
+      if(mode==='warm')start();return;
+    }
+    if(runAt===undefined){finish('Simulation event before Run');return;}
+    if(data.type==='preparation'){events.push({phase:data.phase,ms:rounded(performance.now()-runAt)});$('status').textContent=data.phase;}
+    if(data.type==='progress'){
+      result.progressMs??=rounded(performance.now()-runAt);
+      result.lastProgressMs=rounded(performance.now()-runAt);
+    }
+    if(data.type==='prepared'){result.preparedMs=rounded(performance.now()-runAt);result.simulatorMs=rounded(data.scenario.simulatorMs);prepared=data;}
+    if(data.type==='frame'){result.frameMs=rounded(performance.now()-runAt);firstFrame=data.frame;}
+    if(data.type==='status'&&data.mode==='paused')finish();
+  };
+  $('status').textContent=`Measuring ${mode}…`;
+}
+for(const mode of ['cold','warm','immediate'])$(mode).onclick=()=>run(mode);
+</script>

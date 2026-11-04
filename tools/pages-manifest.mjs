@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-const originalCacheFiles = ['drf/prepare-scenario.mjs', 'drf/truth-cache.mjs', 'assets/truth-cache/manifest.json'];
+const originalCacheFiles = ['drf/prepare-scenario.mjs', 'drf/truth-cache.mjs', 'drf/run-preloader.mjs', 'assets/truth-cache/manifest.json'];
 const truthBank = JSON.parse(readFileSync(new URL('../assets/truth-cache/manifest.json', import.meta.url), 'utf8'));
 originalCacheFiles.push(...truthBank.entries.map(entry => `assets/truth-cache/${entry.file}`));
 

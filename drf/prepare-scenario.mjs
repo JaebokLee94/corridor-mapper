@@ -2,6 +2,21 @@ import { normalizeInput, createSceneGeometry, generateTruthSnapshot, measureTrut
 import { getTruthBundle } from './truth-cache.mjs';
 
 const eligible = input => input.seed >= 1 && input.seed <= 10 && input.vehicles <= 10;
+/** Read existing raw paths only. A miss must never generate paths, add noise or
+ * run an estimator before Run. The same worker retains the validated cache hit.
+ */
+export function createTruthWarmer({ cache = { getTruthBundle } } = {}) {
+  return async raw => {
+    const input = normalizeInput(raw);
+    if (!eligible(input)) return false;
+    try {
+      await cache.getTruthBundle(input, () => { throw new Error('No existing truth to preload'); });
+      return true;
+    } catch { return false; }
+  };
+}
+export const warmTruthCache = createTruthWarmer();
+
 function yieldGeneration() {
   if (typeof MessageChannel === 'undefined') return new Promise(resolve => setTimeout(resolve, 0));
   return new Promise(resolve => {
@@ -32,16 +47,22 @@ export async function buildTruthBundle(raw, progress = () => {}) {
  * onCache is an optional diagnostic callback, not part of the scenario schema.
  */
 export function createScenarioPreparer({ cache = { getTruthBundle } } = {}) {
-  return async function prepare(raw, progress = () => {}, { onCache = () => {} } = {}) {
+  return async function prepare(raw, progress = () => {}, { onCache = () => {}, onPhase = () => {} } = {}) {
     const started = performance.now(), input = normalizeInput(raw);
     if (!eligible(input)) {
+      onPhase('generating');
       onCache({ source: 'uncached', vehicles: input.vehicles, snapshots: input.snapshots });
       return generateScenario(input, progress);
     }
     let latest = 0;
     const report = t => { latest = Math.max(latest, t); progress(latest, input.snapshots); };
-    const { bundle, source } = await cache.getTruthBundle(input, () => buildTruthBundle(input, report));
+    onPhase('loading');
+    const { bundle, source } = await cache.getTruthBundle(input, () => {
+      onPhase('generating');
+      return buildTruthBundle(input, report);
+    });
     onCache({ source, vehicles: bundle.vehicles, snapshots: bundle.snapshots });
+    onPhase('measuring');
     const truth = [], wire = [];
     for (let t = 1; t <= input.snapshots; t++) {
       // Also checks cancellation after an asynchronous disk/network cache read.
