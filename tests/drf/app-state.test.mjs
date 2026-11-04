@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput } from '../../drf/scenario.mjs';
 
-const source=readFileSync(new URL('../../drf/app.mjs',import.meta.url),'utf8');
+const source=readFileSync(process.env.DRF_APP_SOURCE || new URL('../../drf/app.mjs',import.meta.url),'utf8');
 const section=(start,end)=>{
   const a=source.indexOf(start),b=source.indexOf(end,a+start.length);
   assert.ok(a>=0 && b>a,`Actual app source section: ${start}`);
@@ -251,6 +251,51 @@ function runUiContext(total=120) {
   vm.runInContext(section('function controls()','function cancel(')+section('async function receiveRunMessage(','async function hashField('),context);
   return {context,state,$,posted,drawn,errors};
 }
+
+test('timeline and replay stay locked until the run ends, including paused and preparing states',async()=>{
+  const {context,state,$,posted,errors}=runUiContext(5),events=new Map(),pending=new Map();let frameId=0;
+  context.document.addEventListener=(name,callback)=>events.set(name,callback);
+  context.requestAnimationFrame=callback=>{const id=++frameId;pending.set(id,callback);return id;};
+  context.cancelAnimationFrame=id=>pending.delete(id);
+  context.replayFrame=0;context.hoverGeneration=0;context.renderSweep=()=>{};
+  $('playbackSpeed').value='1';
+  vm.runInContext(section('function stopReplay()','function controls()')
+    +section('function replayTick(','function resetView(')
+    +section("$('timeSlider').oninput", "for (const id of ['showEllipses'"),context);
+  const key=key=>events.get('keydown')({key,code:key===' ' ? 'Space' : key,target:{matches:()=>false},preventDefault(){}});
+  for (const [mode,prepared] of [['running',false],['running',true],['paused',true]]) {
+    state.mode=mode;state.scenario=prepared ? {input:{snapshots:5}} : null;
+    state.frames=prepared ? [{t:1},{t:2},{t:3}] : [];state.evaluations=state.frames.map(()=>({}));
+    state.next=state.frames.length;state.selected=state.frames.length;state.followLive=true;state.replay=false;
+    context.controls();
+    assert.equal($('timeSlider').disabled,true);assert.equal($('replayButton').disabled,true);
+    const selected=state.selected;
+    $('timeSlider').value=1;$('timeSlider').oninput();
+    assert.equal(Number($('timeSlider').value),selected,'Synthetic input also restores the current live position');
+    key('ArrowLeft');key('ArrowRight');key(' ');$('replayButton').onclick();
+    assert.equal(state.selected,selected);assert.equal(state.followLive,true);assert.equal(state.replay,false);
+    assert.equal(context.hoverGeneration,0);assert.equal(pending.size,0);
+    state.replay=true;context.replayTick(1000);
+    assert.equal(state.replay,false,'A stale replay callback cannot advance an active run');
+    assert.equal(state.selected,selected);assert.equal(state.followLive,true);assert.equal(pending.size,0);
+  }
+  state.mode='running';
+  await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:4},evaluation:{},next:4},1);
+  assert.equal(state.selected,4,'The next received snapshot remains selected after blocked navigation');
+  assert.equal(state.followLive,true);assert.deepEqual(posted,[]);assert.deepEqual(errors,[]);
+  for (const mode of ['done','cancelled']) {
+    state.mode=mode;state.selected=4;state.followLive=true;context.controls();
+    assert.equal($('timeSlider').disabled,false);assert.equal($('replayButton').disabled,false);
+    $('timeSlider').value=2;$('timeSlider').oninput();
+    assert.equal(state.selected,2);assert.equal(state.followLive,false);
+    key('ArrowLeft');assert.equal(state.selected,1);key('ArrowRight');assert.equal(state.selected,2);
+    $('replayButton').onclick();assert.equal(state.replay,true);assert.equal(pending.size,1);
+    const [id,callback]=pending.entries().next().value;pending.delete(id);callback(1000);
+    assert.equal(state.selected,3);context.stopReplay();assert.equal(pending.size,0);
+  }
+  state.frames=[];state.mode='cancelled';context.controls();
+  assert.equal($('timeSlider').disabled,true);assert.equal($('replayButton').disabled,true);
+});
 
 test('generation progress fills the rear bar before computation fills the foreground bar',async()=>{
   const {context,state,$,posted,errors}=runUiContext(120);state.scenario=null;

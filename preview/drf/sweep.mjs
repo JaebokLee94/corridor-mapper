@@ -1,0 +1,112 @@
+import { generateScenario, normalizeInput } from './scenario.mjs?v=20261103-defaults1';
+import { createGrid, createField } from './field.mjs';
+import { percentile } from './statistics.mjs';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261103-defaults1';
+import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
+
+function summarize(frame, evaluation) {
+  const keys = ['precision', 'surfacePrecision', 'recall', 'holdRate', 'firstSupportPrecision',
+    'medianError', 'p95', 'offwall', 'f1', 'observedFraction', 'missing',
+    'supportedCount', 'pendingCount', 'rejectedCount'];
+  return { ...Object.fromEntries(keys.map(key => [key, evaluation[key]])),
+    Q: frame.Q, admitted: frame.admitted, rejected: frame.rejected };
+}
+/** Paired sweep uses the same causal estimators and thresholds as the main view.
+ * Each seed generates one shared measurement sequence. No per-condition tuning.
+ * Memory O(field + truth + estimator state); frame history is not retained.
+ */
+export async function runExperiment(raw, progress = () => {}) {
+  const input = normalizeInput(raw);
+  if (input.sigmaD === 0) throw new Error('Both methods require range SD σd > 0; exact zero range noise is unsupported.');
+  const scenario = await generateScenario(input), grid = createGrid(input.grid, input.grid, scenario.domain),
+    field = createField(grid, { band: input.band, perimeter: input.perimeter }),
+    evaluators = Object.fromEntries(['guarded', 'baseline'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
+    estimator = new MethodComparison({ sigmaR: input.sigmaD }), timings = [];
+  let frame, evaluations, fieldMs = 0, evaluationMs = 0;
+  const estimatorMs = { guarded: 0, baseline: 0 };
+  for (const wire of scenario.wire) {
+    frame = field.step(wire); fieldMs += frame.ms;
+    const methods = estimator.step(wire);
+    for (const key of Object.keys(methods)) estimatorMs[key] += methods[key].ms;
+    timings.push(frame.ms + methods.guarded.ms + methods.baseline.ms);
+    const start = performance.now();
+    const guarded = evaluators.guarded.step({ ...frame, method: 'guarded-tuned', candidates: methods.guarded.candidates });
+    const baseline = evaluators.baseline.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded);
+    evaluations = { guarded, baseline }; evaluationMs += performance.now() - start;
+    progress(frame.t, input.snapshots);
+  }
+  return { input, wallGeneration: scenario.wallGeneration, method: 'paired-comparison', protocol: METHOD_PROTOCOL,
+    methods: Object.fromEntries(Object.entries(evaluations).map(([key, evaluation]) => [key, { summary: summarize(frame, evaluation) }])),
+    diagnostics: evaluations.guarded.diagnostics,
+    timing: { simulatorMs: scenario.simulatorMs, fieldMs, estimatorMs, evaluationMs,
+      frameP50: percentile(timings, .5), frameP95: percentile(timings, .95) },
+    final: { t: frame.t, Dbar: frame.Dbar, betaHat: frame.betaHat, Q: frame.Q, admitted: frame.admitted, rejected: frame.rejected },
+  };
+}
+export function parseValues(text, integer = false) {
+  const values = String(text).split(/[\s,]+/).filter(Boolean).map(Number);
+  if (!values.length || values.some(v => !Number.isFinite(v) || (integer && (!Number.isInteger(v) || v < 0 || v > 0xffffffff)))) throw new Error('Enter valid comma-separated numbers.');
+  if (new Set(values).size !== values.length) throw new Error('Remove duplicate values or seeds.');
+  return values;
+}
+export function sweepJobs(base, noise, roughness, seeds) {
+  if (noise.length * roughness.length * seeds.length > 1000) throw new Error('A sweep supports at most 1,000 seed/condition combinations.');
+  return roughness.flatMap(r => noise.flatMap(d => seeds.map(seed => normalizeInput({ ...base, sigmaD: d, roughness: r, seed }))));
+}
+export function aggregateRuns(runs) {
+  const groups = new Map();
+  for (const run of runs) for (const [method, result] of Object.entries(run.methods ?? { historical: { summary: run.summary } })) {
+    // A changed duration, fleet, geometry or protocol must never silently pool.
+    const { seed, ...condition } = run.input;
+    const protocol = run.protocol?.[method] ?? null;
+    const key = JSON.stringify([method, condition, protocol]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ ...run, method, methodProtocol: protocol, summary: result.summary });
+  }
+  const fields = ['precision', 'recall', 'holdRate', 'firstSupportPrecision', 'medianError', 'p95', 'offwall', 'f1', 'observedFraction'];
+  return [...groups.values()].map(group => {
+    const { seed, ...input } = group[0].input;
+    const row = { method: group[0].method, protocol: group[0].methodProtocol, input, seeds: group.map(run => run.input.seed), roughness: input.roughness, sigmaD: input.sigmaD, n: group.length };
+    for (const key of fields) {
+      const all = group.map(run => run.summary[key]), values = all.filter(Number.isFinite), n = values.length,
+        missing = all.filter(v => v == null).length, failed = all.length - n - missing,
+        positive = all.includes(Infinity), negative = all.includes(-Infinity),
+        invalid = all.some(v => v != null && !Number.isFinite(v) && v !== Infinity && v !== -Infinity);
+      // Observed failures must not disappear into a finite-only performance average.
+      const mean = failed ? invalid || (positive && negative) ? NaN : positive ? Infinity : -Infinity
+        : n ? values.reduce((s, v) => s + v, 0) / n : null;
+      row[key] = { mean, sd: !failed && n > 1 ? Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1)) : null,
+        n, failed, missing };
+    }
+    return row;
+  }).sort((a, b) => a.roughness - b.roughness || a.sigmaD - b.sigmaD || ['guarded','baseline','historical'].indexOf(a.method) - ['guarded','baseline','historical'].indexOf(b.method));
+}
+/** Bounded pool: at most four default jobs, no frame history.
+ * Cancellation terminates workers and keeps only fully completed seed results. */
+export function startSweep(jobs, onProgress, workerCount = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1))) {
+  const results = [], workers = []; let next = 0, completed = 0, cancelled = false, settled = false;
+  let finish, fail;
+  const promise = new Promise((resolve, reject) => { finish = resolve; fail = reject; });
+  const stop = () => workers.forEach(worker => worker.terminate());
+  function dispatch(worker) {
+    if (next >= jobs.length) return;
+    const id = next++; worker.postMessage({ type: 'run', input: jobs[id], id });
+  }
+  const count = Math.min(jobs.length, workerCount);
+  for (let k = 0; k < count; k++) {
+    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261103-defaults1', import.meta.url), { type: 'module' }); workers.push(worker);
+    worker.onmessage = ({ data }) => {
+      if (cancelled || settled) return;
+      if (data.type === 'error') { settled = true; stop(); fail(new Error(data.message)); return; }
+      if (data.type === 'result') {
+        const { final, ...record } = data.result; results.push(record); completed++; onProgress({ completed, total: jobs.length, results });
+        if (completed === jobs.length) { settled = true; stop(); finish({ results, cancelled: false }); }
+        else dispatch(worker);
+      }
+    };
+    worker.onerror = event => { if (!settled) { settled = true; stop(); fail(new Error(event.message)); } };
+    dispatch(worker);
+  }
+  if (!count) { settled = true; finish({ results, cancelled: false }); }
+  return { promise, cancel() { if (settled) return; cancelled = true; settled = true; stop(); finish({ results, cancelled: true }); } };
+}

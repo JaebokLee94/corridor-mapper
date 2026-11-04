@@ -16,6 +16,55 @@ $('thresholdDetails').textContent = `Fixed tuning log-score thresholds: PSPT ${M
 const fmt = (v, places = 3) => typeof v !== 'number' ? '—' : Number.isFinite(v) ? v.toFixed(places) : v === Infinity ? 'Failed (∞)' : v === -Infinity ? 'Failed (−∞)' : 'Failed (NaN)';
 // Keep the full message in the tooltip when the single status line is truncated.
 const notice = text => { $('status').textContent = text; $('status').title = text; };
+function installSidebarControls() {
+  const sidebar = $('experimentSidebar'), workspace = $('workspace'), toggle = $('sidebarToggle'),
+    controls = $('sidebarControls'), quickRun = $('sidebarRunButton'), run = $('runButton'),
+    pause = $('pauseButton'), progressTrack = $('runProgressTrack');
+  function setExpanded(expanded) {
+    const focusWasInside = sidebar.contains(document.activeElement);
+    const focusWasInControls = controls.contains(document.activeElement);
+    // Dock in the visible heading before hiding the panel; no empty control column.
+    (expanded ? $('experimentTitle') : $('workbenchTitle')).prepend(controls);
+    // Reuse the live progress elements so both stages retain their current values.
+    (expanded ? $('runSection') : controls).append(progressTrack);
+    sidebar.hidden = !expanded;
+    workspace.dataset.sidebar = expanded ? 'expanded' : 'collapsed';
+    toggle.setAttribute('aria-expanded', String(expanded));
+    const label = `${expanded ? 'Hide' : 'Show'} experiment controls`;
+    toggle.setAttribute('aria-label', label); toggle.title = label;
+    quickRun.hidden = expanded;
+    if (focusWasInControls || (!expanded && focusWasInside)) toggle.focus();
+    // Resize existing plots without resetting cameras, settings or computation.
+    window.dispatchEvent(new Event('resize'));
+  }
+  const currentAction = () => ['running', 'paused'].includes(document.body.dataset.state) ? pause : run;
+  const syncRun = () => {
+    const action = currentAction(), label = action === pause ? pause.textContent : 'Run';
+    quickRun.disabled = action.disabled;
+    $('sidebarRunLabel').textContent = label;
+    $('sidebarRunIcon').setAttribute('d', label === 'Pause' ? 'M6 5h4v14H6zM14 5h4v14h-4z' : 'm8 5 11 7-11 7z');
+    quickRun.setAttribute('aria-label', `${label} comparison`);
+    quickRun.title = `${label} comparison`;
+  };
+  toggle.addEventListener('click', () => setExpanded(sidebar.hidden));
+  quickRun.addEventListener('click', () => {
+    const action = currentAction();
+    if (action.disabled) return;
+    if (action === run && !form.checkValidity()) { form.reportValidity(); return; }
+    action.click();
+    syncRun();
+  });
+  const observer = new MutationObserver(syncRun);
+  observer.observe(run, { attributes: true, attributeFilter: ['disabled'] });
+  observer.observe(pause, { attributes: true, attributeFilter: ['disabled'], childList: true, characterData: true, subtree: true });
+  observer.observe(document.body, { attributes: true, attributeFilter: ['data-state'] });
+  syncRun();
+  form.addEventListener('invalid', event => {
+    for (let node = event.target.parentElement; node && node !== sidebar; node = node.parentElement)
+      if (node.tagName === 'DETAILS') node.open = true;
+    setExpanded(true);
+  }, true);
+}
 function fillSettings(input) {
   for (const [key, value] of Object.entries(input)) {
     const field = form.elements.namedItem(key);
@@ -54,11 +103,15 @@ function controls() {
   $('pauseButton').textContent = state.mode === 'paused' ? 'Resume' : 'Pause';
   $('stepButton').disabled = preparing || state.busy || state.mode === 'running' || sweeping || !!state.connecting;
   $('cancelButton').disabled = !active;
+  const runActions = ['runButton', 'pauseButton', 'stepButton', 'cancelButton'].map($);
+  const focusedAction = runActions.find(button => button === document.activeElement);
+  for (const button of runActions) button.hidden = button.id === 'runButton' ? active : !active;
+  if (focusedAction?.hidden) runActions.find(button => !button.hidden && !button.disabled)?.focus();
   for (const el of form.elements) el.disabled = active || sweeping;
   for (const el of $('sweepSettings').elements) el.disabled = active || sweeping;
   $('sweepButton').disabled = active || sweeping || !!state.connecting; $('sweepCancel').disabled = !sweeping;
-  $('timeSlider').max = Math.max(1, state.frames.length); $('timeSlider').value = state.selected; $('timeSlider').disabled = !state.frames.length;
-  $('replayButton').disabled = !state.frames.length;
+  $('timeSlider').max = Math.max(1, state.frames.length); $('timeSlider').value = state.selected; $('timeSlider').disabled = active || !state.frames.length;
+  $('replayButton').disabled = active || !state.frames.length;
   updateRunProgress();
   $('firstSnapshot').disabled = false;
   $('exportJson').disabled = (!state.valid || !state.frames.length) && !state.sweepRuns.length;
@@ -311,6 +364,7 @@ async function updateProfile() {
 }
 function replayTick(time) {
   if (!state.replay) return;
+  if (['running', 'paused'].includes(state.mode)) { stopReplay(); return; }
   const interval = 250 / Number($('playbackSpeed').value);
   if (time - state.replayAt >= interval) {
     state.replayAt = time; state.selected = state.selected >= state.frames.length ? 1 : state.selected + 1;
@@ -319,7 +373,7 @@ function replayTick(time) {
   replayFrame = requestAnimationFrame(replayTick);
 }
 function toggleReplay() {
-  if (!state.frames.length) return;
+  if (['running', 'paused'].includes(state.mode) || !state.frames.length) return;
   if (state.replay) stopReplay(); else { state.followLive = false; state.replay = true; state.replayAt = 0; $('replayButton').textContent = 'Stop replay'; replayFrame = requestAnimationFrame(replayTick); }
 }
 function resetView() {
@@ -332,13 +386,17 @@ $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
 $('resetButton').onclick = () => { state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(DEFAULT_INPUT); renderSelected(); location.hash = ''; renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.'); };
 form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { location.hash = `v1=${encodeURIComponent(JSON.stringify(settings()))}`; } catch (e) { notice(e.message); } });
-$('timeSlider').oninput = () => { stopReplay(); state.followLive = false; state.selected = Number($('timeSlider').value); hoverGeneration++; renderSelected(); };
+$('timeSlider').oninput = () => {
+  if (['running', 'paused'].includes(state.mode)) { $('timeSlider').value = state.selected; return; }
+  stopReplay(); state.followLive = false; state.selected = Number($('timeSlider').value); hoverGeneration++; renderSelected();
+};
 $('replayButton').onclick = toggleReplay;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) { controls(); renderSelected(); renderSweep(); }
 });
 document.addEventListener('keydown', event => {
   if (event.target.matches('input,select,textarea,button') || $('aboutDialog').open || $('shareDialog').open || $('analysisDialog').open) return;
+  if (['running', 'paused'].includes(state.mode)) return;
   if (event.code === 'Space') { event.preventDefault(); toggleReplay(); }
   if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.frames.length) {
     event.preventDefault(); stopReplay(); state.followLive = false; state.selected = Math.max(1, Math.min(state.frames.length, state.selected + (event.key === 'ArrowRight' ? 1 : -1)));
@@ -503,3 +561,4 @@ for(const tab of document.querySelectorAll('[data-tab]')) tab.addEventListener('
 
 $('analysisButton').onclick=()=>{$('analysisDialog').showModal();renderSelected();renderSweep();};
 $('closeAnalysis').onclick=()=>$('analysisDialog').close();
+installSidebarControls();

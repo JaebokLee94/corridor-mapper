@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6f8">
+  <meta name="echomap-compute" content="browser">
+  <meta name="description" content="A reproducible research workbench for range-only wall mapping. Compare guarded PSPT and fixed-fragment Gaussian evidence on identical causal measurements.">
+  <title>EchoMap · Design preview</title>
+  <link rel="icon" href="favicon.ico?v=20261103" sizes="16x16 32x32 48x48">
+  <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32">
+  <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any">
+  <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180">
+
+  <link rel="stylesheet" href="drf/design-preview.css?v=10">
+</head>
+<body class="layout-v2">
+  <a class="skip-link" href="#workspace">Skip to experiment</a>
+  <header class="site-header">
+    <a class="brand" href="drf.html" aria-label="EchoMap home"><svg class="brand-mark" viewbox="0 0 32 32" aria-hidden="true"><path d="M3 8c8-7 17 7 26 0M3 24c8-7 17 7 26 0M7 17h18"></path></svg><span>EchoMap</span></a><h1>Range-only wall mapping</h1>
+
+
+    <nav class="header-actions" aria-label="Research resources">
+      <button id="aboutButton" type="button">Methods &amp; scope</button>
+      <a class="source-link" href="https://github.com/woqhrl9494-cell/corridor-mapper" target="_blank" rel="noopener noreferrer">Source ↗</a>
+      <button id="themeButton" class="icon-button" type="button" aria-label="Switch to dark theme" title="Switch theme">◐</button>
+      <button id="shareButton" type="button">Share experiment</button>
+    </nav>
+  </header>
+  <div class="experiment-strip">
+    <section class="run-section" aria-label="Run controls">
+      <div class="execution-cluster">
+        <div class="run-actions">
+          <div class="run-progress-control">
+            <button id="previewRunButton" class="primary run-button" type="button" data-action="run" disabled>Run comparison</button>
+            <p id="status" class="status sr-only" role="status" aria-live="polite">Press Run comparison to start.</p>
+            <div class="run-progress">
+              <progress id="generationProgress" max="120" value="0" aria-label="Generated measurement snapshots"></progress>
+              <progress id="runProgress" max="120" value="0" aria-label="Computed snapshots"></progress>
+            </div>
+          </div>
+          <button id="runButton" type="button" disabled hidden>Run comparison</button>
+          <button id="pauseButton" type="button" disabled hidden>Pause</button>
+          <button id="stepButton" type="button" disabled>Step</button>
+          <button id="cancelButton" type="button" disabled>Cancel</button>
+          <button id="resetButton" class="ghost" type="button" title="Restore defaults and clear results">Reset</button>
+        </div>
+      </div>
+      <div class="experiment-tools">
+        <button id="openLayers" type="button" aria-haspopup="dialog">Map layers</button>
+        <button class="analysis-launch" id="analysisButton" type="button">Analysis &amp; exports</button>
+      </div>
+    </section>
+    <div class="experiment-context"><button id="openParameters" type="button" aria-haspopup="dialog">Parameters <span aria-hidden="true">↗</span></button><div id="experimentSummary" role="group" aria-label="Quick experiment settings"></div><span id="runState" class="run-state">Ready</span></div>
+  </div>
+  <main class="workspace" id="workspace">
+
+    <div class="content">
+
+      <section class="dashboard" aria-label="Mapping experiment"><figure class="view map-panel" id="viewMain">
+            <figcaption><div class="map-heading"><h2 id="mapTitle">Wall reconstruction</h2><div class="method-switch" role="group" aria-label="Displayed estimator"><button id="methodCompare" type="button" aria-pressed="true" data-method="compare">Compare both</button><button id="methodGuarded" type="button" aria-pressed="false" data-method="guarded">Guarded PSPT</button><button id="methodBaseline" type="button" aria-pressed="false" data-method="baseline">Fixed-fragment B</button></div><div class="map-toolbar" aria-label="Map controls"><button id="fitView" type="button">Fit domain</button><button id="zoomOut" type="button" aria-label="Zoom map out">−</button><button id="zoomIn" type="button" aria-label="Zoom map in">+</button><button id="firstSnapshot" type="button">Reset view</button></div></div>
+            </figcaption>
+            <div class="map-pair" id="mapPair" data-mode="compare"><div class="map-pane"><h3 class="map-name" id="primaryMapName">Guarded PSPT</h3><div class="view-body"><canvas id="mapCanvas" class="dashboard-canvas" role="img" aria-label="Candidate map. Numerical results for both methods appear in the comparison table.">Canvas support is required to display the map. Numerical results are available in the comparison table.</canvas></div></div><div class="map-pane" id="baselinePane"><h3 class="map-name baseline-name">Fixed-fragment B</h3><div class="view-body"><canvas id="baselineCanvas" class="dashboard-canvas" role="img" aria-label="Fixed-fragment B candidate map, sharing the PSPT camera and snapshot"></canvas></div></div></div>
+            <div class="legend-row" aria-label="Map legend"><ul class="legend"><li data-layer="proxy"><span class="swatch swatch-supported" aria-hidden="true"></span>Supported</li><li data-layer="proxy"><span class="swatch swatch-pending" aria-hidden="true"></span>Held</li><li data-layer="proxy"><span class="swatch swatch-contradicted" aria-hidden="true"></span>Rejected</li><li data-layer="truth"><span class="swatch swatch-truth" aria-hidden="true"></span>True wall</li><li data-layer="vehicles"><span class="swatch swatch-track" aria-hidden="true"></span>Trajectory</li><li data-layer="ellipses"><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipse</li></ul><span id="ellipseStats" class="view-meta">No measurements yet</span><span class="axis-note">x, y in metres · 1:1</span></div>
+            <p class="plot-note" id="methodNote">PSPT updates curved patches and holds geometrically ambiguous alternatives.</p>
+          </figure><div class="playback-bar"><div class="timeline"><button id="replayButton" type="button" disabled aria-label="Replay computed snapshots">Replay</button><label class="time-label" for="timeSlider">Snapshot <output id="snapshotLabel">0 / 120</output></label><input id="timeSlider" type="range" min="1" max="120" step="1" value="1" disabled><label class="speed-label">Speed<select id="playbackSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div><p class="keyboard-note"><kbd>Space</kbd> replay <kbd>←</kbd><kbd>→</kbd> step</p></div><section class="view results-panel" aria-labelledby="resultsTitle">
+            <div class="results-heading"><h2 id="resultsTitle">Method comparison</h2><span class="evaluation" title="Post-hoc ground-truth evaluation">Evaluation only</span><p id="evaluationNote" class="note">0.4 m tolerance · same measured prefix</p></div>
+
+            <div class="comparison-scroll" tabindex="0" role="region" aria-label="Method comparison metrics. Scroll horizontally on small screens."><table class="comparison-table"><caption class="sr-only">Results for the selected snapshot. Precision is undefined when no candidates are supported.</caption><thead><tr><th scope="col">Method</th><th scope="col" title="Supported candidate centres within 0.4 m of the true wall. Undefined for an empty estimate.">Centre precision <small>%</small></th><th scope="col" title="Observed wall samples within 0.4 m of supported patches. Observed means within 1 m of a past generated reflection point.">Observed recall <small>%</small></th><th scope="col">Surface F₁</th><th scope="col">P95 distance <small>m</small></th><th scope="col">Off-wall centres <small>%</small></th><th scope="col" title="Centre precision when each candidate was first supported, including subsequently corrected decisions.">First support <small>%</small></th><th scope="col">Supported</th><th scope="col">Held / unselected</th><th scope="col">Rejected</th></tr></thead><tbody><tr data-method-row="guarded"><th scope="row">Guarded PSPT</th><td id="precisionValue" class="primary-value">—</td><td id="recallValue" class="primary-value">—</td><td id="f1Value">—</td><td id="p95Value">—</td><td id="offwallValue">—</td><td id="firstPrecisionValue">—</td><td id="supportedValue" class="count-start">0</td><td id="pendingValue">0</td><td id="contradictedValue">0</td></tr><tr data-method-row="baseline"><th scope="row">Fixed-fragment B</th><td id="bPrecisionValue" class="primary-value">—</td><td id="bRecallValue" class="primary-value">—</td><td id="bF1Value">—</td><td id="bP95Value">—</td><td id="bOffwallValue">—</td><td id="bFirstPrecisionValue">—</td><td id="bSupportedValue" class="count-start">0</td><td id="bPendingValue">0</td><td id="bContradictedValue">—</td></tr></tbody></table></div>
+
+
+          <div class="result-foot"><p class="comparison-note"><span id="thresholdSummary">Exploratory tuning · 200 scenes</span><br>Fixed scores; no certified error bound.</p><details class="run-diagnostics"><summary>Counts &amp; computation</summary><dl class="metrics"><div><dt>Accumulated paths Q<sub>t</sub></dt><dd id="qValue">0</dd></div><div><dt>Admitted / rejected</dt><dd><span id="acceptedValue">0</span> / <span id="rejectedValue">0</span></dd></div><div><dt>Generated paths</dt><dd id="pathValue">—</dd></div><div><dt>Compute time</dt><dd id="timingValue">—</dd></div></dl></details></div></section><div class="field-grid">
+          <figure class="view" id="viewDensity"><figcaption class="vlabel"><div><h2>D̄ · Mean residual density</h2><p class="view-meta">m⁻² · shared by both methods</p></div><div class="map-toolbar"><button id="densityZoomOut" type="button" aria-label="Zoom density out">−</button><button id="densityZoomIn" type="button" aria-label="Zoom density in">+</button><button id="densityResetView" type="button" aria-label="Reset density view">↺</button></div></figcaption><div class="view-body"><canvas id="densityCanvas" class="dashboard-canvas" role="img" aria-label="Mean accumulated residual density"></canvas></div></figure>
+          <figure class="view" id="viewContrast"><figcaption class="vlabel"><div><h2>β̂ · Field contrast</h2><p class="view-meta">Dimensionless · not a probability</p></div><div class="map-toolbar"><button id="contrastZoomOut" type="button" aria-label="Zoom contrast out">−</button><button id="contrastZoomIn" type="button" aria-label="Zoom contrast in">+</button><button id="contrastResetView" type="button" aria-label="Reset contrast view">↺</button></div></figcaption><div class="view-body"><canvas id="contrastCanvas" class="dashboard-canvas" role="img" aria-label="Dimensionless field contrast"></canvas></div></figure>
+          <figure class="view" id="viewMetrics"><figcaption class="vlabel"><h2>Performance over time</h2><select id="historyMetric" aria-label="Metric over time"><option value="precision">Centre precision [%]</option><option value="recall" selected>Observed recall [%]</option><option value="firstSupportPrecision">First support [%]</option><option value="holdRate">Held / unselected [%]</option><option value="p95">P95 distance [m]</option><option value="offwall">Off-wall centres [%]</option></select></figcaption><div class="history-legend"><span><i class="line-pspt"></i>PSPT</span><span><i class="line-baseline"></i>B</span></div><div class="view-body"><canvas id="metricChart" class="dashboard-canvas compact-chart" role="img" aria-label="Comparison of both methods over computed snapshots. Export CSV for all numerical values."></canvas></div></figure>
+        </div><p id="inspector" class="inspector">Hover to inspect a grid cell. Scroll to zoom; drag to pan.</p></section>
+      <div class="workbench-footer"><span class="preview-foot">Local design preview</span><div class="provenance"><span>Frozen DRF base <code id="provenanceCommit">Loading</code></span><span>Core SHA-256 <code id="provenanceCore">Loading</code></span><span>Comparison release · 2026.10.22</span></div></div><dialog id="analysisDialog" aria-labelledby="analysisTitle"><div class="dialog-title"><h2 id="analysisTitle">Analysis tools</h2><button id="closeAnalysis" type="button">Close</button></div><div class="analysis-content" id="analysis-panel">
+        <div class="tabs" role="tablist" aria-label="Analysis tools"><button id="sweepTab" data-tab="sweepPanel" role="tab" aria-controls="sweepPanel" aria-selected="true" type="button">Parameter sweep</button><button id="diagnosticTab" data-tab="diagnosticPanel" role="tab" aria-controls="diagnosticPanel" aria-selected="false" tabindex="-1" type="button">Diagnostics</button><button id="exportTab" data-tab="exportPanel" role="tab" aria-controls="exportPanel" aria-selected="false" tabindex="-1" type="button">Export</button></div>
+        <section id="sweepPanel" role="tabpanel" aria-labelledby="sweepTab"><h2>Range noise × surface roughness</h2><p class="note">Both methods use the same measurement sequence per seed, the same fixed tuning-200 thresholds as the main comparison, and the current settings (including snapshot count). Only range SD, roughness and seed vary. Error bars are mean ± one sample standard deviation across seeds, not confidence intervals. Undefined precision remains missing.</p><form id="sweepSettings" class="sweep-settings"><label class="field"><span>Range SD [m], comma-separated</span><input name="sweepNoise" value="0.05,0.1,0.2,0.3" required></label><label class="field"><span>Roughness [deg], comma-separated</span><input name="sweepRoughness" value="0,2,5,10" required></label><label class="field"><span>Seeds, comma-separated</span><input name="sweepSeeds" value="1,2,3,4,5,6,7,8,9,10" required></label></form><div class="action-row"><button id="sweepButton" class="primary" type="button">Run sweep</button><button id="sweepCancel" type="button" disabled>Cancel sweep</button></div><p id="sweepStatus" class="status" role="status">No sweep results yet.</p><div class="sweep-charts"><figure><figcaption>Guarded PSPT</figcaption><canvas id="sweepChart" class="chart" role="img" aria-label="Guarded PSPT observed recall, mean and sample standard deviation"></canvas></figure><figure><figcaption>Fixed-fragment B</figcaption><canvas id="sweepBaselineChart" class="chart" role="img" aria-label="Fixed-fragment B observed recall, mean and sample standard deviation"></canvas></figure></div><div class="table-scroll"><table id="sweepTable"><caption>Paired sweep results · mean ± one sample SD; valid / failed / missing counts per metric</caption><thead><tr><th>Method</th><th>Roughness [deg]</th><th>Range SD [m]</th><th>Seeds</th><th>Centre precision [%]</th><th>Observed recall [%]</th><th>P95 [m]</th><th>Off-wall [%]</th></tr></thead><tbody><tr><td colspan="8">Run a sweep to compare conditions.</td></tr></tbody></table></div></section>
+        <section id="diagnosticPanel" role="tabpanel" aria-labelledby="diagnosticTab" hidden><h2>Scattering diagnostics</h2><p class="note">Uses simulated reflection points for post-hoc analysis only.</p><label class="field config-select"><span>Vehicle pair</span><select id="configSelect"><option value="0">Run an experiment first</option></select></label><p id="diagnosticSummary" class="status">No results yet.</p><div class="diagnostic-grid"><figure><figcaption>Theorem 2 ratio and χ²₁ density</figcaption><canvas id="diagnosticChart" class="chart" aria-label="Theorem 2 ratio histogram"></canvas></figure><figure><figcaption>Scattering profile δ(s), w(s), Λ(s)</figcaption><canvas id="profileChart" class="chart" aria-label="Scattering profile for the selected pair"></canvas></figure><figure><figcaption>Diffuse count vs local prediction</figcaption><canvas id="countChart" class="chart" aria-label="Observed and predicted diffuse counts"></canvas></figure></div></section>
+        <section id="exportPanel" role="tabpanel" aria-labelledby="exportTab" hidden><h2>Save a reproducible experiment</h2><p>JSON separates inputs, measured data, both estimators, evaluation and ground truth. CSV includes one row per method and snapshot, with its threshold and tuning-source ID. Legacy outer-peak diagnostics are excluded. PNG exports the selected field at 300 dpi.</p><div class="export-actions"><button id="exportJson" type="button" disabled>Download JSON</button><button id="exportCsv" type="button" disabled>Download CSV</button><button id="exportPng" type="button" disabled>PNG · 300 dpi</button></div></section>
+      </div></dialog>
+
+      <footer><span>EchoMap · Hanyang University WSL</span><span>Synthetic research workbench · measurement-only estimation</span></footer>
+    </div>
+  </main>
+  <dialog id="aboutDialog" aria-labelledby="aboutTitle"><div class="dialog-title"><h2 id="aboutTitle">Methods &amp; scope</h2><button id="closeAbout" type="button">Close</button></div>
+    <p>EchoMap compares two non-learning methods for collaborative bistatic range-only wall mapping. Each method receives measured vehicle positions, their covariances and unordered path ranges, one snapshot at a time. Wall geometry and reflection labels are available only to the simulator and evaluator.</p>
+    <div class="information-flow"><span>Simulated scene → measured ranges</span><span>Measured prefix → candidate decisions</span><span>Decisions + ground truth → evaluation</span></div>
+    <h3>Guarded PSPT</h3><p>DRF ridges initialise local quadratic patches and mirror alternatives. Four hypotheses (neither, original, mirror, both) accumulate predictive evidence before geometry updates. Geometry and own-patch evidence guards require at least two informative matched snapshots. Ambiguous geometry can remain held.</p>
+    <h3>Fixed-fragment B</h3><p>DRF ridges initialise fixed 2 m straight fragments. Gaussian range likelihoods share each echo between competing candidates, then cap the total assignment within a link. A fragment is scored for 20 subsequent snapshots, followed by a 5-snapshot regeneration cooldown. Selection uses the highest score attained so far after at least two matching snapshots. It does not implement a rejection decision.</p>
+    <h3>Comparison protocol</h3><p>Both methods use a 100 × 100 candidate grid, a 4σ residual band and exact ellipse perimeter. Their models and computational costs differ: PSPT updates geometry and paired hypotheses; B holds geometry fixed. B uses the declared range SD in its Gaussian variance (the previous experiment used 0.1 m). Display-grid settings affect only the shared field plots.</p><p><span id="thresholdDetails"></span> Scores have different meanings and scales. These are exploratory operating points; neither method obtained an LTT-certified threshold in the earlier calibration study. This page does not claim an error-rate guarantee or use the displayed ground truth to adjust thresholds.</p><p>The 200-scene tuning set used 3 vehicles, 120 snapshots, position SD 0 m and range SD 0.1 m. Selection maximised observed recall subject to empirical mean grouped-fragment FP ≤ 1%. Neither method also reached the 60% recall target. B can produce very sparse or empty maps at this operating point. The original 54-scene evaluation set (3 vehicles, position SD 0.1 m) was later reused for development and is not an independent test of these thresholds. Current results are evaluations of your selected scene, not a held-out benchmark. <a href="https://github.com/woqhrl9494-cell/corridor-mapper/blob/main/THRESHOLD_PROTOCOL.md" target="_blank" rel="noopener noreferrer">Read the protocol and evidence</a>.</p>
+    <h3>Reading the results</h3><p>Centre precision measures supported centres within 0.4 m of true walls. Observed recall measures supported-patch coverage within 0.4 m of wall samples lying within 1 m of past generated reflection points. Surface F₁ combines sampled-patch precision and observed recall. Empty precision is undefined; recall is zero when observed walls exist but the estimate is empty. These metrics differ from the whole-fragment grouped FP loss used in the previous tuning study.</p><p>Solid segments are supported patches; they are never snapped to true walls or joined across unsupported gaps. The dashed wall is evaluation truth. Held candidates express insufficient or ambiguous evidence. A supported candidate can still be wrong.</p>
+    <h3>Fields and simulation</h3><div class="equation"><math display="block"><mover><mi>D</mi><mo>‾</mo></mover><mo>=</mo><mfrac><mi>D</mi><mrow><mi>max</mi><mo>(</mo><mi>Q</mi><mo>,</mo><mn>1</mn><mo>)</mo></mrow></mfrac><mo>,</mo><mspace width="1em"></mspace><mover><mi>β</mi><mo>ˆ</mo></mover><mo>=</mo><mfrac><mi>D</mi><mrow><mi>A</mi><mo>+</mo><msub><mi>ε</mi><mi>A</mi></msub></mrow></mfrac></math></div><p>β̂ is a field-contrast index, not a probability. In Both walls, each wall has its own large-scale cubic B-spline and small-scale perturbation. If needed, constant vertical shifts separate the curves without changing their shapes; their minimum vertical gap exceeds 6 m, computed from cubic extrema. The vehicle route follows the midpoint of the finished walls with its full ±2 m lateral oscillation. The 6 m gap covers that 4 m motion envelope plus 1 m vertical truth-pose clearance on each side. Single-wall modes retain their earlier generator. The estimation domain is [0, 80] × [−20, 50] m. Vehicles advance ⅔ m in x per snapshot, covering 80 m over 120 snapshots from their initial positions. Beyond the finite wall ends, the centreline follows its endpoint tangent.</p><p>The simulator reports the same noise SDs that it uses to generate observations. Controlled noise/model-mismatch experiments are not implemented; finite patch models can still differ from curved walls and scattering. No robustness claim follows from this nominal setup. Validation is synthetic and numerical. The tool does not establish performance with physical sensors or in real caves. The source repository retains the previous implementation and validation evidence.</p>
+  </dialog>
+  <dialog id="shareDialog" aria-labelledby="shareTitle"><div class="dialog-title"><h2 id="shareTitle">Share experiment settings</h2><button id="closeShare" type="button">Close</button></div><p>The link restores the seed and simulation parameters. Recipients run the experiment in their own browser.</p><label class="field"><span>Experiment link</span><input id="shareLink" type="url" readonly></label><p id="shareStatus" role="status"></p></dialog>
+  <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
+
+<dialog id="settingsDialog" aria-labelledby="settingsTitle"><div class="drawer-heading"><h2 id="settingsTitle">Experiment settings</h2><button id="closeSettings" type="button" aria-label="Close settings">Close <span aria-hidden="true">×</span></button></div><div class="settings-tabs" role="tablist" aria-label="Settings category"><button id="parametersTab" type="button" role="tab" aria-selected="true" aria-controls="settings">Parameters</button><button id="layersTab" type="button" role="tab" aria-selected="false" aria-controls="previewDisplayPanel" tabindex="-1">Map layers</button></div><aside class="sidebar settings-panel" aria-label="Experiment controls">
+
+      <details id="settingsDetails" open><summary class="settings-summary">Parameters &amp; layers</summary><form id="settings" role="tabpanel" aria-labelledby="parametersTab">
+        <input name="scene" type="hidden" value="layered">
+        <fieldset class="sidebar-section"><legend>Scene</legend>
+          <div class="prop-grid">
+            <label class="field span-2"><span>Wall configuration</span><select name="wallSide"><option value="both">Both walls</option><option value="upper">Upper only</option><option value="lower">Lower only</option></select></label>
+            <label class="field span-2"><span>Random seed</span><span class="seed-row"><input name="seed" type="number" min="0" max="4294967295" step="1" value="1" required><button id="newSeed" type="button" title="Generate a new seed and clear results">New seed</button></span></label>
+            <label class="field"><span>Vehicles</span><input name="vehicles" type="number" min="2" max="20" step="1" value="10" required></label>
+            <label class="field"><span>Snapshots</span><input name="snapshots" type="number" min="1" max="120" step="1" value="120" required></label>
+            <label class="field"><span>Position σ<sub>p</sub> <small>m</small></span><input name="sigmaP" type="number" min="0" max="2" step="0.01" value="0.1" required></label>
+            <label class="field"><span>Range σ<sub>d</sub> <small>m</small></span><input name="sigmaD" type="number" min="0.01" max="2" step="0.01" value="0.1" required></label>
+          </div>
+        </fieldset>
+        <details class="sidebar-section" open><summary>Wall geometry</summary><p class="note">Both walls: independent shapes, ≥6 m vertical gap</p><div class="prop-grid">
+          <label class="field"><span>Shape amplitude <small>m</small></span><input name="sigmaM" type="number" min="0" max="12" step="0.1" value="6" required></label>
+          <label class="field"><span>Shape spacing <small>m</small></span><input name="deltaM" type="number" min="4" max="60" step="1" value="20" required></label>
+          <label class="field"><span>Roughness height <small>m</small></span><input name="sigmaDGeometry" type="number" min="0" max="3" step="0.01" value="0.33" required></label>
+          <label class="field"><span>Roughness spacing <small>m</small></span><input name="deltaD" type="number" min="1" max="20" step="1" value="4" required></label>
+        </div></details>
+        <details class="sidebar-section" open><summary>Scattering &amp; measurements</summary><div class="prop-grid">
+          <label class="toggle span-2"><input name="specular" type="checkbox" checked>Specular paths</label>
+          <label class="field"><span>Roughness σ <small>deg</small></span><select name="roughness"><option value="0">0°</option><option value="2" selected>2°</option><option value="5">5°</option><option value="10">10°</option></select></label>
+          <label class="field"><span>Intensity λ<sub>0</sub> <small>m⁻¹</small></span><input name="lambda0" type="number" min="0" max="30" step="1" value="10" required></label>
+          <label class="field"><span>Cell Δs <small>m</small></span><input name="cellStep" type="number" min="0.005" max="0.2" step="0.005" value="0.02" required></label>
+          <label class="field"><span>Merge ε<sub>res</sub> <small>m</small></span><input name="resolution" type="number" min="0" max="2" step="0.01" value="0" required></label>
+        </div></details>
+        <details class="sidebar-section" open><summary>Display-field numerics</summary><p class="note">Both estimators use a fixed 100 × 100 grid, 4σ band and exact perimeter.</p><div class="prop-grid">
+          <label class="field"><span>Display grid</span><select name="grid"><option value="100">100 × 100</option><option value="150" selected>150 × 150</option><option value="200">200 × 200</option></select></label>
+          <label class="field"><span>Residual band</span><select name="band"><option value="3">3σ</option><option value="4" selected>4σ</option><option value="5">5σ</option><option value="full">Full grid</option></select></label>
+          <label class="field span-2"><span>Ellipse perimeter</span><select name="perimeter"><option value="exact">Exact integration</option><option value="ramanujan">Ramanujan approximation</option></select></label>
+        </div></details>
+      </form><div id="previewDisplayPanel" role="tabpanel" aria-labelledby="layersTab" hidden>
+
+      <details class="sidebar-section display-settings" open><summary>Map layers</summary>
+        <fieldset class="toggle-list"><legend>Measured / estimated</legend>
+          <label class="toggle"><input id="showEllipses" type="checkbox" checked><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipses</label>
+          <label class="toggle"><input id="showVehicles" type="checkbox" checked><span class="swatch swatch-track" aria-hidden="true"></span>Vehicles &amp; trajectories</label>
+          <label class="toggle"><input id="showProxy" type="checkbox" checked><span class="swatch swatch-supported" aria-hidden="true"></span>Candidate decisions</label>
+        </fieldset>
+        <fieldset class="toggle-list evaluation"><legend>Ground truth · evaluation only</legend>
+          <label class="toggle"><input id="showTruth" type="checkbox" checked><span class="swatch swatch-truth" aria-hidden="true"></span>True walls</label>
+          <label class="toggle"><input id="showSpecular" type="checkbox">Specular points</label>
+          <label class="toggle"><input id="showDiffuse" type="checkbox">Diffuse points</label>
+          <label class="toggle"><input id="showObserved" type="checkbox">Observed-wall mask</label>
+        </fieldset>
+      </details>
+      <details class="sidebar-section"><summary>Field appearance</summary><div class="prop-grid">
+        <label class="field"><span>Axes</span><select id="aspectMode"><option value="equal" selected>Equal metres</option><option value="fill">Fill panel</option></select></label>
+        <label class="field"><span>Colour scale</span><select id="scaleMode"><option value="linear">Linear</option><option value="log">log(1 + value)</option></select></label>
+        <label class="field span-2"><span>PNG export field</span><select id="heatField"><option value="Dbar">D̄ · mean density</option><option value="betaHat">β̂ · field contrast</option></select></label>
+      </div></details>
+      <p class="sidebar-foot">Estimation receives measured positions, covariances and ranges only.</p>
+      </div></details>
+    </aside></dialog>  <dialog id="quickParameterDialog" aria-labelledby="quickParameterTitle">
+    <form id="quickParameterForm">
+      <label class="field"><span id="quickParameterTitle"></span><span id="quickParameterControl"></span></label>
+      <p class="quick-parameter-note">Applying a change clears the current results.</p>
+      <div class="quick-parameter-actions"><button id="cancelQuickParameter" type="button">Cancel</button><button id="applyQuickParameter" type="submit">Apply</button></div>
+    </form>
+  </dialog>
+  <script>
+    const runtime=document.createElement('script');
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-timeline1';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-timeline1';}
+    runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
+    document.body.append(runtime);
+  </script>
+<script type="module" src="drf/design-preview.mjs?v=4"></script></body>
+</html>

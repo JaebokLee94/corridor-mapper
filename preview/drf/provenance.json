@@ -1,0 +1,71 @@
+{
+  "schema": "echomap-drf-provenance/1",
+  "baseCommit": "751f34e3d8d7ee1317554672152d6a2563ce2e0c",
+  "coreHash": "4cbbe073040b739abe4862f21e0ca4ba677b92161f8d59d747c2e8aade5baaf1",
+  "coreFiles": {
+    "drf/field.mjs": "53ff0bcf4254a5f69014272473dcd8932865afa02af38c885fda443e008ec311",
+    "drf/wire.mjs": "9b6636fc6c9f14577d43eaab2c98af610c8d80650389cd4a75310e0a12f73e72"
+  },
+  "status": "Guarded PSPT and fixed-fragment B; causal measurement-only inputs; independent Python checkpoint parity; synthetic numerical validation only",
+  "referenceStatus": "Provided text fixtures only; original MATLAB/Octave files unavailable",
+  "numericalConventions": [
+    "numerical K may underflow to zero",
+    "empty readout betaHat=0",
+    "all-noise-zero configuration rejected",
+    "identical sigmaD within each configuration"
+  ],
+  "referenceQuadrature": "x=0.02 m; simulation uses approximate arc=0.02 m",
+  "historicalReferenceStatus": "84/96 criteria passed only under legacy not-a-knot walls, 60 snapshots and [0,60]x[0,30] domain",
+  "wallProtocol": {
+    "kind": "two-layer-uniform-cubic",
+    "domain": [
+      0,
+      80,
+      -20,
+      50
+    ],
+    "minWidth": 4,
+    "vehicleClearance": 1,
+    "clearanceAxis": "y",
+    "defaultSnapshots": 120,
+    "trajectoryStepMPerSnapshot": 0.6666666666666666,
+    "trajectoryTravelMAt120": 80,
+    "trajectoryTime": "snapshot index; physical dt unspecified; fixed initial fleet offsets preserved",
+    "comparisonSnapshots": 60,
+    "rejectionFleet": {
+      "vehicles": 20,
+      "snapshots": 120
+    },
+    "exit": "finite walls; tangent continuation of centreline only"
+  },
+  "pspt": {
+    "method": "guarded45",
+    "implementation": "drf/pspt.mjs",
+    "domain": [
+      0,
+      80,
+      -20,
+      50
+    ],
+    "grid": [
+      100,
+      100
+    ],
+    "scoreKind": "uncalibrated composite weight",
+    "geometryGuardAlpha": 0.001,
+    "maxIncidenceDeg": 45,
+    "minimumEvidenceSnapshots": 2,
+    "referenceGuardSha256": "5e30bb7c381232016c316f72f77636f86052970e54dc6628ea45c99f2b6b6bec",
+    "validation": "PSPT_VALIDATION.md"
+  },
+  "comparison": {
+    "release": "2026-10-22",
+    "guardedLogThreshold": 6.4615384615384635,
+    "baselineLogThreshold": 12,
+    "thresholdStatus": "Fixed development operating points; neither method has LTT-certified error control",
+    "baselineReference": "2026-10-20 Python baseline.py; source hashes and checkpoints in tests/drf/baseline-reference.json",
+    "baselineNoise": "Uses declared uniform range SD; previous experimental configuration was 0.1 m",
+    "testCommand": "PSPT_FULL_PARITY=1 npm test",
+    "evaluation": "Post-hoc 0.4 m centre/patch metrics; different from grouped whole-fragment FP loss in the prior tuning study"
+  }
+}
