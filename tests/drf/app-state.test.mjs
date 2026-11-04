@@ -46,7 +46,7 @@ test('server page load remains idle for saved completed, active and paused compa
     await new Promise(resolve=>setImmediate(resolve));
     assert.equal(state.mode,'idle');assert.equal(state.frames.length,0);assert.equal(state.sweep,null);
     assert.equal(state.connecting,false);assert.equal(state.server.job,job);
-    assert.match(notices.at(-1),/^Server ready\. Press /);
+    assert.match(notices.at(-1),/^Press /);
   }
 });
 

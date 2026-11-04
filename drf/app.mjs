@@ -14,7 +14,7 @@ let runWorker, evalWorker, hoverWorker, hoverTimer, hoverGeneration = 0, replayF
 $('thresholdSummary').textContent = `Tuning 200 · PSPT ${METHOD_PROTOCOL.guarded.threshold.toFixed(4)} · B ${METHOD_PROTOCOL.baseline.threshold.toFixed(4)}`;
 $('thresholdDetails').textContent = `Fixed tuning log-score thresholds: PSPT ${METHOD_PROTOCOL.guarded.threshold}; B ${METHOD_PROTOCOL.baseline.threshold}. They replace the earlier dev values ${METHOD_PROTOCOL.guarded.previousDevThreshold} and ${METHOD_PROTOCOL.baseline.previousDevThreshold}.`;
 const fmt = (v, places = 3) => typeof v !== 'number' ? '—' : Number.isFinite(v) ? v.toFixed(places) : v === Infinity ? 'Failed (∞)' : v === -Infinity ? 'Failed (−∞)' : 'Failed (NaN)';
-// The title keeps the full message when a short screen clamps the status to one line.
+// Keep the full message in the tooltip when the single status line is truncated.
 const notice = text => { $('status').textContent = text; $('status').title = text; };
 function fillSettings(input) {
   for (const [key, value] of Object.entries(input)) {
@@ -460,8 +460,8 @@ if (document.querySelector('meta[name="echomap-compute"]')?.content === 'server'
   connectComputeServer().then(config => {
     state.server = config; state.connecting = false; controls();
     const active = config.job && !['done', 'cancelled', 'failed'].includes(config.job.status);
-    notice(active ? `Server ready. Press ${config.job.mode === 'sweep' ? 'Run sweep in Analysis tools' : 'Run comparison'} to reconnect to the previous job.`
-      : 'Server ready. Press Run comparison to start.');
+    notice(active ? `Press ${config.job.mode === 'sweep' ? 'Run sweep' : 'Run comparison'} to reconnect.`
+      : 'Press Run comparison to start.');
   }).catch(error => {
     state.connecting = true; controls(); notice(`Compute server unavailable: ${error.message}. Reload after restarting the server.`);
   });
