@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
+import { sweepCsv } from '../../drf/sweep-export.mjs';
 
 const targets = [new URL('../../drf/app.mjs',import.meta.url),new URL('../../preview/drf/app.mjs',import.meta.url)];
 // Also exercise the user's actual temporary preview when present on this Mac.
@@ -21,10 +22,10 @@ function attachReceiver(source,state,elements={thresholdSummary:{},thresholdDeta
     state,LEGACY_RUN_PROTOCOL,()=>({request:async()=>{}}),()=>{},()=>{},{hash:''},error=>{throw error;},()=>{},()=>{},renderThresholdProtocol);
 }
 function exportHandlers(source,state) {
-  const buttons={exportJson:{},exportCsv:{}},downloads=[];
+  const buttons={exportJson:{},exportCsv:{},exportSourceSelect:{value:'comparison'}},downloads=[];
   const code=slice(source,'const jsonValue =',"$('exportPng').onclick");
-  new Function('state','provenance','aggregateRuns','download','Blob','$','psptSnapshotCsv',code)(
-    state,{},()=>[],(blob,name)=>downloads.push({blob,name}),Blob,id=>buttons[id],()=> 't,precision,pspt_ms\r\n1,1,2\r\n');
+  new Function('state','provenance','aggregateRuns','download','Blob','$','psptSnapshotCsv','renderExportControls','sweepCsv',code)(
+    state,{},()=>[],(blob,name)=>downloads.push({blob,name}),Blob,id=>buttons[id],()=> 't,precision,pspt_ms\r\n1,1,2\r\n',()=>{},sweepCsv);
   return {buttons,downloads};
 }
 const initial=()=>({generation:7,protocol:null,server:{},frames:[],evaluations:[],sweepRuns:[],next:0,selected:0,followLive:true,method:'compare'});

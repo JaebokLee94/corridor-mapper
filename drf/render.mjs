@@ -358,10 +358,9 @@ export class DrfMap {
 }
 
 // Chart coordinates and typography use CSS pixels; device pixels are export/display only.
-function chartSurface(canvas) {
-  const width=canvas.clientWidth,height=canvas.clientHeight;
+function chartSurface(canvas,{width=canvas.clientWidth,height=canvas.clientHeight,pixelRatio=window.devicePixelRatio || 1}={}) {
   if (width<1 || height<1) return null;
-  const ratio=window.devicePixelRatio || 1;
+  const ratio=pixelRatio;
   canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
   const ctx=canvas.getContext("2d"),css=getComputedStyle(document.documentElement),color=(name) => css.getPropertyValue(`--color-${name}`).trim();
   ctx.scale(ratio,ratio);ctx.fillStyle=color("plot-bg");ctx.fillRect(0,0,width,height);
@@ -430,29 +429,72 @@ export function drawMetricHistory(canvas,evaluations,selection='all',snapshots=e
     chartLine(surface,axes,points,surface.color("eval"),[],false,false,true);
   });
 }
-export function drawSweep(canvas,aggregates,reference=[],metric='medianError') {
-  const surface=chartSurface(canvas);if (!surface) return;
-  const colors=["#0072b2","#d55e00","#009e73","#cc79a7"],roughness=[...new Set(aggregates.map(a => a.roughness))].sort((a,b) => a-b);
+export function drawSweep(canvas,aggregates,reference=[],metric='medianError',renderOptions={}) {
+  const surface=chartSurface(canvas,renderOptions);if (!surface) return;
+  const colors=["#0072b2","#d55e00","#009e73","#cc79a7"],roughness=renderOptions.roughness ?? [...new Set(aggregates.map(a => a.roughness))].sort((a,b) => a-b);
   const scale=metric==='recall' ? 100 : 1, metricLabel=metric==='recall' ? 'Observed recall' : 'Median distance';
   const all=aggregates.map(a => ({x:a.sigmaD,y:a[metric].mean == null ? NaN : scale*a[metric].mean,sd:a[metric].sd == null ? null : scale*a[metric].sd})),[ymin,ymax]=metric==='recall' ? [0,100] : extent([...all,...reference.map(a=>({y:a.medianError}))]);
   const xmin=Math.min(.05,...aggregates.map(a=>a.sigmaD)),xmax=Math.max(.3,...aggregates.map(a=>a.sigmaD));
-  const axes=chartAxes(surface,{title:aggregates.some(a => a[metric].failed) ? `${aggregates.filter(a => a[metric].failed).length} failed conditions · see table` : `${metricLabel} · mean ${String.raw`$\pm$`} 1 SD`,xLabel:String.raw`$\sigma_d\,[\mathrm{m}]$`,yLabel:metric==='recall' ? String.raw`$\%$` : String.raw`$\mathrm{m}$`,xmin,xmax,ymin,ymax,top:36,height:surface.height-36});
+  const legendRows=renderOptions.legendColumns ? Math.max(1,Math.ceil(roughness.length/renderOptions.legendColumns)) : 1;
+  const legendHeight=36+(legendRows-1)*26;
+  const axes=chartAxes(surface,{title:aggregates.some(a => a[metric].failed) ? `${aggregates.filter(a => a[metric].failed).length} ${renderOptions.failedMessage ?? 'failed conditions · see table'}` : `${metricLabel} · mean ${String.raw`$\pm$`} 1 SD`,xLabel:renderOptions.xLabel ?? String.raw`$\sigma_d\,[\mathrm{m}]$`,yLabel:renderOptions.yLabel ?? (metric==='recall' ? String.raw`$\%$` : String.raw`$\mathrm{m}$`),xmin,xmax,ymin,ymax,top:legendHeight,height:surface.height-legendHeight,showYLabel:renderOptions.showYLabel ?? false,yTicks:renderOptions.yTicks});
   const {ctx}=surface;let legendX=14;
   roughness.forEach((r,k) => {
+    const legendY=renderOptions.legendColumns ? Math.floor(k/renderOptions.legendColumns)*26 : 0;
+    if (renderOptions.legendColumns) legendX=14+(k%renderOptions.legendColumns)*(surface.width-28)/renderOptions.legendColumns;
     const color=colors[k%colors.length],points=aggregates.filter(a=>a.roughness===r).sort((a,b)=>a.sigmaD-b.sigmaD).map(a=>({x:a.sigmaD,y:a[metric].mean == null ? NaN : scale*a[metric].mean,sd:a[metric].sd == null ? null : scale*a[metric].sd}));
     chartLine(surface,axes,points,color,[],true);
     chartLine(surface,axes,reference.filter(a=>a.roughness===r).map(a=>({x:a.sigmaD,y:a.medianError})),color,[5,5]);
     // Legend: coloured line key, text in ink (identity never rides on text colour alone).
-    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(legendX,19);ctx.lineTo(legendX+18,19);ctx.stroke();ctx.restore();
-    legendX+=26+drawRich(ctx,String.raw`$\sigma$ = `+r+'${}^\\circ$',legendX+26,24,{size:15,color:surface.color("ink")})+22;
+    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(legendX,19+legendY);ctx.lineTo(legendX+18,19+legendY);ctx.stroke();ctx.restore();
+    legendX+=26+drawRich(ctx,String.raw`$\sigma$ = `+r+'${}^\\circ$',legendX+26,24+legendY,{size:15,color:surface.color("ink")})+22;
   });
+}
+/** Export paired sweep recall charts from aggregate results, independently of a selected frame.
+ * Logical layout uses CSS pixels; the raster is generated at 300/96 pixels per CSS pixel.
+ * Missing means remain gaps and an undefined sample SD never becomes a fabricated error bar.
+ */
+export async function sweepPng(aggregates) {
+  if (!Array.isArray(aggregates)) throw new TypeError('Sweep aggregates must be an array.');
+  const methods=[['guarded','Guarded PSPT'],['baseline','Fixed-fragment B']];
+  const rows=aggregates.filter(row=>methods.some(([method])=>row.method===method));
+  if (!rows.length) throw new Error('Run a parameter sweep before exporting its charts.');
+  if (rows.some(row=>!Number.isFinite(row.sigmaD) || !Number.isFinite(row.roughness) || !row.recall))
+    throw new Error('Sweep results are missing condition settings or recall statistics.');
+  const width=1200,margin=20,gap=24,panelWidth=(width-2*margin-gap)/2,pixelRatio=300/96;
+  const roughness=[...new Set(rows.map(row=>row.roughness))].sort((a,b)=>a-b),legendRows=Math.max(1,Math.ceil(roughness.length/2));
+  const panelHeight=440+(legendRows-1)*26,height=panelHeight+96;
+  if (height*pixelRatio>32760) throw new Error('Too many roughness conditions for one PNG. Export the CSV or use a smaller sweep.');
+  await prepareCanvasMath();
+  const out=document.createElement('canvas'),surface=chartSurface(out,{width,height,pixelRatio});
+  const {ctx,color}=surface;
+  methods.forEach(([method,title],i)=>{
+    const selected=rows.filter(row=>row.method===method),left=margin+i*(panelWidth+gap),panel=document.createElement('canvas');
+    drawSweep(panel,selected,[],'recall',{width:panelWidth,height:panelHeight,pixelRatio,legendColumns:2,roughness,showYLabel:true,failedMessage:'failed conditions · nonfinite means not plotted',
+      xLabel:String.raw`Range SD $\sigma_d\,[\mathrm{m}]$`,yLabel:String.raw`Observed recall $[\%]$`,yTicks:[0,25,50,75,100]});
+    drawRich(ctx,title,left,28,{size:18,weight:600,color:color('ink')});
+    ctx.drawImage(panel,left,40,panelWidth,panelHeight);
+    if (!selected.some(row=>Number.isFinite(row.recall.mean)))
+      drawRich(ctx,selected.length?'No defined recall means':'No completed conditions',left+panelWidth/2,40+panelHeight/2,{align:'center',color:color('ink-muted')});
+  });
+  drawRich(ctx,String.raw`Error bars: mean $\pm$ 1 sample SD across seeds; not confidence intervals.`,margin,height-28,{color:color('ink-muted')});
+  drawRich(ctx,'Undefined means remain gaps; conditions with fewer than 2 valid seeds have no SD bar.',margin,height-8,{color:color('ink-muted')});
+  return new Promise((resolve,reject)=>out.toBlob(blob=>blob?resolve(blob):reject(new Error('Sweep PNG rendering failed.')),'image/png'));
+}
+
+function emptyDiagnostic(surface, message) {
+  const { ctx, width, height, color } = surface;
+  drawRich(ctx, message, width/2, height/2, { align: 'center', color: color('ink-muted') });
 }
 export function drawHistogram(canvas,ratios) {
   const surface=chartSurface(canvas);if (!surface) return;
+  if (!ratios.some(Number.isFinite)) { emptyDiagnostic(surface, 'No eligible ratio samples'); return; }
   const finite=ratios.filter(Number.isFinite),xmin=finite.reduce((a,b)=>Math.min(a,b),0),xmax=finite.reduce((a,b)=>Math.max(a,b),4),bins=30,step=(xmax-xmin)/bins,counts=Array(bins).fill(0);
   for (const v of finite) counts[Math.min(bins-1,Math.floor((v-xmin)/step))]++;
   const density=counts.map((n,k) => ({x:xmin+(k+.5)*step,y:finite.length ? n/(finite.length*step) : 0}));
-  const theoretical=Array.from({length:160},(_,k) => {const x=Math.max(.02,xmin+(xmax-xmin)*(k+.5)/160);return{x,y:Math.exp(-x/2)/Math.sqrt(2*Math.PI*x)};});
+  // Chi-square density has support only on positive ratios. Negative empirical
+  // ratios stay visible, but must not acquire a fictitious theoretical tail.
+  const theoretical=Array.from({length:160},(_,k) => {const x=Math.max(.02,xmax*(k+.5)/160);return{x,y:Math.exp(-x/2)/Math.sqrt(2*Math.PI*x)};});
   const [,ymax]=extent([...density,...theoretical]);
   const axes=chartAxes(surface,{title:String.raw`Ratio density · dashed $\chi^2_1$`,xLabel:String.raw`$z=(\rho-\rho^*)/\varsigma$`,yLabel:"density",xmin,xmax,ymin:0,ymax});
   const {ctx}=surface;ctx.save();ctx.beginPath();ctx.rect(axes.box.x,axes.box.y,axes.box.w,axes.box.h);ctx.clip();ctx.fillStyle=surface.color("eval");
@@ -461,6 +503,7 @@ export function drawHistogram(canvas,ratios) {
 }
 export function drawProfile(canvas,cells,xRange=[0,60]) {
   const surface=chartSurface(canvas);if (!surface) return;
+  if (!cells.length) { emptyDiagnostic(surface, 'No profile selected'); return; }
   const fields=[["delta",String.raw`$\delta\,[\mathrm{deg}]$`,String.raw`$\mathrm{deg}$`,180/Math.PI],["w","$w(s)$ · dimensionless","$w$",1],["lambda",String.raw`$\Lambda(s)$ · expected count / cell`,"count",1]];
   fields.forEach(([key,title,unit,multiplier],k) => {
     const all=cells.map(c=>({x:c.s[0],y:c[key]*multiplier})),[ymin,ymax]=extent(all),axes=chartAxes(surface,{title,xLabel:String.raw`$x\,[\mathrm{m}]$ · lower solid / upper dashed`,yLabel:unit,xmin:xRange[0],xmax:xRange[1],ymin,ymax,top:k*surface.height/3,height:surface.height/3,metreX:true});
@@ -469,6 +512,7 @@ export function drawProfile(canvas,cells,xRange=[0,60]) {
 }
 export function drawCounts(canvas,counts,predicted) {
   const surface=chartSurface(canvas);if (!surface) return;
+  if (!counts.some((n,k)=>Number.isFinite(n) && Number.isFinite(predicted[k]))) { emptyDiagnostic(surface, 'No count samples'); return; }
   const points=counts.map((n,k)=>({x:predicted[k],y:n})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),maximum=Math.max(1,...points.flatMap(p=>[p.x,p.y]))*1.1;
   const axes=chartAxes(surface,{title:"Diffuse count · dashed $y=x$",xLabel:"Locally predicted count",yLabel:"Actual count",xmin:0,xmax:maximum,ymin:0,ymax:maximum});
   chartLine(surface,axes,[{x:0,y:0},{x:maximum,y:maximum}],surface.color("ink"),[5,5]);

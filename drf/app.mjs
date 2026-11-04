@@ -1,20 +1,22 @@
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
+import { createDiagnosticView } from './diagnostic-ui.mjs';
+import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261103-defaults1';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261103-defaults1';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts } from './render.mjs?v=20261104-latex2';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261104-diagnostics1';
 import { download, png300dpi } from '../surf/exports.mjs';
-import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs';
+import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 
 renderMath();
 const $ = id => document.getElementById(id), form = $('settings');
 const state = { mode: 'idle', protocol: null, scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0, generatedSnapshots: 0, measurementTotal: 0,
   busy: false, replay: false, replayAt: 0, generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
-let runWorker, evalWorker, hoverWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
+let runWorker, evalWorker, hoverWorker, diagnosticWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
 function renderThresholdProtocol(protocol = METHOD_PROTOCOL) {
   const { guarded, baseline } = protocol;
   $('thresholdSummary').textContent = `Tuning ${guarded.tuning.scenes} · PSPT ${guarded.threshold.toFixed(4)} · B ${baseline.threshold.toFixed(4)}`;
@@ -93,7 +95,7 @@ function settings() {
 }
 function createWorker(name, options = {}) {
   if (name === 'run' && state.server) return createServerRunWorker(state.server, options);
-  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261103-background2`, import.meta.url), { type: 'module' });
+  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261104-diagnostics1`, import.meta.url), { type: 'module' });
 }
 function makeWorker(name, onProgress = () => {}) {
   const worker = createWorker(name), pending = new Map(); let id = 0, stopped = false;
@@ -137,16 +139,37 @@ function controls() {
   for (const el of form.elements) el.disabled = active || sweeping;
   for (const el of $('sweepSettings').elements) el.disabled = active || sweeping;
   $('sweepButton').disabled = active || sweeping || !!state.connecting; $('sweepCancel').disabled = !sweeping;
+  const savedSweep = state.server?.savedSweep ?? state.server?.job;
+  $('loadSavedSweep').hidden = !(savedSweep?.mode === 'sweep' && ['done', 'cancelled'].includes(savedSweep.status) && savedSweep.next > 0);
+  $('loadSavedSweep').disabled = active || sweeping || !!state.connecting;
   $('timeSlider').max = Math.max(1, state.frames.length); $('timeSlider').value = state.selected; $('timeSlider').disabled = active || !state.frames.length;
   $('replayButton').disabled = active || !state.frames.length;
   updateRunProgress();
   $('firstSnapshot').disabled = false;
-  $('exportJson').disabled = (!state.valid || !state.frames.length) && !state.sweepRuns.length;
-  for (const id of ['exportCsv', 'exportPng']) $(id).disabled = !state.valid || !state.frames.length;
+  renderExportControls();
   document.body.dataset.state = state.mode;
   $('runState').textContent = ({idle:'Ready',running:'Computing',paused:'Paused',cancelled:'Partial run',done:'Complete'})[state.mode] ?? 'Stopped';
   if (state.server) $('runState').textContent += ' · Server';
   $('newSeed').disabled = active || sweeping;
+}
+function renderExportControls() {
+  const comparison = state.valid && state.frames.length > 0, sweep = state.sweepRuns.length > 0;
+  const select = $('exportSourceSelect'), previous = select.value;
+  const choices = [...(comparison ? [['comparison', 'Comparison snapshots']] : []), ...(sweep ? [['sweep', 'Parameter sweep']] : [])];
+  select.replaceChildren(...(choices.length ? choices : [['', 'Run a comparison or sweep first']]).map(([value, label]) => {
+    const option = document.createElement('option'); option.value = value; option.textContent = label; return option;
+  }));
+  select.value = choices.some(([value]) => value === previous) ? previous : choices[0]?.[0] ?? '';
+  select.disabled = !choices.length;
+  $('exportJson').disabled = !comparison && !sweep;
+  for (const id of ['exportCsv', 'exportPng']) $(id).disabled = !choices.length;
+  const isSweep = select.value === 'sweep';
+  $('exportCsvDescription').textContent = isSweep
+    ? 'One row per seed and method, with parameters and thresholds. Rates are fractions.'
+    : 'One row per snapshot and method, with metrics and thresholds. Rates are fractions.';
+  $('exportPngDescription').textContent = isSweep
+    ? 'Both sweep recall charts, with the mean and sample standard deviation across seeds.'
+    : 'The selected density or contrast field at the current snapshot.';
 }
 function updateRunProgress() {
   const total = state.measurementTotal || state.scenario?.input.snapshots || state.pendingInput?.snapshots || Number(form.elements.namedItem('snapshots').value || DEFAULT_INPUT.snapshots);
@@ -163,7 +186,8 @@ function cancel(clear = false) {
     });
   }
   state.workers = []; state.pendingCommand = null;
-  runWorker = null; evalWorker = null; hoverWorker = null;
+  runWorker = null; evalWorker = null; hoverWorker = null; diagnosticWorker = null;
+  diagnosticView.reset();
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
@@ -374,30 +398,29 @@ function renderSelected() {
   $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
   drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),$('historyMetric').value,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value));
-  if (diag) {
-    setMathText($('diagnosticSummary'), [`diffuse / configuration ${fmt(diag.diffusePerConfig, 1)} · duplicate ranges ${diag.duplicateFraction == null ? '—' : fmt(100 * diag.duplicateFraction, 1) + '%'} · Theorem 2: mean ${fmt(diag.theoremMean)}, median ${fmt(diag.theoremMedian)}, `, { tex: 'n' }, ` = ${diag.ratios.length}, negative = ${diag.theoremNegative} · fold prediction ${fmt(diag.foldPrediction)} m`]);
-    if (!$('diagnosticPanel').hidden) {
-      drawHistogram($('diagnosticChart'), diag.ratios); drawCounts($('countChart'), diag.diffuseCounts, diag.predictedCounts); updateProfile();
-    }
-  }
-  if (!diag) {
-    $('diagnosticSummary').textContent = 'No results yet.';
-    drawHistogram($('diagnosticChart'), []); drawProfile($('profileChart'), [],display.domain); drawCounts($('countChart'), [], []);
-  }
-  const selectedConfig = $('configSelect').value;
-  $('configSelect').replaceChildren(...(scenario?.truth[state.selected - 1]?.configs ?? []).map((c, k) => {
-    const option = document.createElement('option'); option.value = k; option.textContent = `snapshot ${frame.t} · vehicles ${c.i}–${c.j}`; return option;
-  }));
-  $('configSelect').value = selectedConfig || '0';
-  if (!$('configSelect').value && $('configSelect').options.length) $('configSelect').value = '0';
+  renderDiagnostics();
 }
-async function updateProfile() {
-  if (!state.selected || !evalWorker) return;
-  const selected = state.selected, generation = state.generation, configIndex = Number($('configSelect').value || 0);
-  try {
-    const { profile } = await evalWorker.request({ type: 'profile', t: state.frames[selected - 1].t, configIndex });
-    if (generation === state.generation && selected === state.selected && configIndex === Number($('configSelect').value || 0)) drawProfile($('profileChart'), profile.cells,state.scenario.domain);
-  } catch (error) { if (error.message !== 'Cancelled') $('diagnosticSummary').textContent = error.message; }
+// Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
+function sweepDiagnosticWorker() {
+  return diagnosticWorker ??= makeWorker('eval');
+}
+const diagnosticView = createDiagnosticView({
+  elements: Object.fromEntries(['diagnosticSourceSelect', 'configSelect', 'diagnosticSummary', 'diagnosticScope',
+    'diagnosticProfileStatus', 'diagnosticChart', 'profileChart', 'countChart'].map(id => [id, $(id)])),
+  drawHistogram, drawCounts, drawProfile, setMathText,
+  loadSweepSource: run => sweepDiagnosticWorker().request({ type: 'sweep-source', input: run.input }),
+  loadSweepProfile: async (run, configIndex) => (await sweepDiagnosticWorker().request({ type: 'sweep-profile', input: run.input, configIndex })).profile,
+  loadComparisonProfile: async (comparison, configIndex) => {
+    if (!evalWorker) throw new Error('Comparison profile is unavailable.');
+    return (await evalWorker.request({ type: 'profile', t: comparison.t, configIndex })).profile;
+  },
+});
+function renderDiagnostics() {
+  const frame = state.frames[state.selected - 1], diagnostics = state.evaluations[state.selected - 1]?.diagnostics;
+  diagnosticView.render({ comparison: frame && diagnostics && state.scenario ? {
+    key: String(state.generation), t: frame.t, input: state.scenario.input, domain: state.scenario.domain,
+    configs: state.scenario.truth[state.selected - 1].configs, diagnostics,
+  } : null, sweepRuns: state.sweepRuns, visible: $('analysisDialog').open && !$('diagnosticPanel').hidden });
 }
 function replayTick(time) {
   if (!state.replay) return;
@@ -460,7 +483,6 @@ for (const [prefix,view] of [['density',densityMap],['contrast',contrastMap]]) {
   $(prefix+'ZoomOut').onclick = () => view.zoom(1 / 1.3);
   $(prefix+'ResetView').onclick = () => view.fit();
 }
-$('configSelect').onchange = updateProfile;
 $('aboutButton').onclick = () => $('aboutDialog').showModal(); $('closeAbout').onclick = () => $('aboutDialog').close();
 $('themeButton').onclick = () => {
   const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -473,6 +495,7 @@ for (const button of document.querySelectorAll('[data-tab]')) button.onclick = (
   renderSelected(); renderSweep();
 };
 function renderSweep() {
+  renderDiagnostics();
   if (document.hidden || $('sweepPanel').hidden) return;
   const aggregates = aggregateRuns(state.sweepRuns);
   for (const [method, canvas] of [['guarded', 'sweepChart'], ['baseline', 'sweepBaselineChart']])
@@ -497,6 +520,9 @@ function renderSweep() {
 async function runSweep(jobs, resumeId) {
   if (state.connecting) { $('sweepStatus').textContent = 'The compute server is not connected. Reload after restarting the server.'; return; }
   const generation = state.generation; let handle, statusTimer;
+  const savedSweep = state.server?.savedSweep ?? state.server?.job;
+  const loadingSaved = resumeId && savedSweep?.id === resumeId && ['done', 'cancelled'].includes(savedSweep.status);
+  const activity = loadingSaved ? 'Loading saved sweep' : 'Running sweep';
   try {
     if (state.server && !resumeId) {
       state.connecting = true; controls();
@@ -507,12 +533,12 @@ async function runSweep(jobs, resumeId) {
     state.sweepRuns = []; $('sweepButton').disabled = true; $('sweepCancel').disabled = false;
     const status = $('sweepStatus');
     let completedCount = 0;
-    status.textContent = `Running sweep · 0 / ${jobs.length} complete`;
+    status.textContent = `${activity} · 0 / ${jobs.length} complete`;
     // Parallel experiments emit interleaved snapshot updates. Show only the
     // aggregate completed count, at most once per second; never pace computation.
     statusTimer = setInterval(() => {
       if (generation !== state.generation) { clearInterval(statusTimer); return; }
-      const text = `Running sweep · ${completedCount} / ${jobs.length} complete`;
+      const text = `${activity} · ${completedCount} / ${jobs.length} complete`;
       if (status.textContent !== text) status.textContent = text;
     }, 1000);
     const onProgress = ({ completed, total, results, progress }) => {
@@ -543,6 +569,10 @@ $('sweepButton').onclick = () => {
   } catch (error) { $('sweepStatus').textContent = `Sweep stopped: ${error.message}`; }
 };
 $('sweepCancel').onclick = () => state.sweep?.cancel();
+$('loadSavedSweep').onclick = () => {
+  const job = state.server?.savedSweep ?? state.server?.job;
+  if (job?.mode === 'sweep' && job.next > 0) return runSweep(job.jobs, job.id);
+};
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
 $('exportJson').onclick = () => {
   const data = { schema: 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, toleranceM: 0.4, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
@@ -552,7 +582,12 @@ $('exportJson').onclick = () => {
     sweep: { completeSeedResults: state.sweepRuns.map(({ final, ...run }) => run), aggregates: aggregateRuns(state.sweepRuns) } };
   download(new Blob([JSON.stringify(data, jsonValue)], { type: 'application/json' }), 'echomap-drf.json');
 };
+$('exportSourceSelect').onchange = renderExportControls;
 $('exportCsv').onclick = () => {
+  if ($('exportSourceSelect').value === 'sweep') {
+    download(new Blob([sweepCsv(state.sweepRuns)], { type: 'text/csv;charset=utf-8' }), 'echomap-parameter-sweep.csv');
+    return;
+  }
   const protocol = state.protocol;
   const csvValue = value => /[\",\r\n]/.test(String(value)) ? '"'+String(value).replaceAll('"','""')+'"' : String(value);
   const rows=[];let header;
@@ -565,7 +600,15 @@ $('exportCsv').onclick = () => {
   }
   download(new Blob(['\ufeffmethod,selection_threshold,threshold_source,'+header+',implementation_revision\r\n'+rows.join('\r\n')+'\r\n'],{type:'text/csv;charset=utf-8'}),'echomap-method-comparison.csv');
 };
-$('exportPng').onclick = async () => { try { const field=$('heatField').value;download(await png300dpi(await (field==='betaHat' ? contrastMap : densityMap).png()), `echomap-drf-${field}-300dpi.png`); } catch (error) { notice(`PNG export failed: ${error.message}`); } };
+$('exportPng').onclick = async () => {
+  const button = $('exportPng'); button.disabled = true;
+  try {
+    const isSweep = $('exportSourceSelect').value === 'sweep', field = $('heatField').value;
+    const blob = isSweep ? await sweepPng(aggregateRuns(state.sweepRuns)) : await (field === 'betaHat' ? contrastMap : densityMap).png();
+    download(await png300dpi(blob), isSweep ? 'echomap-parameter-sweep-300dpi.png' : `echomap-drf-${field}-300dpi.png`);
+  } catch (error) { notice(`PNG export failed: ${error.message}`); }
+  finally { renderExportControls(); }
+};
 const chartResize = new ResizeObserver(() => { renderSelected(); renderSweep(); });
 chartResize.observe($('analysis-panel') ?? $('sweepPanel'));
 chartResize.observe($('metricChart'));

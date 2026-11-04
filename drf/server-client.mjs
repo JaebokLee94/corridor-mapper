@@ -29,9 +29,13 @@ export async function connectComputeServer() {
   // The sole active job takes precedence over a saved completed job, including
   // work started in another tab. This only discovers metadata; it never starts
   // computation or subscribes to results.
-  const active = (await json('/api/jobs')).jobs.find(item => !terminal.has(item.status));
+  const jobs = (await json('/api/jobs')).jobs;
+  const active = jobs.find(item => !terminal.has(item.status));
   if (active) { job = active; remember(job.id); }
-  return { ...config, job };
+  // A later comparison may replace the remembered job ID. Keep the most recent
+  // retained sweep discoverable without starting or altering any computation.
+  const savedSweep = jobs.find(item => item.mode === 'sweep' && ['done', 'cancelled'].includes(item.status) && item.next > 0) ?? null;
+  return { ...config, job, savedSweep };
 }
 
 /** The connection consumes results only. No acknowledgement or display timer

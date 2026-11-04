@@ -1,8 +1,17 @@
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261022-audit1';
 import { diffuseProfile } from './diffuse.mjs';
+import { createSweepProfileSource } from './diagnostic-profile.mjs';
 let evaluator, baselineEvaluator, scenario;
+let sweepSource, sweepKey;
 self.onmessage = ({ data }) => {
   try {
+    if (data.type === 'sweep-source' || data.type === 'sweep-profile') {
+      const key = JSON.stringify(data.input);
+      if (key !== sweepKey) { sweepSource = createSweepProfileSource(data.input); sweepKey = key; }
+      const { domain, t, configs } = sweepSource;
+      self.postMessage({ type: 'sweep-diagnostic', requestId: data.requestId, domain, t, configs,
+        ...(data.type === 'sweep-profile' ? { profile: sweepSource.profile(data.configIndex) } : {}) });
+    }
     if (data.type === 'init') { scenario = data.scenario; evaluator = createPSPTEvaluator(scenario, data.grid); baselineEvaluator = createPSPTEvaluator(scenario, data.grid); self.postMessage({ type: 'initialized', requestId: data.requestId }); }
     if (data.type === 'evaluate') {
       const guarded=evaluator.step(data.frame);

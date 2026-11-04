@@ -195,7 +195,7 @@ test('snapshot CSV retains completed rows and leaves nonfinite/missing values em
 
 test('actual JSON export handler separates truth, wire, and completed results without future snapshots', async () => {
   const scene = await generateScenario({ ...input, scene: 'layered' }), manual = calculate(scene, 2, true), source = fs.readFileSync(new URL('../../drf/app.mjs', import.meta.url), 'utf8'),
-    start = source.indexOf('const jsonValue ='), end = source.indexOf("$('exportCsv').onclick", start);
+    start = source.indexOf('const jsonValue ='), end = source.indexOf("$('exportSourceSelect').onchange", start);
   assert.ok(start >= 0 && end > start, 'JSON handler bounds must be present');
   const button = {}, downloads = [], state = { scenario: scene, grid: manual.grid, frames: manual.frames,
     evaluations: manual.evaluations, sweepRuns: [], protocol: METHOD_PROTOCOL }, provenance = { baseCommit: 'integration fixture' };

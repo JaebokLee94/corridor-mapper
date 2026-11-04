@@ -231,9 +231,14 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
     fixedMap.fit(true);assertFixed();
     fixedMap.camera.cx+=10;fixedMap.auto=false;fixedCanvas.listeners.wheel({preventDefault(){},deltaY:1,offsetX:100,offsetY:80});assertFixed();
     fixedCanvas.clientWidth=1700;fixedCanvas.clientHeight=350;fixedMap.fit();assertFixed();
-    labels.length=0;drawProfile(canvas,[],[0,80]);assert.ok(labels.filter(text=>text==='80').length>=3,'All three profiles extend to 80 m');
+    labels.length=0;drawProfile(canvas,[{s:[10,6],wall:0,delta:.1,w:.5,lambda:.1}],[0,80]);assert.ok(labels.filter(text=>text==='80').length>=3,'All three profiles extend to 80 m');
     labels.length=0;drawMetricHistory(canvas,[],'p95',120);assert.ok(labels.includes('120'),'The default history includes 120 snapshots');
     canvas.clientHeight=540;
+    for (const [draw, message] of [[()=>drawHistogram(canvas,[]),'No eligible ratio samples'],[()=>drawProfile(canvas,[]),'No profile selected'],[()=>drawCounts(canvas,[],[]),'No count samples']]) {
+      labels.length=0;strokes.length=0;draw();
+      assert.deepEqual(labels,[message],'Empty diagnostics show an explicit message instead of synthetic result axes');
+      assert.equal(strokes.length,0,'No theoretical/reference line is drawn without empirical samples');
+    }
     for (const draw of [()=>drawSweep(canvas,[{roughness:2,sigmaD:.1,medianError:{mean:.13,sd:.02}}],[{roughness:2,sigmaD:.1,medianError:.134}]),()=>drawHistogram(canvas,[-.1,.1,.4,1,2]),()=>drawCounts(canvas,[10,20],[11,19])]) {
       rectangles.length=0;gridSegments.length=0;draw();
       assert.equal(rectangles.length,1);

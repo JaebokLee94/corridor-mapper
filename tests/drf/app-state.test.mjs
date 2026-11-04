@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput } from '../../drf/scenario.mjs';
 import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
+import { createDiagnosticView } from '../../drf/diagnostic-ui.mjs';
 
 const source=readFileSync(process.env.DRF_APP_SOURCE || new URL('../../drf/app.mjs',import.meta.url),'utf8');
 const section=(start,end)=>{
@@ -125,7 +126,7 @@ test('full runs and single steps send exactly one start command with the request
 test('actual lower-map buttons affect only their own camera',()=>{
   const nodes=new Map(),calls=[],$=id=>{if (!nodes.has(id)) nodes.set(id,{});return nodes.get(id);};
   const view=name=>({zoom:factor=>calls.push([name,'zoom',factor]),fit:()=>calls.push([name,'fit'])});
-  vm.runInNewContext(section("for (const [prefix,view] of [['density'","$('configSelect').onchange"),
+  vm.runInNewContext(section("for (const [prefix,view] of [['density'","$('aboutButton').onclick"),
     {$,densityMap:view('density'),contrastMap:view('contrast')});
   for (const prefix of ['density','contrast']) {
     $(prefix+'ZoomIn').onclick();$(prefix+'ZoomOut').onclick();$(prefix+'ResetView').onclick();
@@ -153,20 +154,22 @@ test('actual preview geometry stays cached when the truth overlay is hidden',()=
 
 test('actual view reset preserves simulation, selection and replay; experiment reset still clears them',async()=>{
   const nodes=new Map(),pending=new Map(),charts=new Map();let nextFrame=0,stoppedWorkers=0,cancelledSweeps=0,fitCalls=0;
+  const document={body:{dataset:{}},createElement:()=>({}),querySelectorAll:()=>[]};
   const $=id=>{
     if (!nodes.has(id)) nodes.set(id,{id,value:'',textContent:'old snapshot value',checked:false,options:[],
-      dataset:{},removeAttribute(){},replaceChildren(...options){this.options=options;}});
+      ownerDocument:document,addEventListener(){},dataset:{},removeAttribute(){},replaceChildren(...options){this.options=options;}});
     return nodes.get(id);
   };
   const snapshots={value:'3'},elements=[snapshots];elements.namedItem=name=>name==='snapshots' ? snapshots : name==='wallSide' ? {value:'both'} : null;
-  const form={elements};$('sweepSettings').elements=[];$('playbackSpeed').value='1';
+  const form={elements};$('sweepSettings').elements=[];$('playbackSpeed').value='1';$('analysisDialog').open=true;
   const state={mode:'done',frames:[1,2,3].map(t=>({t,Q:t,admitted:t,rejected:0,ms:1})),evaluations:[{},{},{}],
     selected:3,next:3,busy:false,replay:false,replayAt:0,generation:0,valid:true,grid:{},
     scenario:{input:{snapshots:3},truth:[{configs:[]},{configs:[]},{configs:[]}],wire:[],walls:[]},
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
   const context=vm.createContext({state,$,form,hoverGeneration:0,hoverTimer:0,replayFrame:0,
     runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},LAYERED_DOMAIN,location:{hash:'#old'},
-    document:{body:{dataset:{}},createElement:()=>({}),querySelectorAll:()=>[]},map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,
+    document,createDiagnosticView,setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
+    map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,
     fmt:v=>Number.isFinite(v) ? String(v) : '—',percentile:values=>values[0]??null,
     requestAnimationFrame:fn=>{const id=++nextFrame;pending.set(id,fn);return id;},cancelAnimationFrame:id=>pending.delete(id),clearTimeout(){},
     drawComparisonHistory:(canvas,data)=>charts.set(canvas.id,data),drawHistogram:(canvas,data)=>charts.set(canvas.id,data),
@@ -178,7 +181,8 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   const viewReset=source.match(/^\$\('firstSnapshot'\)\.onclick = .*;$/m)?.[0];assert.ok(viewReset,'Actual view reset handler exists');
   vm.runInContext([
     section('function stopReplay()','async function prepare('),
-    section('function renderSelected()','async function updateProfile('),
+    section('function renderSelected()','// Sweep diagnostics'),
+    section('// Sweep diagnostics','function replayTick('),
     section('async function receiveRunMessage(','async function hashField('),
     section('function replayTick(','$(\'runButton\').onclick'),viewReset,reset,
   ].join('\n'),context);
@@ -243,7 +247,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   assert.equal(Number($('timeSlider').max),1);assert.equal(Number($('timeSlider').value),0);assert.equal($('timeSlider').disabled,true);
   assert.equal($('snapshotLabel').textContent,'0 / 60');
   assert.equal($('sweepStatus').textContent,'No results yet.');
-  assert.equal($('diagnosticSummary').textContent,'No results yet.');
+  assert.equal($('diagnosticSummary').textContent,'No diagnostics yet. Run comparison or complete a parameter sweep.');
   assert.equal($('inspector').textContent,'','Reset clears stale inspection without restoring the removed hint');
   assert.equal(charts.get('diagnosticChart').length,0);assert.equal(charts.get('profileChart').length,0);
   assert.equal(charts.get('countChart')[0].length,0);assert.equal(charts.get('countChart')[1].length,0);
@@ -252,12 +256,15 @@ test('actual view reset preserves simulation, selection and replay; experiment r
 
 function runUiContext(total=120) {
   const nodes=new Map(),posted=[],drawn=[],errors=[];
-  const $=id=>{if (!nodes.has(id)) nodes.set(id,{id,dataset:{},focus(){context.document.activeElement=this;},removeAttribute(name){delete this.dataset[name];}});return nodes.get(id);};
+  const $=id=>{if (!nodes.has(id)) nodes.set(id,{id,dataset:{},value:'',options:[],
+    replaceChildren(...options){this.options=options;this.value=options[0]?.value ?? '';},
+    focus(){context.document.activeElement=this;},removeAttribute(name){delete this.dataset[name];}});return nodes.get(id);};
   const snapshotInput={value:String(total)},elements=[];elements.namedItem=()=>snapshotInput;$('sweepSettings').elements=[];
   const state={generation:1,busy:true,mode:'running',scenario:{input:{snapshots:total}},
     next:0,frames:[],evaluations:[],selected:0,followLive:true,sweepRuns:[],valid:true};
-  const context=vm.createContext({state,$,form:{elements},document:{body:{dataset:{}}},DEFAULT_INPUT,
+  const context=vm.createContext({state,$,form:{elements},document:{body:{dataset:{}},createElement:()=>({})},DEFAULT_INPUT,
     runWorker:{postMessage:message=>posted.push({...message})},
+    diagnosticWorker:null,diagnosticView:{reset(){}},
     renderSelected:()=>drawn.push(state.selected),notice:text=>{$('status').textContent=text;},
     hashField:async()=> 'completed-hash',requestAnimationFrame:()=>assert.fail('UI receipt must not depend on a repaint'),
     fail:error=>errors.push(error),makeWorker:()=>assert.fail('Only prepared messages create inspection workers'),
@@ -266,6 +273,35 @@ function runUiContext(total=120) {
   vm.runInContext(section('function controls()','function cancel(')+section('async function receiveRunMessage(','async function hashField('),context);
   return {context,state,$,posted,drawn,errors};
 }
+
+test('export controls enable sweep-only downloads and preserve the chosen source when both result types exist',async()=>{
+  const {context,state,$}=runUiContext(3),downloaded=[],runs=[{input:{seed:7,snapshots:3}}];
+  Object.assign(state,{mode:'idle',valid:false,frames:[],sweepRuns:[]});context.controls();
+  assert.equal($('exportSourceSelect').disabled,true);
+  for(const id of ['exportJson','exportCsv','exportPng']) assert.equal($(id).disabled,true);
+  state.sweepRuns=runs;context.controls();
+  assert.equal($('exportSourceSelect').disabled,false);assert.equal($('exportSourceSelect').value,'sweep');
+  for(const id of ['exportJson','exportCsv','exportPng']) assert.equal($(id).disabled,false);
+  assert.match($('exportCsvDescription').textContent,/per seed and method/);
+  assert.match($('exportPngDescription').textContent,/Both sweep recall charts/);
+  Object.assign(context,{Blob,download:(blob,name)=>downloaded.push({blob,name}),
+    sweepCsv:actual=>{assert.equal(actual,runs);return 'seed,method\r\n7,guarded\r\n';},
+    psptSnapshotCsv:()=>assert.fail('A sweep export must not use comparison snapshots')});
+  vm.runInContext(section("$('exportCsv').onclick", "$('exportPng').onclick"),context);
+  $('exportCsv').onclick();
+  assert.equal(downloaded[0].name,'echomap-parameter-sweep.csv');
+  assert.match(await downloaded[0].blob.text(),/7,guarded/);
+  state.valid=true;state.frames=[{t:1},{t:2},{t:3}];context.controls();
+  assert.equal($('exportSourceSelect').value,'sweep','New comparison results must not silently change the chosen export');
+  $('exportSourceSelect').value='comparison';context.controls();context.controls();
+  assert.equal($('exportSourceSelect').value,'comparison');
+  assert.deepEqual($('exportSourceSelect').options.map(option=>option.value),['comparison','sweep']);
+  assert.match($('exportCsvDescription').textContent,/per snapshot and method/);
+  assert.match($('exportPngDescription').textContent,/current snapshot/);
+  state.frames=[];context.controls();assert.equal($('exportSourceSelect').value,'sweep');
+  state.sweepRuns=[];context.controls();
+  for(const id of ['exportJson','exportCsv','exportPng']) assert.equal($(id).disabled,true);
+});
 
 test('completed runs offer reset-and-run plus replay, while active and partial runs keep their own controls',()=>{
   const {context,state,$}=runUiContext(3);
@@ -451,7 +487,7 @@ test('Pause, Step and Resume send explicit commands and wait for worker status b
 test('hidden charts defer rendering and visibility return refreshes the current selection and sweep without advancing',()=>{
   const events=new Map(),drawn=[],sweeps=[],document={hidden:true,addEventListener:(name,fn)=>events.set(name,fn)};
   const state={selected:17,mode:'paused'};
-  vm.runInNewContext(section('function renderSelected()','async function updateProfile(')+'\nrenderSelected();',{
+  vm.runInNewContext(section('function renderSelected()','// Sweep diagnostics')+'\nrenderSelected();',{
     document,$:()=>assert.fail('Hidden chart rendering must be skipped'),
   });
   vm.runInNewContext(section("document.addEventListener('visibilitychange'","document.addEventListener('keydown'"),{

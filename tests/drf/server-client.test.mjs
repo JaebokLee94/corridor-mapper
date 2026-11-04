@@ -118,6 +118,20 @@ test('refresh detaches a result stream without cancellation and resumes from per
   assert.deepEqual(resumed.errors, []); assert.equal(f.commands().length, 0);
 });
 
+test('a retained sweep remains discoverable after a newer comparison replaces the remembered job', async t => {
+  const f = fixture(t);
+  Object.assign(f.job, { status: 'done', next: 120 });
+  f.storage.set(savedKey, f.job.id);
+  const sweep = { id: 'sweep-old', mode: 'sweep', status: 'done', next: 160 };
+  f.route = call => call.url === '/api/jobs' ? jsonResponse({ jobs: [f.job, sweep] }) : undefined;
+  const config = await connectComputeServer();
+  assert.equal(config.job.id, f.job.id);
+  assert.deepEqual(config.savedSweep, sweep);
+  assert.equal(f.storage.get(savedKey), f.job.id);
+  assert.equal(f.streams.length, 0);
+  assert.ok(f.calls.every(call => !call.options.method), 'Discovery must never start or alter a job');
+});
+
 test('large sweep creation uses an ordinary request while only small control commands use keepalive', async t => {
   const f = fixture(t), jobs = Array.from({ length: 300 }, (_, i) => ({ ...DEFAULT_INPUT, seed: i + 1 }));
   f.route = call => {

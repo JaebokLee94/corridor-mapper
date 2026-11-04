@@ -12,9 +12,11 @@ const actionIds = ['runButton', 'pauseButton', 'stepButton', 'cancelButton'];
 
 function fixture() {
   const nodes = new Map(), state = { mode:'idle', scenario:null, frames:[], selected:0, sweepRuns:[], valid:false, busy:false };
-  const document = { body:{ dataset:{} }, activeElement:null };
+  const document = { body:{ dataset:{} }, activeElement:null, createElement:()=>({}) };
   const $ = id => {
-    if (!nodes.has(id)) nodes.set(id, { id, hidden:false, disabled:false, dataset:{}, focus(){ document.activeElement = this; } });
+    if (!nodes.has(id)) nodes.set(id, { id, hidden:false, disabled:false, dataset:{}, value:'', options:[],
+      replaceChildren(...options){this.options=options;this.value=options[0]?.value ?? '';},
+      focus(){ document.activeElement = this; } });
     return nodes.get(id);
   };
   $('sweepSettings').elements = [];
