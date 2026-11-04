@@ -49,7 +49,7 @@
           <div class="prop-grid">
             <label class="field span-2"><span>Wall configuration</span><select name="wallSide"><option value="both">Both walls</option><option value="upper">Upper only</option><option value="lower">Lower only</option></select></label>
             <label class="field span-2"><span>Random seed</span><span class="seed-row"><input name="seed" type="number" min="0" max="4294967295" step="1" value="1" required /><button id="newSeed" type="button" title="Generate a new seed and clear results">New seed</button></span></label>
-            <label class="field"><span>Vehicles</span><input name="vehicles" type="number" min="2" max="20" step="1" value="10" required /></label>
+            <label class="field"><span>Vehicles</span><input name="vehicles" type="number" min="2" max="10" step="1" value="10" required /></label>
             <label class="field"><span>Snapshots</span><input name="snapshots" type="number" min="1" max="120" step="1" value="120" required /></label>
             <label class="field"><span>Position <span data-tex="\sigma_p">σp</span> <small>m</small></span><input name="sigmaP" type="number" min="0" max="2" step="0.01" value="0.1" required /></label>
             <label class="field"><span>Range <span data-tex="\sigma_d">σd</span> <small>m</small></span><input name="sigmaD" type="number" min="0.01" max="2" step="0.01" value="0.1" required /></label>
@@ -160,8 +160,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-diagnostics1';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-diagnostics1';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-truthcache1';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-truthcache1';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

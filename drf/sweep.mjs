@@ -1,4 +1,5 @@
-import { generateScenario, normalizeInput } from './scenario.mjs?v=20261103-defaults1';
+import { normalizeInput } from './scenario.mjs';
+import { prepareScenario as generateScenario } from './prepare-scenario.mjs';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261103-defaults1';
@@ -94,7 +95,7 @@ export function startSweep(jobs, onProgress, workerCount = Math.min(4, Math.max(
   }
   const count = Math.min(jobs.length, workerCount);
   for (let k = 0; k < count; k++) {
-    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261103-defaults1', import.meta.url), { type: 'module' }); workers.push(worker);
+    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261104-truthcache1', import.meta.url), { type: 'module' }); workers.push(worker);
     worker.onmessage = ({ data }) => {
       if (cancelled || settled) return;
       if (data.type === 'error') { settled = true; stop(); fail(new Error(data.message)); return; }

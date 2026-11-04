@@ -1,4 +1,5 @@
-import { generateScenario, normalizeInput } from './scenario.mjs';
+import { normalizeInput } from './scenario.mjs';
+import { prepareScenario as generateScenario } from './prepare-scenario.mjs';
 import { createGrid, createField } from './field.mjs';
 import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs';

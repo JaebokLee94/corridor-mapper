@@ -1,0 +1,1136 @@
+{
+  "schema": "echomap-truth/1",
+  "generator": "raw-paths-20261104-v1",
+  "sourceHashes": {
+    "drf/diffuse.mjs": "6a9f63bf383dd7cfb14cd2dab94ecc013f0ec551d1f036b12a8de33ca62b87de",
+    "drf/poly.mjs": "b3284159beebcf135d70df9ba5601b6cbdfe5d0d1416a067ff6991a4d77e3fa2",
+    "drf/rng.mjs": "b5be48effcf70dc4a86a19fc01d3a1e2ca5b80e1af5bea3a2b14f286704da6b0",
+    "drf/scenario.mjs": "caa30d07e47f3e840af1300903821de68efcb348561c3c5629e10c759e836539",
+    "drf/specular.mjs": "99e85d304c00692d086282b5838765677b6e5849a174fa35cdf9a9fdfb20e098",
+    "drf/truth-cache.mjs": "0a4108275d964c606591de04b2bd7d1607827393c38b7bb4d4998dfe75d69e73",
+    "drf/wall.mjs": "78ef4f5a2ae12e55c65d08f9110e2c73dcdda3af80a81f3666dfa92e5a46d7fa",
+    "drf/wire.mjs": "9b6636fc6c9f14577d43eaab2c98af610c8d80650389cd4a75310e0a12f73e72"
+  },
+  "entries": [
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "69e215e016c72eca42268a7d5cc811c0a436d71e66e2350a1d3fa4aa9f718baf.v2.t120.json.gz",
+      "sha256": "e8ab281cba08462d0b725dee02a152768ce95564f17d939fae774d96f2f710d8",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "69e215e016c72eca42268a7d5cc811c0a436d71e66e2350a1d3fa4aa9f718baf.v3.t120.json.gz",
+      "sha256": "30bfb0f5a3fdd60f55e8217734f46aded955aa01937ab3e5196139555226bc5e",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "69e215e016c72eca42268a7d5cc811c0a436d71e66e2350a1d3fa4aa9f718baf.v5.t120.json.gz",
+      "sha256": "adc2e99eb4f8f00b236c361764a7f4dfe1796b0569fb62e560cae68a157fe068",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "69e215e016c72eca42268a7d5cc811c0a436d71e66e2350a1d3fa4aa9f718baf.v10.t120.json.gz",
+      "sha256": "0ee5e295dc75244deb6ed8a3b1ea31cdf80772ffaf09cb57f31c2d92bfca42dc",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "571eca0759481a4dac8af17f6f651b0dfc6d0213c5fc866e7800adfb093929e1.v2.t120.json.gz",
+      "sha256": "35f45dca776fa17dd28e62fecb757fc18776c2a5ae78e23c645a891913c2b7e6",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "571eca0759481a4dac8af17f6f651b0dfc6d0213c5fc866e7800adfb093929e1.v3.t120.json.gz",
+      "sha256": "55e8fa43506f8cd7a04a66e51b55198f3cee61c2a5cee660f5bf4bd9ba6ac724",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "571eca0759481a4dac8af17f6f651b0dfc6d0213c5fc866e7800adfb093929e1.v5.t120.json.gz",
+      "sha256": "5b382a5c91eae6db52b5f03d51aa0a9a69489fed768fe5844dcc663b345d5b7f",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "571eca0759481a4dac8af17f6f651b0dfc6d0213c5fc866e7800adfb093929e1.v10.t120.json.gz",
+      "sha256": "2cb0351b0baff70fd6a433761dfbdb7495b197ed80e9a4d58e989c3169f227ee",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "89df4be469d086760a618416c471723bca6792e1fbeddbc89bed5461f081db36.v2.t120.json.gz",
+      "sha256": "32426528716ed1e6b9a6acec14d0a2ab25e728fcf18893cf851905ebbb85a711",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "89df4be469d086760a618416c471723bca6792e1fbeddbc89bed5461f081db36.v3.t120.json.gz",
+      "sha256": "a33b7bd0a216cdcdafa7d4a2cbbf5ce0d5e00aef58fd70d1384924443a9d7b04",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "89df4be469d086760a618416c471723bca6792e1fbeddbc89bed5461f081db36.v5.t120.json.gz",
+      "sha256": "a1bf9a587b5cc2271ade41b2a21730c1332d7b9d84691c4824cae09b8b2b8713",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "89df4be469d086760a618416c471723bca6792e1fbeddbc89bed5461f081db36.v10.t120.json.gz",
+      "sha256": "026fd7ac25f0c179fe38f7a586963d8a04da9077ebc44b5bad0d8102d1eadbbb",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d97a9af11e969a043390f463b3eca674d57bcb90e9d639e8c1542eaf0453467c.v2.t120.json.gz",
+      "sha256": "864e40b56ded187bb9069b3778c490d12b508d40af735027edad3078b6a57796",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d97a9af11e969a043390f463b3eca674d57bcb90e9d639e8c1542eaf0453467c.v3.t120.json.gz",
+      "sha256": "dd0dc94ef0cf62123b99d3f517c6d327dcc5babac9b355c67c12ee3b639ff2f0",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d97a9af11e969a043390f463b3eca674d57bcb90e9d639e8c1542eaf0453467c.v5.t120.json.gz",
+      "sha256": "036ec0cfe1e1f925c4b1eb77983a2106e85441a81f74c552f28a531362c9f07e",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":1,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d97a9af11e969a043390f463b3eca674d57bcb90e9d639e8c1542eaf0453467c.v10.t120.json.gz",
+      "sha256": "2c02e632d3738ca3c182e21c7c6bb37466605830600aa84a8fa5f4512200e9b7",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "da897159ad32c40a0132b48af0025246d5c3bf3eeac0defa8d113d1f87d33d7a.v2.t120.json.gz",
+      "sha256": "b81520138647bf9d7715d9732514657ce01601543d9972d1aa05b15533dcd95f",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "da897159ad32c40a0132b48af0025246d5c3bf3eeac0defa8d113d1f87d33d7a.v3.t120.json.gz",
+      "sha256": "03b4785d2763447ab4034282d518b3b3690b04cb03c5e02234e1de3304455249",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "da897159ad32c40a0132b48af0025246d5c3bf3eeac0defa8d113d1f87d33d7a.v5.t120.json.gz",
+      "sha256": "ad71e6f54b9ce2e66c51b2fa8951b73fb8ed887965164d8ad8a64b534f937d7a",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "da897159ad32c40a0132b48af0025246d5c3bf3eeac0defa8d113d1f87d33d7a.v10.t120.json.gz",
+      "sha256": "b584c4abf45f7538113b304fe2006c94c780480264739aa63ea6bd8b93a7e052",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "7e9651376fb19c01e13461f6a9dabe9259b3c5a2c8b0eb10a3694a318c8c6d3b.v2.t120.json.gz",
+      "sha256": "339e24ee4981826744e82cc3892fe65f01e128f2f0b3fc299eb6e05df48f0524",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "7e9651376fb19c01e13461f6a9dabe9259b3c5a2c8b0eb10a3694a318c8c6d3b.v3.t120.json.gz",
+      "sha256": "14f4d04ac48a7f7f211fa270c8fcde19fca07d73525e5283f7114744cc43f9cf",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "7e9651376fb19c01e13461f6a9dabe9259b3c5a2c8b0eb10a3694a318c8c6d3b.v5.t120.json.gz",
+      "sha256": "1b1ae22141994107b5c440f3fd0057ec300aa9456a04d74b554978fbe03992ec",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "7e9651376fb19c01e13461f6a9dabe9259b3c5a2c8b0eb10a3694a318c8c6d3b.v10.t120.json.gz",
+      "sha256": "36bd6d5cc9679dc8f012ff243f1d40f83bae129a875abeacfe5203b57a9bf034",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "3352c55db765c13a422f210760788f373c4840939b3e8df351346db64a3a1d6b.v2.t120.json.gz",
+      "sha256": "06900c5a1c3c3d519f55001b314b3b474c89254f0699dd51b702c3c0887ae633",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "3352c55db765c13a422f210760788f373c4840939b3e8df351346db64a3a1d6b.v3.t120.json.gz",
+      "sha256": "bb5f8a0ec7d48173111319921647c76354aea752eb52520ecdfbaa0ca7d873b3",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "3352c55db765c13a422f210760788f373c4840939b3e8df351346db64a3a1d6b.v5.t120.json.gz",
+      "sha256": "c2e1c7fd228e6742ff1fcb69d2d6e14c30ecd114385b121c2444e970a78de04c",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "3352c55db765c13a422f210760788f373c4840939b3e8df351346db64a3a1d6b.v10.t120.json.gz",
+      "sha256": "bb8e6c5301b423ea19f9ef55c05247f31a4895ea713e48d82c397fb5d5ce8535",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "cc6e4156519d2ac60b7af609603668e9f8d83076f11c31334c386431afc9fe89.v2.t120.json.gz",
+      "sha256": "8e43cdc8911187de52c5b995091a567fb8422edec1cfe9485c0d5b84c01de3ae",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "cc6e4156519d2ac60b7af609603668e9f8d83076f11c31334c386431afc9fe89.v3.t120.json.gz",
+      "sha256": "727f5445a70912e60978729b7e2acbd9c1340fb3f8e9db5053afa43dbd9144be",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "cc6e4156519d2ac60b7af609603668e9f8d83076f11c31334c386431afc9fe89.v5.t120.json.gz",
+      "sha256": "ecaa9dcb2a0440e7bb4e30561e8f343e5c6e6a379e9217569d7ce106906ace8a",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":10,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "cc6e4156519d2ac60b7af609603668e9f8d83076f11c31334c386431afc9fe89.v10.t120.json.gz",
+      "sha256": "a25ceb5b3ed6c738fe2fbd23c131cbb322f1b0dadc106e9a8491e0fb076a3d41",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "35e913741bf7a877fd6eb669d2b97ed70c3e13511115f9fcb899db8547c4e885.v2.t120.json.gz",
+      "sha256": "8ec914f95ac5f4c331f307b2539b6e89a4c32f132ac1efeb570eaa161ba29510",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "35e913741bf7a877fd6eb669d2b97ed70c3e13511115f9fcb899db8547c4e885.v3.t120.json.gz",
+      "sha256": "7f011467b06322f8ff115f17ed87e4bcdad29d91b81dfb45db492d168dc0ad45",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "35e913741bf7a877fd6eb669d2b97ed70c3e13511115f9fcb899db8547c4e885.v5.t120.json.gz",
+      "sha256": "171616d7b286a959ff55b70cbead6e24ef7a0f12f1a7a0cd06ee9959a5952950",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "35e913741bf7a877fd6eb669d2b97ed70c3e13511115f9fcb899db8547c4e885.v10.t120.json.gz",
+      "sha256": "612429ccbf08202891f4ac0fe67691ccb45d860f67e3ac54c35c56e43a072c90",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "9e9306a3b65807d0506f5da47949abe4cc446266643ef1d49536b23d91d80a0a.v2.t120.json.gz",
+      "sha256": "63b1c3d74ba96b1ac21cebe42d3a0002701297c73efd6bdb70ee72cb506bc265",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "9e9306a3b65807d0506f5da47949abe4cc446266643ef1d49536b23d91d80a0a.v3.t120.json.gz",
+      "sha256": "969dc260e89777aa54aed02580cae25b19e7b3b2bf3581cd9b5a0655c4faaafd",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "9e9306a3b65807d0506f5da47949abe4cc446266643ef1d49536b23d91d80a0a.v5.t120.json.gz",
+      "sha256": "d69a64ade024ef53213958d7c08334d4422062a658c9e74e39abbf373afe8b49",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "9e9306a3b65807d0506f5da47949abe4cc446266643ef1d49536b23d91d80a0a.v10.t120.json.gz",
+      "sha256": "688a55a18118ed72a24aa7f8019d0a491f33e93449e99218cd259a6ffbe0f0fd",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "5372da4e59c72cbc7262ea11c6b8e4de16c91ad0b417dc87a11097e5bb75222d.v2.t120.json.gz",
+      "sha256": "4853806aeeeaab410cdf44b9bc50fa128df304c91bda740fc0e5cf633263e677",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "5372da4e59c72cbc7262ea11c6b8e4de16c91ad0b417dc87a11097e5bb75222d.v3.t120.json.gz",
+      "sha256": "91d573cbf0729b671c531b210ed2844777fc913a77bef839d2a4f9f9dbff2054",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "5372da4e59c72cbc7262ea11c6b8e4de16c91ad0b417dc87a11097e5bb75222d.v5.t120.json.gz",
+      "sha256": "46212933bfce62b71cfea20f4d6357a0951839ab95745747aa07275ef60756d2",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "5372da4e59c72cbc7262ea11c6b8e4de16c91ad0b417dc87a11097e5bb75222d.v10.t120.json.gz",
+      "sha256": "c301daee217302c23c4195b50c5ac14e1045b3842f48777e701a4d6318b20eba",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "22992898c266335321311e6d440b3fdf592731dfdfd9b161a845317529be067e.v2.t120.json.gz",
+      "sha256": "04168569239d56967098e4bca2afd23a43aed73d93df771748d82d0d10424818",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "22992898c266335321311e6d440b3fdf592731dfdfd9b161a845317529be067e.v3.t120.json.gz",
+      "sha256": "bc30efd710d16c89118eb2b7afff1d92d07ec9b61547192f75a9d0e690c663bd",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "22992898c266335321311e6d440b3fdf592731dfdfd9b161a845317529be067e.v5.t120.json.gz",
+      "sha256": "5df834a49e489a7a8ac82f445ea97cfcae85e6e13dce265c89c8d7947d58229f",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":2,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "22992898c266335321311e6d440b3fdf592731dfdfd9b161a845317529be067e.v10.t120.json.gz",
+      "sha256": "d8be476c827ec2cb91cb1cd59d71d2e0a1a33edbf4fe0418f28788fd79c0f9e9",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d4b25545a1723285a3555a080bcfe97e04da2b5cbf91c48627478a546ae49363.v2.t120.json.gz",
+      "sha256": "030888fb0bee1f3bcbc8b120b9ebb120db8639280fd440331bb4d79c6fda1488",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d4b25545a1723285a3555a080bcfe97e04da2b5cbf91c48627478a546ae49363.v3.t120.json.gz",
+      "sha256": "96dcb67822c76d953eb76b24c37d0884575e869123cf6f6def9cf8e2a41938a2",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d4b25545a1723285a3555a080bcfe97e04da2b5cbf91c48627478a546ae49363.v5.t120.json.gz",
+      "sha256": "3590be5d8654f4d21b16982a456ad13436f768db0a19c86dfb7239da4eb632b9",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d4b25545a1723285a3555a080bcfe97e04da2b5cbf91c48627478a546ae49363.v10.t120.json.gz",
+      "sha256": "5a8905c23f4406281c69c5af89cba5ab24c57805e4a53400abdc367682119e70",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "137794724b4381ad9790beafd30dc9f9b31f039b7068d7582e0a80d87e67ded0.v2.t120.json.gz",
+      "sha256": "1740b4ae10b0ea5338f5b05ba76bd9721b76acf3472ecd4b952c3fae58e29b33",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "137794724b4381ad9790beafd30dc9f9b31f039b7068d7582e0a80d87e67ded0.v3.t120.json.gz",
+      "sha256": "a96fde2ad655358b536174054e2c9fa5fb1c8f409e02ecf276a1af1ce0c75785",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "137794724b4381ad9790beafd30dc9f9b31f039b7068d7582e0a80d87e67ded0.v5.t120.json.gz",
+      "sha256": "c9f4fafd2a4534216b5375148b2d83dd568af54b24041f340bb4f9dd8d8fa163",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "137794724b4381ad9790beafd30dc9f9b31f039b7068d7582e0a80d87e67ded0.v10.t120.json.gz",
+      "sha256": "883e681a15409556aa0fa350b4e2c86bbc68cb11ce61a46cb4a8fbf3dd35b1bf",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "156c6f9d8faae423169e41e6dcf4f21f7f3fe937f576f4d2f88679849cd3b485.v2.t120.json.gz",
+      "sha256": "a9d849de15ac0c351765df420023f4e94c2edf254d7af1da5adb8e48c1c90998",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "156c6f9d8faae423169e41e6dcf4f21f7f3fe937f576f4d2f88679849cd3b485.v3.t120.json.gz",
+      "sha256": "a0ed9ee22d024ab0629f482844ef1de6662d68e201c6c6d258e71bfa419d2dfc",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "156c6f9d8faae423169e41e6dcf4f21f7f3fe937f576f4d2f88679849cd3b485.v5.t120.json.gz",
+      "sha256": "cdebe609de98ed8bfdb0c12be6989fbeb9feeb92afc39c4977d74d9928add755",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "156c6f9d8faae423169e41e6dcf4f21f7f3fe937f576f4d2f88679849cd3b485.v10.t120.json.gz",
+      "sha256": "c28efdd33da47e2b6c7255f5f1dc146178fb4c556e7ca76b9dc3a3294dd4db80",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "8f62bb5e513db6731ac2a7b1852b32db827d32151d897bdcfc1a45b305766d62.v2.t120.json.gz",
+      "sha256": "f5e09cffa4c01a8cbb4b8191c278161e064e029bd1c8afc42bb34f87b9231707",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "8f62bb5e513db6731ac2a7b1852b32db827d32151d897bdcfc1a45b305766d62.v3.t120.json.gz",
+      "sha256": "d614dc2ad0d8c1cb15aee4d6bc2f939540faec594ef89bd18b16ef1979df0e04",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "8f62bb5e513db6731ac2a7b1852b32db827d32151d897bdcfc1a45b305766d62.v5.t120.json.gz",
+      "sha256": "2d5cdc32065c0ab3ef7f456b45bcf24cbdff1c1b509c4f87cb019dee6d6cd68d",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":3,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "8f62bb5e513db6731ac2a7b1852b32db827d32151d897bdcfc1a45b305766d62.v10.t120.json.gz",
+      "sha256": "d3da36be2596e0198081770707662b0a65a4cc3c62ce8a4e3eb8891e4ee9e2f5",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "56c2dcf3b550b420477bd09cafc5dbaba33d564440aea0d9e73bce6ff7345d2c.v2.t120.json.gz",
+      "sha256": "983b768b43340e6a2454fdaae9eef64dbb1451ef5ddb86535a44e56b1c183e10",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "56c2dcf3b550b420477bd09cafc5dbaba33d564440aea0d9e73bce6ff7345d2c.v3.t120.json.gz",
+      "sha256": "82a9337eb9debd6625a4a9adfe8150adcf614915528b7bfe6d23b1f6b232693a",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "56c2dcf3b550b420477bd09cafc5dbaba33d564440aea0d9e73bce6ff7345d2c.v5.t120.json.gz",
+      "sha256": "b1520beefb9ebef170b80b5f5ca5fc53ceeae82855aa20f9171add903af4d7ba",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "56c2dcf3b550b420477bd09cafc5dbaba33d564440aea0d9e73bce6ff7345d2c.v10.t120.json.gz",
+      "sha256": "90a27dc9bb91c80c4e169bb2b8e3080f46161ddbc741b23fbf41353bab7420b5",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "288786a27be025e49d7f07f6f0ac8d94ee6be0f9146952a015d70c7d3dc33cca.v2.t120.json.gz",
+      "sha256": "c74e37d01aac58c704243998fa2a4aa836c444844c38e41e52209e08efe8f3f7",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "288786a27be025e49d7f07f6f0ac8d94ee6be0f9146952a015d70c7d3dc33cca.v3.t120.json.gz",
+      "sha256": "9173a4b65126878e9d5de0d85e3d3f6e2c909d242b41b99a10dd424428f64c4c",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "288786a27be025e49d7f07f6f0ac8d94ee6be0f9146952a015d70c7d3dc33cca.v5.t120.json.gz",
+      "sha256": "e44d1b90060b0820a9f828f9232773701ca90d71caabdb0d8a855296d3ff375f",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "288786a27be025e49d7f07f6f0ac8d94ee6be0f9146952a015d70c7d3dc33cca.v10.t120.json.gz",
+      "sha256": "5cd88730ceced6324cd66866dd644a1672ee4b76eb9187a6c97f6ae8952536d5",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "fdc685945f2b5f3accf4817b24bd41846801184f59a8c5aa998c9e74638e9526.v2.t120.json.gz",
+      "sha256": "baa70f874cb671672ccbebc26391c30321eff0d37fb0a2577bdb906d92bda209",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "fdc685945f2b5f3accf4817b24bd41846801184f59a8c5aa998c9e74638e9526.v3.t120.json.gz",
+      "sha256": "145f7ebf3a4676aed33cad8e1f94ea8363ced3ee0734f783f1189f4ca7176bc0",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "fdc685945f2b5f3accf4817b24bd41846801184f59a8c5aa998c9e74638e9526.v5.t120.json.gz",
+      "sha256": "1c65d376997a0c78799c9efeaf0bc3c0ca77ce7b242c378ec6ad429f11346593",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "fdc685945f2b5f3accf4817b24bd41846801184f59a8c5aa998c9e74638e9526.v10.t120.json.gz",
+      "sha256": "15cb5df2908385d0e40754cf7a7b92c8e4b2a24f50e0beb7b0b1d678b84362dd",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "53388ce38174992c7c6cb2eca9331165b6e2f89f3996389cc5a9d787fb839e37.v2.t120.json.gz",
+      "sha256": "953bcfa22cb68199847a17637eed92debaa3286d4e671125975b4105185d5995",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "53388ce38174992c7c6cb2eca9331165b6e2f89f3996389cc5a9d787fb839e37.v3.t120.json.gz",
+      "sha256": "efc6980300ec257ac26271cdfb5fd444bf65afa318208d20b6783bcbbdaf5688",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "53388ce38174992c7c6cb2eca9331165b6e2f89f3996389cc5a9d787fb839e37.v5.t120.json.gz",
+      "sha256": "02c961ec8fd80cae3ab6a3f6f4c0ac74fa9e592d5b2824e2a93ef839b08b363a",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":4,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "53388ce38174992c7c6cb2eca9331165b6e2f89f3996389cc5a9d787fb839e37.v10.t120.json.gz",
+      "sha256": "f7055dcd07e51fd9bc82899648472ebb4947745936960bb4b6aa5fdb94d2ad7c",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "bc0886b2836fc2836fbd8e651a2d5a89a8874a9fe1a24304f3362e25802f71e1.v2.t120.json.gz",
+      "sha256": "3078b9864f906d8e4c52bc9d42e56460741f251140afb4aa5f2f8170782ad48d",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "bc0886b2836fc2836fbd8e651a2d5a89a8874a9fe1a24304f3362e25802f71e1.v3.t120.json.gz",
+      "sha256": "14c31e3908e69c48b938fe73621eaeee4a77f93d3207db2713fa28d9392044b5",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "bc0886b2836fc2836fbd8e651a2d5a89a8874a9fe1a24304f3362e25802f71e1.v5.t120.json.gz",
+      "sha256": "49acb4ec5423bb06a8775a5fc61222ac27662b013a261d6b53cf90569c3413f1",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "bc0886b2836fc2836fbd8e651a2d5a89a8874a9fe1a24304f3362e25802f71e1.v10.t120.json.gz",
+      "sha256": "ac5f2f88382135380ccb44fb1144b52409703d6ef305b854b695e8d8f57a449b",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0c70a72b84663d00844039114bf3840d29b87382117c8ddbf718c5c9e4541dd4.v2.t120.json.gz",
+      "sha256": "3bded4ad648fe9922d8cfaad240eac0cee452b4b4fa391c36967280dc0a12ad8",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0c70a72b84663d00844039114bf3840d29b87382117c8ddbf718c5c9e4541dd4.v3.t120.json.gz",
+      "sha256": "febcdaafc2c3747f49f7f1bd47ef8836a380204e009b345f441e917009b0edf6",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0c70a72b84663d00844039114bf3840d29b87382117c8ddbf718c5c9e4541dd4.v5.t120.json.gz",
+      "sha256": "c561eef7d399ea0916c57f438a536305c0b9d757968e28762625065e36f8058e",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0c70a72b84663d00844039114bf3840d29b87382117c8ddbf718c5c9e4541dd4.v10.t120.json.gz",
+      "sha256": "ab89d1621b4bcbb9a9d6d505005b586ea8a817f8597964f2e8d9ee103f4f9f83",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "c8a1b57edfe2f8109df42d71e2a39eedce7b7d1fd5c10940a6e36897ef02b421.v2.t120.json.gz",
+      "sha256": "3a18b4282fd6d66f6c3064302f5fd3871e24b8437ca8a07ab5c5a5f52a3300f1",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "c8a1b57edfe2f8109df42d71e2a39eedce7b7d1fd5c10940a6e36897ef02b421.v3.t120.json.gz",
+      "sha256": "cf0dea5a4d5a72dc550a737b69ecbed30b2a1c73ebaeba3f71e72c0a914eb0e3",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "c8a1b57edfe2f8109df42d71e2a39eedce7b7d1fd5c10940a6e36897ef02b421.v5.t120.json.gz",
+      "sha256": "f29b2558a0a1f20b2b559b20104d953ddadc9bbc5ee92c8ffe4a8e2269ce4f02",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "c8a1b57edfe2f8109df42d71e2a39eedce7b7d1fd5c10940a6e36897ef02b421.v10.t120.json.gz",
+      "sha256": "70d55e2f3b22cff9181982836713d9a8ab8b4a7620a10d87895464e5ea7b80c8",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "303a1d21e7e89aa9e150878b3066e2c9c53c08762de38a000331e7e5a7c1a2f2.v2.t120.json.gz",
+      "sha256": "f52403fa097e98de18c7a4d1e54b292ed6d2b8ba16cfd96c15b0e74c1208ff28",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "303a1d21e7e89aa9e150878b3066e2c9c53c08762de38a000331e7e5a7c1a2f2.v3.t120.json.gz",
+      "sha256": "1ae0dcb3528d8b4ce01b8f2724cacaf9382df2c73c6eceb0cda0ee0ad5a80325",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "303a1d21e7e89aa9e150878b3066e2c9c53c08762de38a000331e7e5a7c1a2f2.v5.t120.json.gz",
+      "sha256": "6b84ca6ff649e04ecf54a9046ac7f7216ffa006d81a4fca5938cf0765f796909",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":5,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "303a1d21e7e89aa9e150878b3066e2c9c53c08762de38a000331e7e5a7c1a2f2.v10.t120.json.gz",
+      "sha256": "ed18541a285373bfcb3f36f5ed1c080b496ec122ec042b982b9464c02fdbf66b",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "9a31af206cfa27c4092b274abba3b29a2e3713d1f2b465711d8c6ee3425d1d97.v2.t120.json.gz",
+      "sha256": "4676f603ebf5626ac565f928b82a7ac53a7ee9583b169630d555bcac2657a82c",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "9a31af206cfa27c4092b274abba3b29a2e3713d1f2b465711d8c6ee3425d1d97.v3.t120.json.gz",
+      "sha256": "0c557191400e98a806b9b799936f3b7054756a383d7498fb574ea45b95bc2ccb",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "9a31af206cfa27c4092b274abba3b29a2e3713d1f2b465711d8c6ee3425d1d97.v5.t120.json.gz",
+      "sha256": "4c5009ff60cbf9bd525b92112d7faf25ad30d2804d7ef93ef2d64b4d14e21c0b",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "9a31af206cfa27c4092b274abba3b29a2e3713d1f2b465711d8c6ee3425d1d97.v10.t120.json.gz",
+      "sha256": "a9ae42e568285c544c66b699c1177baf1a64cc1858f363abc6d0da99c8505944",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0bd375ca9e885efd15a8f89f008744fc0af0221f399110d420ef1a44a3b48cdc.v2.t120.json.gz",
+      "sha256": "3c205873fd400904c5fc8227ec68b9a06c5ac0e3062dac9ab588d8a2b3805af0",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0bd375ca9e885efd15a8f89f008744fc0af0221f399110d420ef1a44a3b48cdc.v3.t120.json.gz",
+      "sha256": "f7a7e637b5ed4e315fc675f1f0645e32292860426b3dc1d4ccbdceadbac0127c",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0bd375ca9e885efd15a8f89f008744fc0af0221f399110d420ef1a44a3b48cdc.v5.t120.json.gz",
+      "sha256": "25e121bb5ab11095adf7bc29bc5f3fca50ad179f5b10ca6e90da4a356ebbf01b",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0bd375ca9e885efd15a8f89f008744fc0af0221f399110d420ef1a44a3b48cdc.v10.t120.json.gz",
+      "sha256": "b2dd9e08a4bd3db2113c7828e7668fd2b925b3834f85b1960119a81ddfab17d8",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "aad3f7e407d91eca47205458d4dbc9dd1172b1a15e756e0c3e025fea3b8adf97.v2.t120.json.gz",
+      "sha256": "481c2898038119ebd324a91f6197c65ffbdcddcfebcdaccf503c5fd24e5fb713",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "aad3f7e407d91eca47205458d4dbc9dd1172b1a15e756e0c3e025fea3b8adf97.v3.t120.json.gz",
+      "sha256": "70a9d717ba486d2ad833c39582adfb2881ada05e7339700a6f15517f89b2f54c",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "aad3f7e407d91eca47205458d4dbc9dd1172b1a15e756e0c3e025fea3b8adf97.v5.t120.json.gz",
+      "sha256": "8a6e5f694b0c2f2564f404a31ee758314de4011749ad4524fb380a888b637ecf",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "aad3f7e407d91eca47205458d4dbc9dd1172b1a15e756e0c3e025fea3b8adf97.v10.t120.json.gz",
+      "sha256": "6223dfc6861589e3c3766b32fa746115e723c6f460415b935060b7a1cf807b4a",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "60ca1831f74b27794c7af4db64f0946ce1e09362e44e793ab99905abb666f7ae.v2.t120.json.gz",
+      "sha256": "c2aca7b5bb67535c3cb6144e51497f453f8e4e33a8b9e44733f204a636c5c258",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "60ca1831f74b27794c7af4db64f0946ce1e09362e44e793ab99905abb666f7ae.v3.t120.json.gz",
+      "sha256": "511d067552e4143dd31ba52e69d67b031274910f943d23123db21bbfb07952c3",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "60ca1831f74b27794c7af4db64f0946ce1e09362e44e793ab99905abb666f7ae.v5.t120.json.gz",
+      "sha256": "9afad60c99ab9efd1c8df1f703642b08464e8c05bd58f899af8cc36d68d269ae",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":6,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "60ca1831f74b27794c7af4db64f0946ce1e09362e44e793ab99905abb666f7ae.v10.t120.json.gz",
+      "sha256": "bb6208a3c7fc3ab4b4407b77e127a4e0d3c869e3259a638d516018d94b692a89",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0e8bc35cdc431d1d6701241baf58f0bdcda7d24be99ae48e402973c03c90652c.v2.t120.json.gz",
+      "sha256": "9b1d8e132768d0188e327b92f12c8882c63bddb2830bf47d1d0add9163a49834",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0e8bc35cdc431d1d6701241baf58f0bdcda7d24be99ae48e402973c03c90652c.v3.t120.json.gz",
+      "sha256": "b6763b559156bf3ea4038f2dcbfbb839efb12f0823f25092aa6f78e6273098ba",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0e8bc35cdc431d1d6701241baf58f0bdcda7d24be99ae48e402973c03c90652c.v5.t120.json.gz",
+      "sha256": "3a5bb49beab015e06c086c3648424ed6d0acac592f3f1fbd311a7c606c9622b5",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "0e8bc35cdc431d1d6701241baf58f0bdcda7d24be99ae48e402973c03c90652c.v10.t120.json.gz",
+      "sha256": "fc706f87d794fb388e4245630741c0b33268cc2c4956e000c6a076427b2df1ce",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "c291e423e503b16074cceebd5b13242a0ff394eced03baeb7e0b68c526b9821a.v2.t120.json.gz",
+      "sha256": "964d2efcbd03c436c2b88075b3231462be9d76fa7066267cc05b256899e60c0d",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "c291e423e503b16074cceebd5b13242a0ff394eced03baeb7e0b68c526b9821a.v3.t120.json.gz",
+      "sha256": "8e973849daf6076788b68f677f86675ba67a8493584417fcb5e776e6f3d1d2fc",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "c291e423e503b16074cceebd5b13242a0ff394eced03baeb7e0b68c526b9821a.v5.t120.json.gz",
+      "sha256": "3a8c2a067a4194c2853a8b93fde34bd7ddb91fd6f6830ef8b69bd7bbf99bf468",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "c291e423e503b16074cceebd5b13242a0ff394eced03baeb7e0b68c526b9821a.v10.t120.json.gz",
+      "sha256": "49a94c9f7f2341e18caa7d970a7ce8693cf09c061c42ad080ea60542470c57b1",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d5ce3f25a96775ee334c979dc98860fb6570eacc372e1b5679014ccc946edcb5.v2.t120.json.gz",
+      "sha256": "cb8a806548ea6fd66d3d3336cdabb8dcc63c3517da181e7f11fe83712f8c1687",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d5ce3f25a96775ee334c979dc98860fb6570eacc372e1b5679014ccc946edcb5.v3.t120.json.gz",
+      "sha256": "d5cd5eab30f1f8f5f82d30801d2eec579210641d6b41acdaf055761d95d13efe",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d5ce3f25a96775ee334c979dc98860fb6570eacc372e1b5679014ccc946edcb5.v5.t120.json.gz",
+      "sha256": "f6bf042220a9894ea2efa49a424bed6bfc593b24f89f9249de438dc5e9a189f7",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "d5ce3f25a96775ee334c979dc98860fb6570eacc372e1b5679014ccc946edcb5.v10.t120.json.gz",
+      "sha256": "09e93da8c3a3636eb09a4a8620fc10e13dd2fe234544934ddd71229620964ae3",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "07bf6feb082081e867abf61ab2971d9f567e2c4aaabc1b1ce0a1ae425c42281f.v2.t120.json.gz",
+      "sha256": "4bcd32038ae724000ffab6ebb31140f33abfd5f9b4c4b8019363ed35d2ca17e8",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "07bf6feb082081e867abf61ab2971d9f567e2c4aaabc1b1ce0a1ae425c42281f.v3.t120.json.gz",
+      "sha256": "e31f54ce35ae516d4436be4c6b044e84a2b70e88f47211c77a6869a6baad6ae2",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "07bf6feb082081e867abf61ab2971d9f567e2c4aaabc1b1ce0a1ae425c42281f.v5.t120.json.gz",
+      "sha256": "b3f9655cf40d1d698cc4fd64e1d9b25e8d4ad81e19b637d9d9f3a8c3f67f41eb",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":7,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "07bf6feb082081e867abf61ab2971d9f567e2c4aaabc1b1ce0a1ae425c42281f.v10.t120.json.gz",
+      "sha256": "73776079beaf756b11443c0c6460034843db60b7cafc908ad26476fb6c8e37a8",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "b5853e843c89c7144d8b679b0378bef98d0e3c25d2d4b938f321611ed1885a83.v2.t120.json.gz",
+      "sha256": "514c1d1445ba5ac57e3415be197be811a80b4a8f526eb3e915ba10102bef91a3",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "b5853e843c89c7144d8b679b0378bef98d0e3c25d2d4b938f321611ed1885a83.v3.t120.json.gz",
+      "sha256": "4f2d41f55271b4082e5dda2faccc0aedfd7f3739fa3e5822b5894f18856818f0",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "b5853e843c89c7144d8b679b0378bef98d0e3c25d2d4b938f321611ed1885a83.v5.t120.json.gz",
+      "sha256": "2279a8632511eea6d6378a37edfd8d5742abdf39c291523a55d369d25b1d4ef1",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "b5853e843c89c7144d8b679b0378bef98d0e3c25d2d4b938f321611ed1885a83.v10.t120.json.gz",
+      "sha256": "c9a59af8ced9f5745d6344e12f321a53faf41e86c5edce197d8129a1f0fb9ef6",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a17eba479a67fdd6882cfc80d53dbff92473b172ec56ec7015ad72aa15fa9aa5.v2.t120.json.gz",
+      "sha256": "ef73837797a7b9e794694a62c47fd9604b76e458987fb653351be47522b71a68",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a17eba479a67fdd6882cfc80d53dbff92473b172ec56ec7015ad72aa15fa9aa5.v3.t120.json.gz",
+      "sha256": "f36a6a8a852f51e4fabf475c73c8eededa9b251baf7c3f1ed1f95c9064518438",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a17eba479a67fdd6882cfc80d53dbff92473b172ec56ec7015ad72aa15fa9aa5.v5.t120.json.gz",
+      "sha256": "ef3a4411926c64075087d962acd7f60f3954f2b8e20489a54a95406ac583ffd7",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a17eba479a67fdd6882cfc80d53dbff92473b172ec56ec7015ad72aa15fa9aa5.v10.t120.json.gz",
+      "sha256": "02ac88c7835c3d0a9e792795848317e808cfcf3b52307d6ba8709d04f372d11f",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "8a21343472f5d3a2bb87e5a09bac198f5697e9c15dc43c99f1267a5d5afb40d8.v2.t120.json.gz",
+      "sha256": "e76356b7ecb2af5699990407e4328c19c0e9f874566f88b0ecc6976b3864ee6e",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "8a21343472f5d3a2bb87e5a09bac198f5697e9c15dc43c99f1267a5d5afb40d8.v3.t120.json.gz",
+      "sha256": "87b196f1301019f9811d309f076b62ac7344c5e115badf6e2aebe284e6f53b2c",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "8a21343472f5d3a2bb87e5a09bac198f5697e9c15dc43c99f1267a5d5afb40d8.v5.t120.json.gz",
+      "sha256": "c027b59b20c4235acfd9abe198c7cb6abf75b97139b4b42bdb9ce11169d9b22a",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "8a21343472f5d3a2bb87e5a09bac198f5697e9c15dc43c99f1267a5d5afb40d8.v10.t120.json.gz",
+      "sha256": "f4bd18f8254d9105dcbff51bf437c5e2ef91d01511b3a8599f3da2adea030042",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a6b74bebbfd4012a7d96844aa1a730e709c54da84346992071ca3044d1710c06.v2.t120.json.gz",
+      "sha256": "09b6bfe471e1bfd9aa94a75135d405aca717572c7d7cfebf16a9eb54e187c875",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a6b74bebbfd4012a7d96844aa1a730e709c54da84346992071ca3044d1710c06.v3.t120.json.gz",
+      "sha256": "30a15d59293cdc2a195e2c1b6239e4ac55399f87f2b63ad5c6ebdfebd7b96333",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a6b74bebbfd4012a7d96844aa1a730e709c54da84346992071ca3044d1710c06.v5.t120.json.gz",
+      "sha256": "e1fcb7c1ea1e6a7f53bb1ae7327a608bba434239b4658e8664ca95835ea013ed",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":8,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a6b74bebbfd4012a7d96844aa1a730e709c54da84346992071ca3044d1710c06.v10.t120.json.gz",
+      "sha256": "5ab66a9d5bada907955c3d546d79589cfe13d5f272c9a7dcd99ea23df980f368",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a30b7462f7b65d9996b6552de0d6f9e70135e388cf386094a0b03da40c089a55.v2.t120.json.gz",
+      "sha256": "dff3e8af9e233aa861aeabcd4d25e70c2f28b47c3c82dd83a6796754f4efb819",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a30b7462f7b65d9996b6552de0d6f9e70135e388cf386094a0b03da40c089a55.v3.t120.json.gz",
+      "sha256": "617966ebcf78c1159b2e8cf5dc3da80b0a1ee55b49128bb87e7655ee892753b0",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a30b7462f7b65d9996b6552de0d6f9e70135e388cf386094a0b03da40c089a55.v5.t120.json.gz",
+      "sha256": "db0bb685bcb5c0027cdfdd6b657baadbc6c5f9fdb28acd37cf62601ac232ddd2",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":0,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "a30b7462f7b65d9996b6552de0d6f9e70135e388cf386094a0b03da40c089a55.v10.t120.json.gz",
+      "sha256": "6cc2cd9efcd3baec0c31a5b5a98815f3c81f6dd5b42df2a3d840d0167197f5e7",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "06b0778088a8a3deb34e143ad12b4e809d36fb3bb773fc6ba8691bdcf59f5126.v2.t120.json.gz",
+      "sha256": "9930730e8c6839350b061f5799b47d7ef2705af722b307311e6ed081fedef5bd",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "06b0778088a8a3deb34e143ad12b4e809d36fb3bb773fc6ba8691bdcf59f5126.v3.t120.json.gz",
+      "sha256": "b766d58a694bb38b2de7ee42294e17126686718cf79c92a28c95ff77908af659",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "06b0778088a8a3deb34e143ad12b4e809d36fb3bb773fc6ba8691bdcf59f5126.v5.t120.json.gz",
+      "sha256": "cbabd78ff44017c781cd473a5b667837d3f08f55a10aab9278774971be5ee603",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":10,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "06b0778088a8a3deb34e143ad12b4e809d36fb3bb773fc6ba8691bdcf59f5126.v10.t120.json.gz",
+      "sha256": "5178adfd0dcdb63fc1b8de002d257a7d5e9b6c2c099976e91b8b6b460f7f2bdd",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "90189bb8ea0982f539d4f99f36f432a7303ae165253c376948f300477314ba73.v2.t120.json.gz",
+      "sha256": "67d8289be4309ef3de3b4564c7dec19693c7c00a8eaa03762144b1398edc7c8c",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "90189bb8ea0982f539d4f99f36f432a7303ae165253c376948f300477314ba73.v3.t120.json.gz",
+      "sha256": "3a6e9a84d0fc8110a8fad29b92f41d9cc78376ba798ea3b060e61f4341f5fab7",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "90189bb8ea0982f539d4f99f36f432a7303ae165253c376948f300477314ba73.v5.t120.json.gz",
+      "sha256": "0b753ab73245cda924f537ba6c6d7b54e47584228f670f43779ac4a5c2be5d3d",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":2,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "90189bb8ea0982f539d4f99f36f432a7303ae165253c376948f300477314ba73.v10.t120.json.gz",
+      "sha256": "59cc0c04ea21a9ef77f99967451fece34c77368dc82685791772b356cb4b77a8",
+      "vehicles": 10,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "2b85680a927322d5175233e03efe2ded4c95bf6e1b906452a858356b891847db.v2.t120.json.gz",
+      "sha256": "a0ad30e5bda10e11a5578e3ec544d2408ffb68a905d079873f635c75573ba284",
+      "vehicles": 2,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "2b85680a927322d5175233e03efe2ded4c95bf6e1b906452a858356b891847db.v3.t120.json.gz",
+      "sha256": "577bb4f004ae11867456de50eb691b10178670b0ea8a4a100a27ce337b220e3e",
+      "vehicles": 3,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "2b85680a927322d5175233e03efe2ded4c95bf6e1b906452a858356b891847db.v5.t120.json.gz",
+      "sha256": "750f8731ef4588e03673557c4510e5299dc0e7a99c5f1faf5aef394af5c5e4a7",
+      "vehicles": 5,
+      "snapshots": 120
+    },
+    {
+      "key": "{\"schema\":\"echomap-truth/1\",\"generator\":\"raw-paths-20261104-v1\",\"seed\":9,\"scene\":\"layered\",\"wallSide\":\"both\",\"sigmaM\":6,\"deltaM\":20,\"sigmaDGeometry\":0.33,\"deltaD\":4,\"roughness\":5,\"lambda0\":10,\"cellStep\":0.02}",
+      "file": "2b85680a927322d5175233e03efe2ded4c95bf6e1b906452a858356b891847db.v10.t120.json.gz",
+      "sha256": "6dccf8dd0b267792ac6b5ddbeb1bc65fa8d84de459248b8cd28c3bfaff843e5a",
+      "vehicles": 10,
+      "snapshots": 120
+    }
+  ]
+}

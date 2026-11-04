@@ -10,6 +10,8 @@
   "scripts": {
     "build": "node build.mjs",
     "build:drf-offline": "node build-drf-offline.mjs",
+    "build:truth-bank": "node tools/build-truth-bank.mjs",
+    "bench:truth-cache": "node tools/benchmark-truth-cache.mjs",
     "test": "node --test tests/*.test.js tests/surf/*.test.mjs tests/drf/*.test.mjs",
     "test:legacy-dom": "node tests/jsdom_smoke.js",
     "validate:drf": "node tests/drf/run-reference.mjs --seed-count 10 --workers 3",

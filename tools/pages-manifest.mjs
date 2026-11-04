@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs';
+const originalCacheFiles = ['drf/prepare-scenario.mjs', 'drf/truth-cache.mjs', 'assets/truth-cache/manifest.json'];
+const truthBank = JSON.parse(readFileSync(new URL('../assets/truth-cache/manifest.json', import.meta.url), 'utf8'));
+originalCacheFiles.push(...truthBank.entries.map(entry => `assets/truth-cache/${entry.file}`));
+
 // Only public viewer dependencies belong in the shared-site artifact.
 const originalDiagnosticFiles = ['diagnostic-ui.mjs', 'diagnostic-profile.mjs', 'sweep-export.mjs'].map(path => `drf/${path}`);
 const originalMathFiles = ['latex-LICENSE.txt', 'latex.mjs', 'latex-assets.mjs', 'dom-math.mjs', 'render-math.mjs'].map(path => `drf/${path}`);
 export const runtimeFiles = [
-  ...originalMathFiles, ...originalDiagnosticFiles,
+  ...originalMathFiles, ...originalDiagnosticFiles, ...originalCacheFiles,
   'drf.html', 'wall_metrics.js', 'surf/map.mjs', 'surf/exports.mjs',
   'favicon.ico', 'assets/echomap-icon.svg', 'assets/echomap-icon-32.png', 'assets/echomap-touch-icon.png',
   ...[
@@ -15,6 +20,6 @@ export const runtimeFiles = [
 ];
 
 export const previewFiles = [
-  ...runtimeFiles.filter(path => !originalMathFiles.includes(path) && !originalDiagnosticFiles.includes(path)),
+  ...runtimeFiles.filter(path => !originalMathFiles.includes(path) && !originalDiagnosticFiles.includes(path) && !originalCacheFiles.includes(path)),
   'drf/design-preview.css', 'drf/design-preview.mjs', 'drf/preview-run-control.mjs',
 ];

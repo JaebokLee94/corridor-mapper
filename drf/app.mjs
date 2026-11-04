@@ -95,7 +95,7 @@ function settings() {
 }
 function createWorker(name, options = {}) {
   if (name === 'run' && state.server) return createServerRunWorker(state.server, options);
-  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261104-diagnostics1`, import.meta.url), { type: 'module' });
+  return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=20261104-truthcache1`, import.meta.url), { type: 'module' });
 }
 function makeWorker(name, onProgress = () => {}) {
   const worker = createWorker(name), pending = new Map(); let id = 0, stopped = false;

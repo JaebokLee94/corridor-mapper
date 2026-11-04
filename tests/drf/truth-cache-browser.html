@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Local physical-truth cache checks</title>
+<style>
+  body{font:15px/1.5 system-ui,sans-serif;color:#182b39;background:#f5f7f9;max-width:1100px;margin:32px auto;padding:0 20px}
+  h1{font-size:24px;margin-bottom:8px}p{margin:8px 0}button{font:inherit;padding:8px 16px;border:1px solid #235976;border-radius:4px;background:#fff;color:#183d52;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}table{width:100%;border-collapse:collapse;background:#fff;margin-top:20px}th,td{text-align:left;vertical-align:top;padding:9px 12px;border:1px solid #d4dce3}
+  th{background:#e9eff4}td:last-child{overflow-wrap:anywhere}.pass{color:#106633;font-weight:650}.fail{color:#aa2020;font-weight:650}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#fff;padding:14px;border:1px solid #d4dce3;font-size:12px}#status{min-height:24px}small{color:#526777}
+</style>
+<h1>Local physical-truth cache checks</h1>
+<p>Local verification page (excluded from the public site). Nothing runs until the button is pressed. Uses this origin's packaged assets and IndexedDB.</p>
+<button id="runChecks" disabled>Run checks</button>
+<p id="status" role="status">Loading modules…</p>
+<table aria-label="Truth cache verification results">
+  <thead><tr><th>Check</th><th>Result</th><th>Source</th><th>Elapsed</th><th>Evidence</th></tr></thead>
+  <tbody id="results"></tbody>
+</table>
+<pre id="details">No checks run.</pre>
+<h2>Numerical comparison diagnostics</h2>
+<p id="diffSummary">No mismatches inspected.</p>
+<pre id="diffDetails">Cross-engine raw/scenario comparisons allow absolute floating-point error ≤ 1e-12; downstream calculations allow ≤ 1e-9. Structure, IDs, counts, decisions, null and infinity remain exact. Same-Chrome IndexedDB comparisons remain exact.</pre>
+<script type="module">
+const runButton=document.getElementById('runChecks'),status=document.getElementById('status');
+const body=document.getElementById('results'),details=document.getElementById('details');
+const log=[];
+const show=()=>{details.textContent=JSON.stringify(log,null,2);};
+const assert=(value,message)=>{if(!value)throw new Error(message);};
+const stableScenario=({simulatorMs,...data})=>data;
+const elapsed=start=>Math.round((performance.now()-start)*10)/10;
+function structuralDiff(actual,expected,tolerance=0){
+  const report={totalMismatches:0,numericMismatches:0,strictMismatches:0,maxAbsoluteDifference:0,maxRelativeDifference:0,tolerance,
+    relativeDefinition:'abs(actual - expected) / max(abs(actual), abs(expected), Number.MIN_VALUE)',first20:[],first20Strict:[]};
+  const display=value=>value===undefined?'[undefined]':typeof value==='number'&&!Number.isFinite(value)?String(value):Object.is(value,-0)?'[-0]':value;
+  function mismatch(path,a,b,reason){
+    report.totalMismatches++;
+    const item={path,actual:display(a),expected:display(b),reason};
+    if(typeof a==='number'&&typeof b==='number'){
+      report.numericMismatches++;
+      if(Number.isFinite(a)&&Number.isFinite(b)){
+        item.delta=a-b;item.absoluteDifference=Math.abs(item.delta);
+        item.relativeDifference=item.absoluteDifference/Math.max(Math.abs(a),Math.abs(b),Number.MIN_VALUE);
+        report.maxAbsoluteDifference=Math.max(report.maxAbsoluteDifference,item.absoluteDifference);
+        report.maxRelativeDifference=Math.max(report.maxRelativeDifference,item.relativeDifference);
+      }
+    }
+    const leaf=path.replace(/\[\d+\]/g,'').split('.').at(-1);
+    const discrete=/^(t|i|j|seed|vehicles|snapshots|span|wall|id|gid|side|birth|checkedThrough|lastScored|nobs|group_nobs|n_active|n_matched|n_matched_configs|first_.*|own_.*_snapshots|qualified_active|qualified_matched|Q|admitted|rejected|missing|.*Count|.*Errors|configurationCount|degenerate|unlabelled|theoremNegative|unresolved|nearMultiple|length)$/.test(leaf)
+      || /\.(generated|beforeThinning|afterThinning|src)(\.|\[|$)/.test(path);
+    item.strict=!(typeof a==='number'&&typeof b==='number'&&Number.isFinite(a)&&Number.isFinite(b)
+      &&!discrete&&!(Number.isInteger(a)&&Number.isInteger(b))&&Math.abs(a-b)<=tolerance);
+    if(item.strict){report.strictMismatches++;if(report.first20Strict.length<20)report.first20Strict.push(item);}
+    if(report.first20.length<20)report.first20.push(item);
+  }
+  function visit(a,b,path){
+    if(Object.is(a,b))return;
+    if(a===null||b===null||typeof a!=='object'||typeof b!=='object'){
+      mismatch(path,a,b,typeof a===typeof b?'value':'type');return;
+    }
+    const arrayA=Array.isArray(a)||ArrayBuffer.isView(a),arrayB=Array.isArray(b)||ArrayBuffer.isView(b);
+    if(arrayA!==arrayB){mismatch(path,arrayA?'array':'object',arrayB?'array':'object','container type');return;}
+    if(arrayA){
+      if(a.length!==b.length)mismatch(`${path}.length`,a.length,b.length,'array length');
+      for(let i=0;i<Math.max(a.length,b.length);i++)visit(a[i],b[i],`${path}[${i}]`);
+      return;
+    }
+    const keys=new Set([...Object.keys(a),...Object.keys(b)]);
+    for(const key of keys){
+      const child=`${path}.${key}`;
+      if(!Object.hasOwn(a,key)||!Object.hasOwn(b,key))mismatch(child,a[key],b[key],'missing key');
+      else visit(a[key],b[key],child);
+    }
+  }
+  visit(actual,expected,'$');return report;
+}
+function numericalComparison(actual,expected,label,tolerance){
+  const report={label,keyOrderIgnored:true,...structuralDiff(actual,expected,tolerance)};
+  log.push({numericalComparison:report});show();
+  document.getElementById('diffSummary').textContent=`${label}: ${report.totalMismatches} raw numeric/value differences, ${report.strictMismatches} failures; max absolute ${report.maxAbsoluteDifference}; max relative ${report.maxRelativeDifference}; absolute floating tolerance ${tolerance}. Counts, IDs and structure remain exact.`;
+  document.getElementById('diffDetails').textContent=JSON.stringify(report,null,2);
+  return report;
+}
+function exactJson(actual,expected,label){
+  const exact=JSON.stringify(actual)===JSON.stringify(expected);
+  if(exact)return true;
+  const report={label,jsonExact:false,keyOrderIgnored:true,...structuralDiff(actual,expected)};
+  report.propertyOrderOnly=report.totalMismatches===0;
+  log.push({exactComparisonDiagnostic:report});show();
+  document.getElementById('diffSummary').textContent=`${label}: ${report.totalMismatches} structural mismatches; ${report.numericMismatches} numeric mismatches; max absolute ${report.maxAbsoluteDifference}; max relative ${report.maxRelativeDifference}. ${report.propertyOrderOnly?'Values match; JSON property order differs.':'Values differ even after ignoring property order.'} Exact check still fails.`;
+  document.getElementById('diffDetails').textContent=JSON.stringify(report,null,2);
+  return false;
+}
+async function hash(value){
+  const bytes=new TextEncoder().encode(JSON.stringify(value));
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  return Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+}
+async function downstreamWorkerMain(event){
+  try{
+    const {prepared,reference,moduleBase}=event.data;
+    const [{createGrid,createField},{MethodComparison},{createPSPTEvaluator}]=await Promise.all([
+      import(new URL('drf/field.mjs',moduleBase).href),import(new URL('drf/comparison.mjs',moduleBase).href),
+      import(new URL('drf/pspt-evaluate.mjs',moduleBase).href)
+    ]);
+    const withoutTiming=value=>{
+      if(ArrayBuffer.isView(value))return value;
+      if(Array.isArray(value))return value.map(withoutTiming);
+      if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value)
+        .filter(([key])=>!['ms','psptMs','simulatorMs'].includes(key)).map(([key,item])=>[key,withoutTiming(item)]));
+      return value;
+    };
+    const initialise=scene=>{
+      const grid=createGrid(100,100,scene.domain);
+      return {scene,field:createField(grid,{band:scene.input.band,perimeter:scene.input.perimeter}),
+        estimator:new MethodComparison({sigmaR:scene.input.sigmaD}),guarded:createPSPTEvaluator(scene,grid),baseline:createPSPTEvaluator(scene,grid)};
+    };
+    const step=(state,index)=>{
+      const wire=state.scene.wire[index],frame=state.field.step(wire),methods=state.estimator.step(wire);
+      Object.assign(frame,{methods,candidates:methods.guarded.candidates,psptMs:methods.guarded.ms,method:'guarded-tuned'});
+      const guarded=state.guarded.step(frame),baseline=state.baseline.step({...frame,method:'baseline-b',candidates:methods.baseline.candidates},guarded);
+      return {frame,evaluation:{...guarded,methods:{guarded,baseline}}};
+    };
+    const states=[initialise(prepared),initialise(reference)],started=performance.now();
+    const report={snapshots:0,grid:[100,100],tolerance:1e-9,totalMismatches:0,numericMismatches:0,strictMismatches:0,
+      maxAbsoluteDifference:0,maxRelativeDifference:0,first20:[],first20Strict:[]};
+    let finalMetrics;
+    for(let index=0;index<120;index++){
+      const a=step(states[0],index),b=step(states[1],index);
+      const diff=structuralDiff(withoutTiming(a),withoutTiming(b),1e-9);
+      report.snapshots++;
+      for(const key of ['totalMismatches','numericMismatches','strictMismatches'])report[key]+=diff[key];
+      for(const key of ['maxAbsoluteDifference','maxRelativeDifference'])report[key]=Math.max(report[key],diff[key]);
+      for(const key of ['first20','first20Strict'])report[key].push(...diff[key].slice(0,20-report[key].length).map(item=>({...item,snapshot:index+1})));
+      if(index===119){
+        const summary=e=>Object.fromEntries(['precision','surfacePrecision','recall','f1','p95','offwall','missing','supportedCount','pendingCount','rejectedCount','firstSupportCount','firstSupportErrors'].map(key=>[key,e[key]]));
+        finalMetrics={cached:{guarded:summary(a.evaluation.methods.guarded),baseline:summary(a.evaluation.methods.baseline)},
+          uncached:{guarded:summary(b.evaluation.methods.guarded),baseline:summary(b.evaluation.methods.baseline)}};
+      }
+      if((index+1)%10===0)self.postMessage({type:'progress',snapshots:index+1});
+    }
+    self.postMessage({type:'done',report,finalMetrics,milliseconds:performance.now()-started});
+  }catch(error){self.postMessage({type:'error',message:error.stack||String(error)});}
+}
+function checkDownstream(prepared,reference){
+  return new Promise((resolve,reject)=>{
+    const source=`${structuralDiff.toString()}\nself.onmessage=${downstreamWorkerMain.toString()};`;
+    const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
+    const worker=new Worker(url,{type:'module'});
+    const finish=()=>{worker.terminate();URL.revokeObjectURL(url);};
+    worker.onmessage=event=>{
+      const message=event.data;
+      if(message.type==='progress'){status.textContent=`5/6: Worker comparison ${message.snapshots}/120 snapshots…`;return;}
+      finish();if(message.type==='error')reject(new Error(message.message));else resolve(message);
+    };
+    worker.onerror=event=>{finish();reject(new Error(event.message));};
+    worker.postMessage({prepared,reference,moduleBase:new URL('../../',location.href).href});
+  });
+}
+const yieldPage=()=>new Promise(resolve=>{
+  const channel=new MessageChannel();channel.port1.onmessage=()=>{channel.port1.close();channel.port2.close();resolve();};channel.port2.postMessage(null);
+});
+function row(name,result,source,milliseconds,evidence){
+  const tr=document.createElement('tr');
+  for(const [index,value] of [name,result,source,`${milliseconds} ms`,evidence].entries()){
+    const cell=document.createElement('td');cell.textContent=value;
+    if(index===1)cell.className=result==='PASS'?'pass':'fail';tr.append(cell);
+  }
+  body.append(tr);
+}
+try{
+  const [{createScenarioPreparer,buildTruthBundle},{createTruthCache,createPackagedStore},{DEFAULT_INPUT,normalizeInput,generateScenario,createSceneGeometry,generateTruthSnapshot}]=await Promise.all([
+    import('../../drf/prepare-scenario.mjs'),import('../../drf/truth-cache.mjs'),import('../../drf/scenario.mjs')
+  ]);
+  runButton.disabled=false;status.textContent='Ready. Press Run checks.';
+  runButton.onclick=async()=>{
+    runButton.disabled=true;body.replaceChildren();log.length=0;show();
+    document.getElementById('diffSummary').textContent='No mismatches inspected.';
+    document.getElementById('diffDetails').textContent='Cross-engine raw/scenario tolerance: absolute 1e-12; downstream tolerance: absolute 1e-9. Discrete fields and same-Chrome IndexedDB comparisons remain exact.';
+    const started=performance.now();let completed=0;
+    const record=(name,source,ms,evidence,data={})=>{
+      row(name,'PASS',source,ms,evidence);completed++;log.push({name,result:'PASS',source,ms,...data});show();
+    };
+    try{
+      assert(location.protocol==='http:'||location.protocol==='https:','Open this page on the running HTTP origin.');
+      assert(typeof DecompressionStream==='function','DecompressionStream is unavailable.');
+      assert(Boolean(globalThis.indexedDB),'IndexedDB is unavailable.');
+      const input=normalizeInput({...DEFAULT_INPUT,seed:1,vehicles:3,snapshots:120,grid:100});
+      const packagedCache=createTruthCache({persistent:null,packaged:createPackagedStore()});
+      const prepare=createScenarioPreparer({cache:packagedCache});
+
+      status.textContent='1/6: Loading the packaged seed 1 bank, then comparing with uncached generation…';
+      let tick=performance.now(),cacheEvent;
+      const prepared=await prepare(input,()=>{},{onCache:event=>{cacheEvent=event;}});
+      const packagedMs=elapsed(tick);
+      assert(cacheEvent?.source==='packaged',`Expected packaged source, got ${cacheEvent?.source}. Check manifest/files.`);
+      tick=performance.now();const reference=await generateScenario(input);const uncachedMs=elapsed(tick);
+      const packagedDiff=numericalComparison(stableScenario(prepared),stableScenario(reference),'Packaged Node-generated scenario vs Chrome uncached scenario',1e-12);
+      assert(packagedDiff.strictMismatches===0,'Packaged scenario exceeds floating tolerance or has a discrete mismatch.');
+      const originalWireHash=await hash(prepared.wire);
+      record('Packaged Node scenario / Chrome numeric parity','packaged',packagedMs,
+        `${packagedDiff.totalMismatches} numeric differences; maximum ${packagedDiff.maxAbsoluteDifference}, limit 1e-12. Discrete fields exact. Uncached: ${uncachedMs} ms.`,
+        {uncachedMs,cacheEvent,comparison:packagedDiff,wireSha256:originalWireHash,stats:packagedCache.stats()});
+
+      status.textContent='2/6: Checking physical raw truth and applying different measurement noise…';
+      const raw=await packagedCache.getTruthBundle(input,()=>{throw new Error('Unexpected raw regeneration');});
+      const rawHashBefore=await hash(raw.bundle.truth);
+      const generatedRaw=await buildTruthBundle(input);
+      const rawPrefix={vehicles:input.vehicles,snapshots:input.snapshots,geometry:raw.bundle.geometry,
+        truth:raw.bundle.truth.slice(0,input.snapshots).map(snapshot=>({...snapshot,p:snapshot.p.slice(0,input.vehicles),
+          configs:snapshot.configs.filter(c=>c.i<=input.vehicles&&c.j<=input.vehicles)}))};
+      const rawDiff=numericalComparison(rawPrefix,generatedRaw,'Packaged raw truth vs Chrome uncached raw truth',1e-12);
+      assert(rawDiff.strictMismatches===0,'Raw physical cache exceeds floating tolerance or has a discrete mismatch.');
+      const noisyInput=normalizeInput({...input,sigmaP:.2,sigmaD:.3});
+      tick=performance.now();let noiseEvent;
+      const noisy=await prepare(noisyInput,()=>{},{onCache:event=>{noiseEvent=event;}});const memoryMs=elapsed(tick);
+      assert(noiseEvent?.source==='memory',`Expected memory source for changed noise, got ${noiseEvent?.source}.`);
+      const noisyReference=await generateScenario(noisyInput);
+      const noisyDiff=numericalComparison(stableScenario(noisy),stableScenario(noisyReference),'Reapplied-noise scenario vs Chrome uncached scenario',1e-12);
+      assert(noisyDiff.strictMismatches===0,'Reapplied-noise scenario exceeds floating tolerance or has a discrete mismatch.');
+      const noisyHash=await hash(noisy.wire),referenceHash=await hash(noisyReference.wire);
+      assert(noisyHash!==originalWireHash,'Changing position/range noise did not change the measured wire.');
+      assert(rawHashBefore===await hash(raw.bundle.truth),'Measurement preparation mutated cached physical truth.');
+      record('Raw truth + changed-noise numeric parity','memory',memoryMs,
+        `Raw bytes unchanged. Changed-noise max difference ${noisyDiff.maxAbsoluteDifference} ≤ 1e-12; discrete fields exact. Cross-engine wire hashes are recorded, not required to match.`,
+        {rawComparison:rawDiff,scenarioComparison:noisyDiff,rawImmutable:true,wireChanged:true,wireSha256:noisyHash,referenceWireSha256:referenceHash,wireHashesEqual:noisyHash===referenceHash,stats:packagedCache.stats()});
+
+      status.textContent='3/6: Writing or loading a custom setting through real IndexedDB…';
+      const custom=normalizeInput({...DEFAULT_INPUT,seed:10,vehicles:2,snapshots:4,sigmaM:6.125});
+      const firstCache=createTruthCache({packaged:null}),firstPrepare=createScenarioPreparer({cache:firstCache});
+      tick=performance.now();let firstEvent;
+      const first=await firstPrepare(custom,()=>{},{onCache:event=>{firstEvent=event;}});const firstMs=elapsed(tick);
+      assert(['generated','persistent'].includes(firstEvent?.source),`Unexpected custom source ${firstEvent?.source}.`);
+      const customReference=await generateScenario(custom);
+      assert(exactJson(stableScenario(first),stableScenario(customReference),'Custom first-access scenario vs uncached scenario'),'Custom setting differs from uncached generation.');
+      assert(firstCache.stats().cacheWriteErrors===0,'IndexedDB write failed; inspect quota or browser storage permissions.');
+      record('Custom setting / IndexedDB first access',firstEvent.source,firstMs,
+        'seed 10, 2 vehicles, 4 snapshots, wall amplitude 6.125 m. Exact uncached equality; no cache-write errors.',
+        {exact:true,stats:firstCache.stats(),wireSha256:await hash(first.wire)});
+
+      status.textContent='4/6: Opening an independent cache instance and checking an IndexedDB hit…';
+      const secondCache=createTruthCache({packaged:null}),secondPrepare=createScenarioPreparer({cache:secondCache});
+      tick=performance.now();let secondEvent;
+      const second=await secondPrepare(custom,()=>{},{onCache:event=>{secondEvent=event;}});const secondMs=elapsed(tick);
+      assert(secondEvent?.source==='persistent',`Expected real IndexedDB hit from a new instance, got ${secondEvent?.source}.`);
+      assert(exactJson(stableScenario(second),stableScenario(customReference),'IndexedDB scenario vs uncached scenario'),
+        'IndexedDB-loaded scenario differs from uncached generation.');
+      record('Independent instance / IndexedDB exact JSON','persistent',secondMs,
+        'New cache instance has no prior memory entries. Persistent bytes reproduce every deterministic scenario field.',
+        {exact:true,stats:secondCache.stats(),wireSha256:await hash(second.wire)});
+
+      status.textContent='5/6: Comparing field, both methods and evaluators in a dedicated worker…';
+      const downstream=await checkDownstream(prepared,reference);
+      log.push({downstream});show();
+      document.getElementById('diffSummary').textContent=`Downstream 120 snapshots: ${downstream.report.totalMismatches} numeric differences; ${downstream.report.strictMismatches} failures; max absolute ${downstream.report.maxAbsoluteDifference}; limit 1e-9. IDs, decisions, counts and array lengths checked exactly.`;
+      document.getElementById('diffDetails').textContent=JSON.stringify(downstream,null,2);
+      assert(downstream.report.snapshots===120,'Downstream verification did not finish 120 snapshots.');
+      assert(downstream.report.strictMismatches===0,'Downstream numeric tolerance or exact candidate/count/decision check failed.');
+      record('120-snapshot downstream field / methods / metrics','dedicated module worker',Math.round(downstream.milliseconds*10)/10,
+        `Grid 100×100. ${downstream.report.totalMismatches} floating differences; maximum ${downstream.report.maxAbsoluteDifference} ≤ 1e-9. Candidate IDs/statuses, counts and observed-sample membership unchanged.`,
+        {comparison:downstream.report,finalMetrics:downstream.finalMetrics});
+
+      status.textContent='6/6: Checking seed 9, roughness 10°, 10 vehicles at snapshots 1, 60 and 120…';
+      tick=performance.now();
+      const worstInput=normalizeInput({...DEFAULT_INPUT,seed:9,roughness:10,vehicles:10,snapshots:120,grid:100});
+      const worstCache=createTruthCache({persistent:null,packaged:createPackagedStore()});
+      const worst=await worstCache.getTruthBundle(worstInput,()=>{throw new Error('Worst-case packaged bank missing; full generation is not allowed in this QA step.');});
+      assert(worst.source==='packaged',`Expected worst-case packaged source, got ${worst.source}.`);
+      const worstGeometry=createSceneGeometry(worstInput),worstDiffs=[];
+      for(const t of [1,60,120]){
+        const fresh=generateTruthSnapshot(worstInput,worstGeometry.spans,t,worstGeometry.wallModel);
+        const diff=numericalComparison(worst.bundle.truth[t-1],fresh,`Seed 9 / roughness 10° / 10 vehicles raw snapshot ${t}`,1e-12);
+        worstDiffs.push({snapshot:t,...diff});
+        assert(diff.strictMismatches===0,`Worst-case raw snapshot ${t} exceeds numeric tolerance or differs in path counts/structure.`);
+        await yieldPage();
+      }
+      const maximum=Math.max(...worstDiffs.map(d=>d.maxAbsoluteDifference));
+      record('High-roughness full-fleet raw samples','packaged',elapsed(tick),
+        `Only snapshots 1/60/120 freshly generated. Maximum difference ${maximum} ≤ 1e-12; path counts and discrete fields exact.`,
+        {seed:9,roughness:10,vehicles:10,comparison:worstDiffs,stats:worstCache.stats()});
+      status.textContent=`PASS: ${completed}/6 checks completed in ${elapsed(started)} ms.`;
+      document.documentElement.dataset.qaResult='pass';
+    }catch(error){
+      const message=error?.stack||String(error);row('Stopped check','FAIL','—',elapsed(started),message);
+      log.push({result:'FAIL',error:message});show();status.textContent=`FAIL after ${completed}/6 checks: ${error.message||error}`;
+      document.documentElement.dataset.qaResult='fail';
+    }finally{runButton.disabled=false;}
+  };
+}catch(error){status.textContent=`Module load failed: ${error.message||error}`;details.textContent=error.stack||String(error);}
+</script>
+</html>

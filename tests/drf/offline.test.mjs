@@ -70,6 +70,7 @@ test('offline bundle is current and its classic Blob workers preserve the field'
   assert.deepEqual(Array.from(actual.Dbar), Array.from(expected.Dbar));
   assert.deepEqual(Array.from(actual.betaHat), Array.from(expected.betaHat));
   const scenarioMessages = [], scenarioContext = vm.createContext({ performance, setTimeout,
+    TextEncoder, TextDecoder, structuredClone, URL,
     postMessage: data => scenarioMessages.push(data) });
   scenarioContext.self = scenarioContext;
   vm.runInContext(await blobs.get(runtime.worker('scenario').url).text(), scenarioContext);
@@ -83,6 +84,14 @@ test('offline bundle is current and its classic Blob workers preserve the field'
   assert.equal(JSON.stringify(offline.scenario.wallModel), JSON.stringify(module.wallModel));
   assert.equal(JSON.stringify(offline.scenario.wallGeneration), JSON.stringify(module.wallGeneration));
   assert.equal(JSON.stringify(offline.scenario.domain), JSON.stringify([0, 80, -20, 50]));
+  // A classic file worker cannot fetch the packaged HTTP bank. Missing browser
+  // storage/transport must fall back to identical generation for bank seeds too.
+  const cachedSeedInput = { seed: 1, vehicles: 2, snapshots: 2 };
+  await scenarioContext.onmessage({ data: { type: 'generate', requestId: 31, input: cachedSeedInput } });
+  const fallback = scenarioMessages.at(-1), uncached = await generateScenario(cachedSeedInput);
+  assert.equal(fallback.type, 'scenario', fallback.message);
+  assert.equal(JSON.stringify(fallback.scenario.truth), JSON.stringify(uncached.truth));
+  assert.equal(JSON.stringify(fallback.scenario.wire), JSON.stringify(uncached.wire));
   const psptMessages = [], psptContext = vm.createContext({ performance, postMessage: data => psptMessages.push(data) });
   psptContext.self = psptContext;
   vm.runInContext(await blobs.get(runtime.worker('pspt').url).text(), psptContext);

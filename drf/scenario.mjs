@@ -99,22 +99,24 @@ export function truePoses(t, vehicles = 3, wallModel = null) {
     return [x, centre.value + centre.first * Math.max(0, x - (wallModel?.L ?? 60)) + LATERAL_AMPLITUDE * Math.sin(2 * Math.PI * x / 30 + v + 1)];
   });
 }
-/** Independent streams preserve standard pose/specular noise across paired sweeps. */
-export function generateSnapshot(input, spans, t, wallModel = null) {
+/** Noise-free physical snapshot, before optional specular removal/range merging.
+ * Input: simulator settings, accepted spans/model and a 1-based t <= snapshots.
+ * Output: {t,p[V][2],configs[C]}, C=V(V-1)/2. Each config retains both physical
+ * point kinds, true path lengths and sampling diagnostics, but no noise z.
+ * Roughness/intensity/cell spacing affect physical diffuse samples; position
+ * noise, range noise, specular selection and resolution do not. A reusable
+ * cache must match all physical settings and the generator revision separately.
+ * Work O(C*(wall cells + sampled points*visibility cost)); memory O(V+points).
+ */
+export function generateTruthSnapshot(raw, spans, t, wallModel = null) {
+  const input = normalizeInput(raw);
   if (input.scene === 'layered' && !wallModel) throw new Error('Layered snapshots require their accepted truth wall model');
-  const p = truePoses(t, input.vehicles, wallModel), sigma2 = input.sigmaP ** 2,
+  if (!Number.isInteger(t) || t < 1 || t > input.snapshots) throw new RangeError('Truth snapshot is outside the requested time prefix');
+  const p = truePoses(t, input.vehicles, wallModel),
     activeWalls = [...new Set(spans.map(span => span.wall))];
-  const poseNoise = p.map((_, v) => {
-    // Stream addresses use the same 1-based vehicle IDs as the wire.
-    const r = createRng(input.seed, 'pose', t, v + 1);
-    return [r.normal(), r.normal()];
-  });
-  const pHat = p.map((q, v) => q.map((a, k) => a + input.sigmaP * poseNoise[v][k]));
-  const truth = { t, p, poseNoise, configs: [] }, measured = { t, configs: [] };
+  const truth = { t, p, configs: [] };
   for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) {
-    const spec = input.specular ? specularPoints(spans, p[i], p[j]) : [];
-    const specRng = createRng(input.seed, 'specNoise', t, i + 1, j + 1);
-    const diffRng = createRng(input.seed, 'diffNoise', t, i + 1, j + 1);
+    const spec = specularPoints(spans, p[i], p[j]);
     const profile = diffuseProfile(spans, p[i], p[j], input.roughness * Math.PI / 180, input.lambda0, input.cellStep);
     // Keep logical lower/upper indices even if one physical wall is absent.
     const diffuse = [], diffuseSampling = { beforeThinning: [0, 0], afterThinning: [0, 0] };
@@ -126,9 +128,55 @@ export function generateSnapshot(input, spans, t, wallModel = null) {
       diffuseSampling.afterThinning[wall] = points.length;
       diffuse.push(...points);
     }
+    truth.configs.push({ i: i + 1, j: j + 1,
+      specular: spec.slice(), diffuse,
+      lambdaTotal: profile.lambdaTotal, diffuseSampling,
+      generated: { specular: spec.length, diffuse: diffuse.length },
+      numericalDiagnostics: spec.diagnostics ?? { degenerateSpans: [], unresolved: 0 },
+    });
+  }
+  return truth;
+}
+
+/** Apply current noise and observation settings to a physical snapshot.
+ * Input: raw truth for Vmax vehicles and matching physical settings/seed.
+ * Output: legacy {truth,wire} for V<=Vmax, with new owned arrays. Only wire's
+ * measured positions/covariances/ranges may cross into an online estimator.
+ * Pair filtering uses vehicle IDs, not a prefix of the Vmax pair array.
+ * Preserve RNG order: assign every point's z before merging, then shuffle the
+ * retained paths. Position covariance is sigmaP^2 I and dHat=rho+sigmaD*z.
+ * Work O(Vmax^2+points), or O(points log points) when resolution merging sorts;
+ * memory O(V+selected points). No field, estimator or evaluation result is reused.
+ */
+export function measureTruthSnapshot(raw, snapshot) {
+  const input = normalizeInput(raw), t = snapshot?.t, positions = snapshot?.p;
+  if (!Number.isInteger(t) || t < 1 || t > input.snapshots) throw new RangeError('Truth snapshot is outside the requested time prefix');
+  if (!Array.isArray(positions) || positions.length < input.vehicles || positions.length > 20
+    || !positions.every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)))
+    throw new RangeError('Truth snapshot does not contain the requested vehicle prefix');
+  const maximum = positions.length, configs = snapshot.configs;
+  if (!Array.isArray(configs) || configs.length !== maximum * (maximum - 1) / 2)
+    throw new RangeError('Truth snapshot must contain every vehicle pair');
+  let index = 0;
+  for (let i = 1; i <= maximum; i++) for (let j = i + 1; j <= maximum; j++) {
+    const config = configs[index++];
+    if (config?.i !== i || config?.j !== j || !Array.isArray(config.specular) || !Array.isArray(config.diffuse))
+      throw new RangeError('Truth snapshot pairs must follow canonical vehicle ID order');
+  }
+  const p = positions.slice(0, input.vehicles).map(q => q.slice()), sigma2 = input.sigmaP ** 2,
+    poseNoise = p.map((_, v) => {
+      const rng = createRng(input.seed, 'pose', t, v + 1);
+      return [rng.normal(), rng.normal()];
+    }), pHat = p.map((q, v) => q.map((a, k) => a + input.sigmaP * poseNoise[v][k])),
+    truth = { t, p, poseNoise, configs: [] }, measured = { t, configs: [] };
+  for (const config of configs) {
+    const { i, j } = config;
+    if (i > input.vehicles || j > input.vehicles) continue;
+    const spec = input.specular ? config.specular : [], diffuse = config.diffuse,
+      specRng = createRng(input.seed, 'specNoise', t, i, j), diffRng = createRng(input.seed, 'diffNoise', t, i, j);
     const tagged = [
-      ...spec.map(point => ({ ...point, kind: 'specular', z: specRng.normal() })),
-      ...diffuse.map(point => ({ ...point, kind: 'diffuse', z: diffRng.normal() })),
+      ...spec.map(point => ({ ...point, s: point.s.slice(), kind: 'specular', z: specRng.normal() })),
+      ...diffuse.map(point => ({ ...point, s: point.s.slice(), kind: 'diffuse', z: diffRng.normal() })),
     ];
     let emitted = tagged;
     if (input.resolution > 0) {
@@ -137,23 +185,27 @@ export function generateSnapshot(input, spans, t, wallModel = null) {
         if (point.rho - previous >= input.resolution) { emitted.push(point); previous = point.rho; }
     }
     const paths = emitted.map(point => ({ dHat: point.rho + input.sigmaD * point.z, sigmaD: input.sigmaD }));
-    const shuffle = createRng(input.seed, 'shuffle', t, i + 1, j + 1);
+    const shuffle = createRng(input.seed, 'shuffle', t, i, j);
     for (let k = paths.length - 1; k > 0; k--) {
       const n = Math.floor(shuffle.uniform() * (k + 1)); [paths[k], paths[n]] = [paths[n], paths[k]];
     }
-    truth.configs.push({ i: i + 1, j: j + 1,
+    truth.configs.push({ i, j,
       specular: emitted.filter(q => q.kind === 'specular').map(({ kind, ...q }) => q),
       diffuse: emitted.filter(q => q.kind === 'diffuse').map(({ kind, ...q }) => q),
-      lambdaTotal: profile.lambdaTotal,
-      diffuseSampling,
+      lambdaTotal: config.lambdaTotal.slice(),
+      diffuseSampling: { beforeThinning: config.diffuseSampling.beforeThinning.slice(), afterThinning: config.diffuseSampling.afterThinning.slice() },
       // Existing generated counts are visible paths before resolution merging.
       generated: { specular: spec.length, diffuse: diffuse.length },
-      numericalDiagnostics: spec.diagnostics ?? { degenerateSpans: [], unresolved: 0 },
+      numericalDiagnostics: input.specular ? structuredClone(config.numericalDiagnostics) : { degenerateSpans: [], unresolved: 0 },
     });
-    measured.configs.push({ i: i + 1, j: j + 1, pHat_i: pHat[i], pHat_j: pHat[j],
+    measured.configs.push({ i, j, pHat_i: pHat[i - 1], pHat_j: pHat[j - 1],
       Sigma_i: [sigma2, 0, sigma2], Sigma_j: [sigma2, 0, sigma2], paths });
   }
   return { truth, wire: makeWire(measured) };
+}
+/** Uncached composition preserves the existing truth/wire contract. */
+export function generateSnapshot(input, spans, t, wallModel = null) {
+  return measureTruthSnapshot(input, generateTruthSnapshot(input, spans, t, wallModel));
 }
 export async function generateScenario(raw, progress = () => {}) {
   const started = performance.now(), input = normalizeInput(raw), geometry = createSceneGeometry(input);
