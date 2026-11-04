@@ -244,7 +244,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   assert.equal($('snapshotLabel').textContent,'0 / 60');
   assert.equal($('sweepStatus').textContent,'No results yet.');
   assert.equal($('diagnosticSummary').textContent,'No results yet.');
-  assert.match($('inspector').textContent,/Hover/);assert.ok(!$('inspector').textContent.includes('old D/A/Q'));
+  assert.equal($('inspector').textContent,'','Reset clears stale inspection without restoring the removed hint');
   assert.equal(charts.get('diagnosticChart').length,0);assert.equal(charts.get('profileChart').length,0);
   assert.equal(charts.get('countChart')[0].length,0);assert.equal(charts.get('countChart')[1].length,0);
   assert.equal(context.runWorker,null);assert.equal(context.evalWorker,null);assert.equal(context.hoverWorker,null);
@@ -252,7 +252,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
 
 function runUiContext(total=120) {
   const nodes=new Map(),posted=[],drawn=[],errors=[];
-  const $=id=>{if (!nodes.has(id)) nodes.set(id,{dataset:{}});return nodes.get(id);};
+  const $=id=>{if (!nodes.has(id)) nodes.set(id,{id,dataset:{},focus(){context.document.activeElement=this;},removeAttribute(name){delete this.dataset[name];}});return nodes.get(id);};
   const snapshotInput={value:String(total)},elements=[];elements.namedItem=()=>snapshotInput;$('sweepSettings').elements=[];
   const state={generation:1,busy:true,mode:'running',scenario:{input:{snapshots:total}},
     next:0,frames:[],evaluations:[],selected:0,followLive:true,sweepRuns:[],valid:true};
@@ -266,6 +266,88 @@ function runUiContext(total=120) {
   vm.runInContext(section('function controls()','function cancel(')+section('async function receiveRunMessage(','async function hashField('),context);
   return {context,state,$,posted,drawn,errors};
 }
+
+test('completed runs offer reset-and-run plus replay, while active and partial runs keep their own controls',()=>{
+  const {context,state,$}=runUiContext(3);
+  const actionIds=['runButton','pauseButton','stepButton','cancelButton','completedReplayButton'];
+  const visible=()=>actionIds.filter(id=>!$(id).hidden);
+  for (const mode of ['idle','cancelled']) {
+    state.mode=mode;state.frames=mode==='idle'?[]:[{t:1}];context.controls();
+    assert.deepEqual(visible(),['runButton']);assert.equal($('runButton').textContent,'Run comparison');
+    assert.equal($('completedReplayButton').disabled,true);
+  }
+  for (const mode of ['running','paused']) {
+    state.mode=mode;context.controls();
+    assert.deepEqual(visible(),['pauseButton','stepButton','cancelButton']);
+    assert.equal($('pauseButton').textContent,mode==='paused'?'Resume':'Pause');
+  }
+  context.document.activeElement=$('pauseButton');
+  state.mode='done';state.frames=[{t:1},{t:2},{t:3}];state.busy=false;context.controls();
+  assert.deepEqual(visible(),['runButton','completedReplayButton']);
+  assert.equal($('runActions').dataset.mode,'complete');
+  assert.equal($('runButton').textContent,'Reset & run');assert.equal($('completedReplayButton').textContent,'Replay');
+  assert.equal($('runButton').disabled,false);assert.equal($('completedReplayButton').disabled,false);
+  assert.equal(context.document.activeElement,$('runButton'),'Move keyboard focus out of a newly hidden action');
+  state.connecting=true;context.controls();
+  assert.equal($('runButton').disabled,true);assert.equal($('completedReplayButton').disabled,true);
+  state.connecting=false;state.valid=false;context.controls();
+  assert.deepEqual(visible(),['runButton'],'Failed result validation must not expose completed-run actions');
+  state.valid=true;state.frames=[];context.controls();assert.deepEqual(visible(),['runButton']);
+});
+
+test('completed replay starts at the first cached snapshot, waits one interval, and never dispatches computation',()=>{
+  const {context,state,$,posted,drawn}=runUiContext(3),pending=new Map();let frameId=0;
+  context.requestAnimationFrame=callback=>{const id=++frameId;pending.set(id,callback);return id;};
+  context.cancelAnimationFrame=id=>pending.delete(id);context.replayFrame=0;
+  context.createWorker=()=>assert.fail('Replay must not create a worker');
+  context.prepare=()=>assert.fail('Replay must not restart calculation');
+  $('playbackSpeed').value='1';
+  vm.runInContext(section('function stopReplay()','function controls()')+section('function replayTick(','function resetView(')
+    +section("$('replayButton').onclick", "document.addEventListener('visibilitychange'"),context);
+  const frames=[{t:1},{t:2},{t:3}],evaluations=[{precision:1},{precision:1},{precision:1}],scenario=state.scenario;
+  Object.assign(state,{mode:'done',frames,evaluations,next:3,selected:2,replay:false,busy:false});context.controls();
+  $('completedReplayButton').onclick();
+  assert.equal(state.selected,1);assert.equal(Number($('timeSlider').value),1);assert.equal(drawn.at(-1),1);
+  assert.equal(state.replay,true);assert.equal(state.followLive,false);assert.equal(pending.size,1);
+  assert.equal($('replayButton').textContent,'Stop replay');assert.equal($('completedReplayButton').textContent,'Stop replay');
+  const tick=time=>{const [id,callback]=pending.entries().next().value;pending.delete(id);callback(time);};
+  tick(1000);tick(1249);assert.equal(state.selected,1,'Do not skip the first snapshot on the first animation callback');
+  tick(1250);assert.equal(state.selected,2);
+  $('completedReplayButton').onclick();
+  assert.equal(state.replay,false);assert.equal(pending.size,0);
+  assert.equal($('replayButton').textContent,'Replay');assert.equal($('completedReplayButton').textContent,'Replay');
+  $('replayButton').onclick();assert.equal($('completedReplayButton').textContent,'Stop replay');
+  context.stopReplay();assert.equal($('completedReplayButton').textContent,'Replay');
+  assert.equal(state.frames,frames);assert.equal(state.evaluations,evaluations);assert.equal(state.scenario,scenario);assert.equal(state.next,3);
+  assert.deepEqual(posted,[],'Playback sends no run or worker commands');
+  for (const patch of [{mode:'running'},{mode:'paused'},{mode:'cancelled'},{mode:'done',valid:false},{mode:'done',connecting:true},{mode:'done',frames:[]}]) {
+    Object.assign(state,{mode:'done',valid:true,connecting:false,frames,selected:2},patch);
+    $('completedReplayButton').onclick();assert.equal(state.replay,false);assert.equal(state.selected,2);assert.equal(pending.size,0);
+  }
+});
+
+test('reset-and-run clears the completed result and replay but preserves current parameters and seed',async()=>{
+  const {context,state,$,errors}=runUiContext(3),commands=[],input={...DEFAULT_INPUT,snapshots:3,vehicles:4,seed:923};
+  let stopped=0,cancelledReplay=0;
+  Object.assign(state,{mode:'done',frames:[{t:1},{t:2},{t:3}],evaluations:[{},{},{}],selected:3,next:3,
+    workers:[{stop(){stopped++;}}],replay:true,generatedSnapshots:3,measurementTotal:3});
+  Object.assign(context,{hoverGeneration:0,hoverTimer:0,hoverWorker:{},evalWorker:{},replayFrame:19,location:{hash:'#old'},
+    settings:()=>({...input}),fillSettings:()=>assert.fail('Restart must not restore default parameters'),clearTimeout(){},
+    cancelAnimationFrame:id=>{if(id===19)cancelledReplay++;},
+    createWorker:name=>{assert.equal(name,'run');return {postMessage:message=>commands.push(message),terminate(){}};},
+    map:{fit(){}},baselineMap:{fit(){}},densityMap:{fit(){}},contrastMap:{fit(){}},
+  });
+  vm.runInContext(section('function stopReplay()','function controls()')+section('function cancel(','function fail(')
+    +section("$('runButton').onclick", "$('pauseButton').onclick"),context);
+  context.controls();assert.equal($('runButton').textContent,'Reset & run');
+  await $('runButton').onclick();
+  assert.equal(stopped,1);assert.equal(cancelledReplay,1);assert.equal(state.replay,false);
+  assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.selected,0);assert.equal(state.next,0);
+  assert.equal(state.mode,'running');assert.equal(state.busy,true);assert.equal(state.generatedSnapshots,0);
+  assert.equal(commands.length,1);assert.equal(commands[0].type,'start');assert.deepEqual({...commands[0].input},input);
+  assert.deepEqual(JSON.parse(decodeURIComponent(context.location.hash.slice(3))),input);
+  assert.equal($('runButton').hidden,true);assert.equal($('completedReplayButton').hidden,true);assert.deepEqual(errors,[]);
+});
 
 test('timeline and replay stay locked until the run ends, including paused and preparing states',async()=>{
   const {context,state,$,posted,errors}=runUiContext(5),events=new Map(),pending=new Map();let frameId=0;

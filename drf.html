@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261104-sweep-status1" />
+  <link rel="stylesheet" href="drf/style.css?v=20261104-compact-controls1" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -35,7 +35,7 @@
           </div>
           <h2>Experiment</h2><button id="resetButton" class="ghost" type="button" title="Restore defaults and clear results">Reset</button>
         </div>
-        <div class="run-actions"><button id="runButton" class="primary run-button" type="button" disabled>Run comparison</button><button id="pauseButton" type="button" disabled hidden>Pause</button><button id="stepButton" type="button" disabled hidden>Step</button><button id="cancelButton" type="button" disabled hidden>Cancel</button></div>
+        <div id="runActions" class="run-actions" data-mode="idle"><button id="runButton" class="primary run-button" type="button" disabled>Run comparison</button><button id="completedReplayButton" type="button" disabled hidden title="Replay saved snapshots from the beginning">Replay</button><button id="pauseButton" type="button" disabled hidden>Pause</button><button id="stepButton" type="button" disabled hidden>Step</button><button id="cancelButton" type="button" disabled hidden>Cancel</button></div>
         <p id="status" class="status" role="status" aria-live="polite">Press Run comparison to start.</p>
         <div id="runProgressTrack" class="run-progress">
           <progress id="generationProgress" max="120" value="0" aria-label="Generated measurement snapshots"></progress>
@@ -96,7 +96,7 @@
       </details>
     </aside>
     <div class="content">
-      <div id="workbenchTitle" class="workbench-title"><div><h1>Range-only wall mapping</h1><p>Two non-learning estimators. One shared measurement sequence.</p></div><span id="runState" class="run-state">Ready</span></div>
+      <div id="workbenchTitle" class="workbench-title"><div class="workbench-heading"><h1>Range-only wall mapping</h1><p>Two non-learning estimators. One shared measurement sequence.</p></div><span id="runState" class="run-state">Ready</span></div>
       <section class="dashboard" aria-label="Mapping experiment">
         <div class="main-grid">
           <figure class="view map-panel" id="viewMain">
@@ -105,7 +105,6 @@
             </figcaption>
             <div class="map-pair" id="mapPair" data-mode="compare"><div class="map-pane"><h3 class="map-name" id="primaryMapName">Guarded PSPT</h3><div class="view-body"><canvas id="mapCanvas" class="dashboard-canvas" role="img" aria-label="Candidate map. Numerical results for both methods appear in the comparison table.">Canvas support is required to display the map. Numerical results are available in the comparison table.</canvas></div></div><div class="map-pane" id="baselinePane"><h3 class="map-name baseline-name">Fixed-fragment B</h3><div class="view-body"><canvas id="baselineCanvas" class="dashboard-canvas" role="img" aria-label="Fixed-fragment B candidate map, sharing the PSPT camera and snapshot"></canvas></div></div></div>
             <div class="legend-row" aria-label="Map legend"><ul class="legend"><li data-layer="proxy"><span class="swatch swatch-supported" aria-hidden="true"></span>Supported</li><li data-layer="proxy"><span class="swatch swatch-pending" aria-hidden="true"></span>Held</li><li data-layer="proxy"><span class="swatch swatch-contradicted" aria-hidden="true"></span>Rejected</li><li data-layer="truth"><span class="swatch swatch-truth" aria-hidden="true"></span>True wall</li><li data-layer="vehicles"><span class="swatch swatch-track" aria-hidden="true"></span>Trajectory</li><li data-layer="ellipses"><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipse</li></ul><span id="ellipseStats" class="view-meta">No measurements yet</span></div>
-            <p class="plot-note" id="methodNote">PSPT updates curved patches and holds geometrically ambiguous alternatives.</p>
           </figure>
           <section class="view results-panel" aria-labelledby="resultsTitle">
             <div class="results-heading"><h2 id="resultsTitle">Method comparison</h2><span class="evaluation" title="Post-hoc ground-truth evaluation">Evaluation only</span></div>
@@ -127,11 +126,11 @@
         </div>
         <div class="playback-bar"><div class="timeline"><button id="replayButton" type="button" disabled aria-label="Replay computed snapshots">Replay</button><label class="time-label" for="timeSlider">Snapshot <output id="snapshotLabel">0 / 120</output></label><input id="timeSlider" type="range" min="1" max="120" step="1" value="1" disabled /><label class="speed-label">Speed<select id="playbackSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div><p class="keyboard-note"><kbd>Space</kbd> replay <kbd>←</kbd><kbd>→</kbd> step</p></div>
         <div class="field-grid">
-          <figure class="view" id="viewDensity"><figcaption class="vlabel"><div><h2>D̄ · Mean residual density</h2><p class="view-meta">m⁻² · shared by both methods</p></div><div class="map-toolbar"><button id="densityZoomOut" type="button" aria-label="Zoom density out">−</button><button id="densityZoomIn" type="button" aria-label="Zoom density in">+</button><button id="densityResetView" type="button" aria-label="Reset density view">↺</button></div></figcaption><div class="view-body"><canvas id="densityCanvas" class="dashboard-canvas" role="img" aria-label="Mean accumulated residual density"></canvas></div></figure>
-          <figure class="view" id="viewContrast"><figcaption class="vlabel"><div><h2>β̂ · Field contrast</h2><p class="view-meta">Dimensionless · not a probability</p></div><div class="map-toolbar"><button id="contrastZoomOut" type="button" aria-label="Zoom contrast out">−</button><button id="contrastZoomIn" type="button" aria-label="Zoom contrast in">+</button><button id="contrastResetView" type="button" aria-label="Reset contrast view">↺</button></div></figcaption><div class="view-body"><canvas id="contrastCanvas" class="dashboard-canvas" role="img" aria-label="Dimensionless field contrast"></canvas></div></figure>
+          <figure class="view" id="viewDensity"><figcaption class="vlabel"><div class="field-heading"><h2>D̄ · Mean residual density</h2><p class="view-meta">m⁻² · shared by both methods</p></div><div class="map-toolbar"><button id="densityZoomOut" type="button" aria-label="Zoom density out">−</button><button id="densityZoomIn" type="button" aria-label="Zoom density in">+</button><button id="densityResetView" type="button" aria-label="Reset density view">↺</button></div></figcaption><div class="view-body"><canvas id="densityCanvas" class="dashboard-canvas" role="img" aria-label="Mean accumulated residual density"></canvas></div></figure>
+          <figure class="view" id="viewContrast"><figcaption class="vlabel"><div class="field-heading"><h2>β̂ · Field contrast</h2><p class="view-meta">Dimensionless · not a probability</p></div><div class="map-toolbar"><button id="contrastZoomOut" type="button" aria-label="Zoom contrast out">−</button><button id="contrastZoomIn" type="button" aria-label="Zoom contrast in">+</button><button id="contrastResetView" type="button" aria-label="Reset contrast view">↺</button></div></figcaption><div class="view-body"><canvas id="contrastCanvas" class="dashboard-canvas" role="img" aria-label="Dimensionless field contrast"></canvas></div></figure>
           <figure class="view" id="viewMetrics"><figcaption class="vlabel"><h2>Performance over time</h2><select id="historyMetric" aria-label="Metric over time"><option value="precision">Centre precision [%]</option><option value="recall" selected>Observed recall [%]</option><option value="firstSupportPrecision">First support [%]</option><option value="holdRate">Held / unselected [%]</option><option value="p95">P95 distance [m]</option><option value="offwall">Off-wall centres [%]</option></select></figcaption><div class="history-legend"><span><i class="line-pspt"></i>PSPT</span><span><i class="line-baseline"></i>B</span></div><div class="view-body"><canvas id="metricChart" class="dashboard-canvas compact-chart" role="img" aria-label="Comparison of both methods over computed snapshots. Export CSV for all numerical values."></canvas></div></figure>
         </div>
-        <p id="inspector" class="inspector">Hover to inspect a grid cell. Scroll to zoom; drag to pan.</p>
+        <p id="inspector" class="inspector"></p>
       </section>
       <div class="workbench-footer"><button class="analysis-launch" id="analysisButton" type="button">Experiments, diagnostics &amp; exports <span aria-hidden="true">↗</span></button><div class="provenance"><span>Frozen DRF base <code id="provenanceCommit">Loading</code></span><span>Core SHA-256 <code id="provenanceCore">Loading</code></span><span>Comparison release · 2026.10.22</span></div></div><dialog id="analysisDialog" aria-labelledby="analysisTitle"><div class="dialog-title"><h2 id="analysisTitle">Analysis tools</h2><button id="closeAnalysis" type="button">Close</button></div><div class="analysis-content" id="analysis-panel">
         <div class="tabs" role="tablist" aria-label="Analysis tools"><button id="sweepTab" data-tab="sweepPanel" role="tab" aria-controls="sweepPanel" aria-selected="true" type="button">Parameter sweep</button><button id="diagnosticTab" data-tab="diagnosticPanel" role="tab" aria-controls="diagnosticPanel" aria-selected="false" tabindex="-1" type="button">Diagnostics</button><button id="exportTab" data-tab="exportPanel" role="tab" aria-controls="exportPanel" aria-selected="false" tabindex="-1" type="button">Export</button></div>
@@ -156,8 +155,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-run-controls1';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-sweep-status1';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261104-compact-controls1';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261104-compact-controls1';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

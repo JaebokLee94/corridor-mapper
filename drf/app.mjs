@@ -107,16 +107,29 @@ function makeWorker(name, onProgress = () => {}) {
   }); }, stop() { stopped = true; worker.terminate(); for (const p of pending.values()) p.reject(new Error('Cancelled')); pending.clear(); } };
   state.workers.push(handle); return handle;
 }
-function stopReplay() { cancelAnimationFrame(replayFrame); replayFrame = 0; state.replay = false; $('replayButton').textContent = 'Replay'; }
+function stopReplay() {
+  cancelAnimationFrame(replayFrame); replayFrame = 0; state.replay = false;
+  for (const id of ['replayButton', 'completedReplayButton']) if ($(id)) $(id).textContent = 'Replay';
+}
 function controls() {
   const active = ['running', 'paused'].includes(state.mode), sweeping = !!state.sweep, preparing = active && !state.scenario;
+  const completed = state.mode === 'done' && state.valid && state.frames.length > 0;
   $('runButton').disabled = active || sweeping || !!state.connecting; $('pauseButton').disabled = !active || preparing || !!state.pendingCommand;
   $('pauseButton').textContent = state.mode === 'paused' ? 'Resume' : 'Pause';
   $('stepButton').disabled = preparing || state.busy || state.mode === 'running' || sweeping || !!state.connecting;
   $('cancelButton').disabled = !active;
-  const runActions = ['runButton', 'pauseButton', 'stepButton', 'cancelButton'].map($);
+  const completedReplay = $('completedReplayButton');
+  if (completedReplay) {
+    completedReplay.hidden = !completed;
+    completedReplay.disabled = !completed || !!state.connecting;
+    completedReplay.textContent = state.replay ? 'Stop replay' : 'Replay';
+    $('runButton').textContent = completed ? 'Reset & run' : 'Run comparison';
+    $('runButton').title = completed ? 'Clear previous results and run with the current settings' : 'Run comparison';
+    $('runActions').dataset.mode = completed ? 'complete' : active ? 'active' : 'idle';
+  }
+  const runActions = ['runButton', 'pauseButton', 'stepButton', 'cancelButton', 'completedReplayButton'].map($).filter(Boolean);
   const focusedAction = runActions.find(button => button === document.activeElement);
-  for (const button of runActions) button.hidden = button.id === 'runButton' ? active : !active;
+  for (const button of runActions) button.hidden = button === completedReplay ? !completed : button === $('runButton') ? active : !active;
   if (focusedAction?.hidden) runActions.find(button => !button.hidden && !button.disabled)?.focus();
   for (const el of form.elements) el.disabled = active || sweeping;
   for (const el of $('sweepSettings').elements) el.disabled = active || sweeping;
@@ -279,7 +292,7 @@ async function hashField(frame) {
 const inspect = point => {
   clearTimeout(hoverTimer); const generation = ++hoverGeneration;
   const frame = state.frames[state.selected - 1];
-  if (!frame || point.index < 0 || !hoverWorker) { $('inspector').textContent = 'Hover to inspect a grid cell. Scroll to zoom; drag to pan.'; return; }
+  if (!frame || point.index < 0 || !hoverWorker) { $('inspector').textContent = ''; return; }
   const grid = state.grid, ix = point.index % grid.nx, iy = Math.floor(point.index / grid.nx), x = grid.x[ix], y = grid.y[iy];
   hoverTimer = setTimeout(async () => {
     if (generation !== hoverGeneration || !hoverWorker) return;
@@ -313,7 +326,7 @@ function renderSelected() {
   // Keep every result, but defer hidden-tab chart work until visibility returns.
   if (document.hidden) return;
   hoverGeneration++;
-  $('inspector').textContent = 'Hover to inspect a grid cell. Scroll to zoom; drag to pan.';
+  $('inspector').textContent = '';
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
   const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse', 'showObserved'].map(id => [id, $(id).checked]));
   const display={ grid: state.grid, domain: state.scenario?.domain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls: scenario?.walls ?? previewWalls(),cameraBounds:scenario?.cameraBounds ?? previewBounds,
@@ -341,7 +354,7 @@ function renderSelected() {
     node('firstPrecisionValue').title=e ? `First-support errors: ${e.firstSupportErrors} / ${e.firstSupportCount}` : '';
   }
   for (const button of document.querySelectorAll('[data-method]')) button.setAttribute('aria-pressed',String(button.dataset.method===state.method));
-  $('methodNote').textContent=state.method==='compare' ? 'Shared snapshot and axes · zoom and pan are linked. B retains past threshold crossings.' : state.method==='guarded'
+  if ($('methodNote')) $('methodNote').textContent=state.method==='compare' ? 'Shared snapshot and axes · zoom and pan are linked. B retains past threshold crossings.' : state.method==='guarded'
     ? 'PSPT updates curved patches and holds geometrically ambiguous alternatives.'
     : 'B retains fixed fragments that crossed its threshold in a past qualified snapshot; unselected fragments are held.';
   $('qValue').textContent = frame?.Q ?? 0; $('acceptedValue').textContent = frame?.admitted ?? 0; $('rejectedValue').textContent = frame?.rejected ?? 0;
@@ -380,6 +393,7 @@ function replayTick(time) {
   if (!state.replay) return;
   if (['running', 'paused'].includes(state.mode)) { stopReplay(); return; }
   const interval = 250 / Number($('playbackSpeed').value);
+  if (state.replayAt === null) state.replayAt = time;
   if (time - state.replayAt >= interval) {
     state.replayAt = time; state.selected = state.selected >= state.frames.length ? 1 : state.selected + 1;
     $('timeSlider').value = state.selected; renderSelected();
@@ -388,7 +402,18 @@ function replayTick(time) {
 }
 function toggleReplay() {
   if (['running', 'paused'].includes(state.mode) || !state.frames.length) return;
-  if (state.replay) stopReplay(); else { state.followLive = false; state.replay = true; state.replayAt = 0; $('replayButton').textContent = 'Stop replay'; replayFrame = requestAnimationFrame(replayTick); }
+  if (state.replay) stopReplay(); else {
+    state.followLive = false; state.replay = true; state.replayAt = 0;
+    for (const id of ['replayButton', 'completedReplayButton']) if ($(id)) $(id).textContent = 'Stop replay';
+    replayFrame = requestAnimationFrame(replayTick);
+  }
+}
+function replayFromStart() {
+  if (state.mode !== 'done' || !state.valid || !state.frames.length || state.connecting) return;
+  if (state.replay) { stopReplay(); return; }
+  // Replay uses saved frames only. Hold the first snapshot for a full interval.
+  state.selected = 1; $('timeSlider').value = 1;
+  toggleReplay(); state.replayAt = null; renderSelected();
 }
 function resetView() {
   for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
@@ -405,6 +430,7 @@ $('timeSlider').oninput = () => {
   stopReplay(); state.followLive = false; state.selected = Number($('timeSlider').value); hoverGeneration++; renderSelected();
 };
 $('replayButton').onclick = toggleReplay;
+if ($('completedReplayButton')) $('completedReplayButton').onclick = replayFromStart;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) { controls(); renderSelected(); renderSweep(); }
 });
