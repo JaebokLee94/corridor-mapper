@@ -32,6 +32,56 @@ test('shared URLs preserve the exact seed and snapshot count across reloads; onl
   }
 });
 
+test('server page load remains idle for saved completed, active and paused comparisons or sweeps',async()=>{
+  for (const job of [null,...['comparison','sweep'].flatMap(mode=>['done','running','paused','cancelled','failed'].map(status=>({id:'saved-job',mode,status,input:{seed:42},jobs:[{seed:42}]})))]) {
+    const state={mode:'idle',frames:[],sweep:null},notices=[];
+    const context=vm.createContext({state,document:{querySelector:()=>({content:'server'})},
+      connectComputeServer:async()=>({job}),controls(){},notice:message=>notices.push(message),
+      prepare:()=>assert.fail('Page load must not start or restore a comparison'),
+      runSweep:()=>assert.fail('Page load must not start or restore a sweep'),
+      fillSettings:()=>assert.fail('Saved job must not overwrite selected settings on page load'),
+      $:()=>assert.fail('Page load must not open the sweep dialog'),
+    });
+    vm.runInContext(section('if (document.querySelector(\'meta[name="echomap-compute"]\')','// Switching the displayed method'),context);
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(state.mode,'idle');assert.equal(state.frames.length,0);assert.equal(state.sweep,null);
+    assert.equal(state.connecting,false);assert.equal(state.server.job,job);
+    assert.match(notices.at(-1),/^Server ready\. Press /);
+  }
+});
+
+test('explicit Run starts a new calculation after completion and reconnects only to an active comparison',async()=>{
+  for (const status of ['done','cancelled','failed','running','paused']) {
+    const selected={seed:7,snapshots:3},previous={seed:42,snapshots:120};let input=selected,queries=0;
+    const state={server:{},mode:'idle',generation:0,workers:[]},created=[],posted=[];
+    const context=vm.createContext({state,location:{hash:''},controls(){},notice(){},
+      connectComputeServer:async()=>{queries++;return {job:{id:'previous',mode:'comparison',status,input:previous}};},
+      settings:()=>input,fillSettings:value=>{input=value;},cancel:()=>{state.generation++;},
+      createWorker:(name,options)=>{created.push({name,...options});return {postMessage:message=>posted.push(message),terminate(){}};},
+      fail:error=>{throw error;},
+    });
+    vm.runInContext(section('async function requestedServerJob(','function fail('),context);
+    assert.equal(queries,0);assert.deepEqual(created,[]);
+    await context.prepare(false);
+    const active=['running','paused'].includes(status);
+    assert.equal(queries,1);assert.equal(created.length,1);assert.equal(created[0].resumeId,active?'previous':undefined);
+    assert.equal(posted.length,1);assert.equal(posted[0].input,active?previous:selected);
+  }
+});
+
+test('an explicit Run cannot duplicate or cancel a different active server job',async()=>{
+  const state={server:{},mode:'idle'},notices=[];
+  const context=vm.createContext({state,controls(){},notice:message=>notices.push(message),
+    connectComputeServer:async()=>({job:{id:'sweep',mode:'sweep',status:'running'}}),
+    cancel:()=>assert.fail('Do not cancel a background sweep'),
+    createWorker:()=>assert.fail('Do not create a competing comparison'),
+    fail:error=>{throw error;},
+  });
+  vm.runInContext(section('async function requestedServerJob(','function fail('),context);
+  await context.prepare(false);
+  assert.equal(state.mode,'idle');assert.equal(state.connecting,false);assert.match(notices.at(-1),/press Run sweep to reconnect/);
+});
+
 test('full runs and single steps send exactly one start command with the requested settings',async()=>{
   for (const [single,requested] of [[false,60],[true,60],[false,80]]) {
     const input={scene:'layered',seed:0xffffffff,vehicles:10,snapshots:requested,grid:150,band:4,perimeter:'exact'},posted=[],inspections=[];

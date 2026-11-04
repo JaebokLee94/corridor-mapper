@@ -26,12 +26,11 @@ export async function connectComputeServer() {
     try { job = await json(`/api/jobs/${encodeURIComponent(id)}`); }
     catch (error) { if (missing(error)) remember(null); else throw error; }
   }
-  if (!job) {
-    // A page can close before the creation response stores its job ID. The local
-    // service has at most one active job, so recover that computation on reload.
-    const active = (await json('/api/jobs')).jobs.find(item => !terminal.has(item.status));
-    if (active) { job = active; remember(job.id); }
-  }
+  // The sole active job takes precedence over a saved completed job, including
+  // work started in another tab. This only discovers metadata; it never starts
+  // computation or subscribes to results.
+  const active = (await json('/api/jobs')).jobs.find(item => !terminal.has(item.status));
+  if (active) { job = active; remember(job.id); }
   return { ...config, job };
 }
 

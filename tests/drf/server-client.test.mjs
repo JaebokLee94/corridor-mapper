@@ -248,6 +248,16 @@ test('a temporarily failed reconnect preserves the saved job; a create-before-re
   const connected = await connectComputeServer(); assert.equal(connected.job.status, 'running'); assert.equal(f.storage.get(savedKey), f.job.id);
 });
 
+test('metadata discovery prefers an active job over a saved completed job without starting computation or a stream', async t => {
+  const f = fixture(t); f.job.status = 'done'; f.storage.set(savedKey, f.job.id);
+  const active = { ...f.job, id: 'job-2', status: 'running', next: 4, total: 120 };
+  f.route = call => call.url === '/api/jobs' ? jsonResponse({ jobs: [f.job, active] }) : undefined;
+  const connected = await connectComputeServer();
+  assert.deepEqual(connected.job, active); assert.equal(f.storage.get(savedKey), active.id);
+  assert.ok(f.calls.every(call => !call.options.method || call.options.method === 'GET'));
+  assert.equal(f.streams.length, 0); assert.equal(f.commands().length, 0);
+});
+
 test('sweep completion sorts independently completed jobs into input order and retains all records', async t => {
   const f = fixture(t), progress = [], jobs = [{ seed: 1 }, { seed: 2 }, { seed: 3 }];
   [

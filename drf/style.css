@@ -66,8 +66,8 @@ math { font-family:var(--font-math); }
 .run-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
 .run-button { grid-column:1/-1; min-height:42px; }
 .run-actions button:not(.run-button) { padding:7px 4px; }
-.status { margin-top:12px; min-height:3em; color:var(--color-ink-muted); overflow-wrap:anywhere; }
-progress { display:block; width:100%; height:4px; margin-top:10px; border:0; background:var(--color-surface-2); appearance:none; border-radius:3px; overflow:hidden; }
+.status { margin-top:12px; min-height:0; color:var(--color-ink-muted); overflow-wrap:anywhere; }
+progress { display:block; width:100%; height:4px; margin-top:6px; border:0; background:var(--color-surface-2); appearance:none; border-radius:3px; overflow:hidden; }
 progress::-webkit-progress-bar { background:var(--color-surface-2); }
 progress::-webkit-progress-value { background:var(--color-accent); }
 progress::-moz-progress-bar { background:var(--color-accent); }
@@ -325,7 +325,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .run-section { padding:12px 16px; }
   .sidebar-title { margin-bottom:6px; }
   .run-button { min-height:36px; }
-  .status { margin-top:8px; min-height:2.8em; }
+  .status { margin-top:8px; min-height:0; }
   .sidebar-section { padding:10px 16px; }
   .sidebar-section>legend { margin-bottom:8px; }
   .prop-grid { gap:8px 10px; }

@@ -92,7 +92,26 @@ function cancel(clear = false) {
   }
   controls(); renderSelected();
 }
+async function requestedServerJob(mode) {
+  if (!state.server) return null;
+  const config = await connectComputeServer(); state.server = config;
+  const job = config.job;
+  if (!job || ['done', 'cancelled', 'failed'].includes(job.status)) return null;
+  if (job.mode !== mode) throw new Error(job.mode === 'sweep'
+    ? 'A server sweep is already active. Open Analysis tools and press Run sweep to reconnect.'
+    : 'A server comparison is already active. Press Run comparison to reconnect.');
+  return job;
+}
 async function prepare(single = false, resumeId) {
+  if (state.connecting) return;
+  if (state.server && !resumeId) {
+    state.connecting = true; controls();
+    try {
+      const job = await requestedServerJob('comparison');
+      if (job) { resumeId = job.id; fillSettings(job.input); }
+    } catch (error) { notice(error.message); return; }
+    finally { state.connecting = false; controls(); }
+  }
   try {
     const input = settings();
     cancel(true); state.pendingInput=input; state.mode = 'running'; state.busy = true;
@@ -157,7 +176,7 @@ async function receiveRunMessage(data, generation) {
         const hash = await hashField(state.frames.at(-1));
         if (generation !== state.generation) return;
         $('mapCanvas').dataset.fieldHash = hash;
-        notice(`Complete · ${state.frames.length} snapshots · both methods evaluated`);
+        notice(`Complete · ${state.frames.length} snapshots`);
         renderSelected();
       }
     }
@@ -357,6 +376,12 @@ async function runSweep(jobs, resumeId) {
   if (state.connecting) { $('sweepStatus').textContent = 'The compute server is not connected. Reload after restarting the server.'; return; }
   const generation = state.generation; let handle;
   try {
+    if (state.server && !resumeId) {
+      state.connecting = true; controls();
+      const job = await requestedServerJob('sweep');
+      if (job) { resumeId = job.id; jobs = job.jobs; fillSettings(jobs[0]); }
+      state.connecting = false;
+    }
     const base = jobs[0] ?? settings();
     state.sweepRuns = []; $('sweepButton').disabled = true; $('sweepCancel').disabled = false;
     $('sweepStatus').textContent = `0 / ${jobs.length} · ${base.snapshots} snapshots · Both methods use the fixed tuning-200 thresholds.`;
@@ -379,7 +404,7 @@ async function runSweep(jobs, resumeId) {
     $('sweepStatus').textContent = `${result.cancelled ? 'Cancelled' : 'Complete'} · ${result.results.length} / ${jobs.length} · ${base.snapshots} snapshots · paired methods · tuning-200 thresholds`;
     renderSweep();
   } catch (error) { if (generation === state.generation) $('sweepStatus').textContent = `Sweep stopped: ${error.message}`; }
-  finally { if (state.sweep === handle) { state.sweep = null; controls(); } }
+  finally { state.connecting = false; if (state.sweep === handle) state.sweep = null; controls(); }
 }
 $('sweepButton').onclick = () => {
   try {
@@ -432,14 +457,11 @@ if (matchMedia('(max-width: 760px)').matches) $('settingsDetails').open=false;
 controls(); renderSelected();
 if (document.querySelector('meta[name="echomap-compute"]')?.content === 'server') {
   state.connecting = true; controls(); notice('Connecting to the compute server.');
-  connectComputeServer().then(async config => {
+  connectComputeServer().then(config => {
     state.server = config; state.connecting = false; controls();
-    if (config.job?.mode === 'sweep' && config.job.jobs?.length) {
-      fillSettings(config.job.jobs[0]); $('analysisDialog').showModal(); await runSweep(config.job.jobs, config.job.id);
-    } else if (config.job?.id && config.job.mode !== 'sweep') {
-      if (config.job.input) fillSettings(config.job.input);
-      await prepare(false, config.job.id);
-    } else notice('Server ready. Computation continues when this tab is hidden or closed.');
+    const active = config.job && !['done', 'cancelled', 'failed'].includes(config.job.status);
+    notice(active ? `Server ready. Press ${config.job.mode === 'sweep' ? 'Run sweep in Analysis tools' : 'Run comparison'} to reconnect to the previous job.`
+      : 'Server ready. Press Run comparison to start.');
   }).catch(error => {
     state.connecting = true; controls(); notice(`Compute server unavailable: ${error.message}. Reload after restarting the server.`);
   });
