@@ -35,12 +35,38 @@ test('shared URLs preserve the exact seed and snapshot count across reloads; onl
     const value=filled.at(-1),restored=JSON.parse(decodeURIComponent(location.hash.slice(4)));
     assert.deepEqual(restored,value);
     assert.equal(calls,hash ? 0 : 1);
-    assert.equal(value.seed,hash.includes('invalid') ? DEFAULT_INPUT.seed : hash ? initial.seed : 1234567);
+    assert.equal(value.seed,hash.includes('invalid') ? DEFAULT_INPUT.seed : hash ? initial.seed : 8);
     assert.equal(value.snapshots,hash && !hash.includes('invalid') ? 80 : DEFAULT_INPUT.snapshots);
     assert.equal(value.vehicles,hash && !hash.includes('invalid') ? 7 : DEFAULT_INPUT.vehicles);
     assert.equal(notices.length,hash.includes('invalid') ? 1 : 0);
     vm.runInNewContext(section('let initialInput = DEFAULT_INPUT;','(globalThis.__drfOffline ?'),{...context,location});
     assert.deepEqual(filled.at(-1),value,'Reloading the resulting URL preserves all settings');
+  }
+});
+
+test('bare visits select every bank seed uniformly while explicit seeds and reloads remain stable',()=>{
+  const startup=section('let initialInput = DEFAULT_INPUT;','(globalThis.__drfOffline ?');
+  for(const draws of [...Array.from({length:10},(_,i)=>[i]),[4294967289],[4294967295,4294967290,0]]) {
+    const location={hash:''},filled=[];let calls=0;
+    const context={location,DEFAULT_INPUT,normalizeInput,matchMedia:()=>({matches:false}),
+      crypto:{getRandomValues:array=>{assert.ok(calls<draws.length,'RNG rejection terminates');array[0]=draws[calls++];return array;}},
+      fillSettings:input=>filled.push({...input}),notice:message=>assert.fail(message),
+      history:{replaceState:(_,__,url)=>{location.hash=url;}},
+      prepare:()=>assert.fail('Arrival must not start a run'),runSweep:()=>assert.fail('Arrival must not start a sweep'),
+      createWorker:()=>assert.fail('Arrival must not create a worker')};
+    vm.runInNewContext(startup,context);
+    const value=filled.at(-1);
+    assert.equal(value.seed,1+draws.at(-1)%10);assert.equal(calls,draws.length);
+    assert.ok(Number.isInteger(value.seed)&&value.seed>=1&&value.seed<=10);
+    vm.runInNewContext(startup,{...context});
+    assert.deepEqual(filled.at(-1),value);assert.equal(calls,draws.length,'Reload preserves the chosen seed');
+  }
+  for(const seed of [0,1,10,11,0xffffffff]) {
+    const input={...DEFAULT_INPUT,seed},filled=[];
+    vm.runInNewContext(startup,{location:{hash:`#v1=${encodeURIComponent(JSON.stringify(input))}`},DEFAULT_INPUT,normalizeInput,
+      matchMedia:()=>({matches:false}),crypto:{getRandomValues:()=>assert.fail('Explicit seeds must not be replaced')},
+      fillSettings:value=>filled.push({...value}),notice:message=>assert.fail(message),history:{replaceState(){}}});
+    assert.equal(filled.at(-1).seed,seed);
   }
 });
 

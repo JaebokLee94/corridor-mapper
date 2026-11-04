@@ -621,8 +621,13 @@ let initialInput = DEFAULT_INPUT;
 try {
   const hasSharedInput=location.hash.startsWith('#v1='),raw=hasSharedInput ? JSON.parse(decodeURIComponent(location.hash.slice(4))) : DEFAULT_INPUT;
   initialInput=normalizeInput({...raw,scene:'layered'});
-  // A shared seed is a reproducibility contract. Randomise only an unseeded visit.
-  if (!hasSharedInput) initialInput={...initialInput,seed:crypto.getRandomValues(new Uint32Array(1))[0]};
+  // Keep shared experiments reproducible. Bare visits use the precomputed bank.
+  if (!hasSharedInput) {
+    const draw=new Uint32Array(1);
+    // Reject the six surplus uint32 values so each of the ten seeds is equally likely.
+    do { crypto.getRandomValues(draw); } while (draw[0]>=4294967290);
+    initialInput={...initialInput,seed:1+draw[0]%10};
+  }
 } catch (error) { notice(`Could not restore URL settings: ${error.message}`); }
 fillSettings(initialInput);
 history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialInput))}`);
