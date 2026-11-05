@@ -26,10 +26,10 @@ function gradient(field, nx, ny, dx, dy) {
  * for candidate extraction or beta. Ridges O(grid + candidates²), O(grid) memory.
  */
 export class DRF {
-  constructor({ nx = 100, ny = 100 } = {}) {
+  constructor({ nx = 100, ny = 100, updateCache = null } = {}) {
     if (nx < 2 || ny < 2) throw new RangeError("ridge grid needs at least two cells per axis");
     this.grid = createGrid(nx, ny, [0, 80, -20, 50]);
-    this.field = createField(this.grid, { band: 4, perimeter: "exact" });
+    this.field = createField(this.grid, { band: 4, perimeter: "exact", updateCache });
     const { x, y, dx, dy } = this.grid;
     Object.assign(this, { nx, ny, x, y, dx, dy, D: this.field.D, A: this.field.A });
   }

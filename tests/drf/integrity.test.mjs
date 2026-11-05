@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
+import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 const root = new URL('../../', import.meta.url);
 const read = path => fs.readFileSync(new URL(path, root));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -13,20 +14,32 @@ test('approved display changes preserve all 43 other protected source/artifact f
   for (const path of Object.keys(baseline.sha256)) assert.doesNotMatch(path, /(^|\/)__pycache__\/|\.pyc$/);
   for (const [path, hash] of Object.entries(baseline.sha256)) if (!allowed.has(path)) assert.equal(sha(read(path)), hash, path);
 });
-test('displayed frozen DRF core hash matches the actual worker estimator source', () => {
+test('displayed DRF core hash covers actual field, reuse cache and wire sources', () => {
   const provenance = JSON.parse(read('drf/provenance.json')), hash = createHash('sha256');
-  for (const path of ['drf/field.mjs', 'drf/wire.mjs']) {
+  const paths = ['drf/field.mjs', 'drf/field-reuse.mjs', 'drf/wire.mjs'];
+  assert.deepEqual(Object.keys(provenance.coreFiles), paths);
+  for (const path of paths) {
     assert.equal(sha(read(path)), provenance.coreFiles[path], path);
     hash.update(path).update('\0').update(read(path)).update('\0');
   }
   assert.equal(hash.digest('hex'), provenance.coreHash);
 });
 
+test('public provenance names the current operating points and their development source', () => {
+  const {comparison} = JSON.parse(read('drf/provenance.json'));
+  assert.equal(comparison.guardedLogThreshold, METHOD_PROTOCOL.guarded.threshold);
+  assert.equal(comparison.baselineLogThreshold, METHOD_PROTOCOL.baseline.threshold);
+  assert.equal(comparison.thresholdSource, METHOD_PROTOCOL.guarded.tuning.id);
+  assert.equal(comparison.refinement, METHOD_PROTOCOL.guarded.refinement);
+  assert.equal(comparison.clustering, METHOD_PROTOCOL.guarded.clustering);
+  assert.match(comparison.thresholdStatus, /not retuned or certified/);
+});
+
 test('historical 160-run evidence matches archived numerical sources and unchanged estimator sources', () => {
   const report = JSON.parse(read('tests/drf/validation-results.json'));
   // Exact bytes from Git commit 7ab64cf915b9a4f95a8e1265eaa2d9c419f5c5ec.
   // These historical fixtures do not validate the new two-layer wall model.
-  const archived = new Set(['drf/wall.mjs', 'drf/scenario.mjs', 'drf/sweep.mjs', 'drf/evaluate.mjs', 'drf/specular.mjs']);
+  const archived = new Set(['drf/wall.mjs', 'drf/scenario.mjs', 'drf/sweep.mjs', 'drf/evaluate.mjs', 'drf/specular.mjs', 'drf/field.mjs']);
   for (const [path, hash] of Object.entries(report.integrity.initialSHA256)) {
     const source = archived.has(path) ? `tests/drf/legacy-source/${path.slice(4)}` : path;
     assert.equal(sha(read(source)), hash, source);

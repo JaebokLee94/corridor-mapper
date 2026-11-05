@@ -60,6 +60,50 @@ export function eigen2(a, b, c) {
 const add = (a, b, scale = 1) => a.map((value, i) => value + scale * b[i]);
 const P0_DEFAULT = [[0.25, 0, 0], [0, (Math.PI / 12) ** 2, 0], [0, 0, 0.15 ** 2]];
 
+// Private to each surface: no fitted state or evidence is shared across candidates.
+// For an unchanged surface, all vehicle pairs use the same sampled curve and a
+// vehicle's same range/unit direction. Keep their float64 operation order, then
+// reuse those intermediate values. Large custom grids retain the uncached path.
+const predictionCaches = new WeakMap(), MAX_CACHED_GRID = 257, MAX_CACHED_POSITIONS = 24;
+function predictionCache(surface, ext, nuGrid) {
+  if (nuGrid > MAX_CACHED_GRID || Object.getPrototypeOf(surface) !== Surfel.prototype
+      || Object.hasOwn(surface, "frame") || Object.hasOwn(surface, "center")) return null;
+  let cache = predictionCaches.get(surface);
+  if (cache && cache.ext === ext && cache.nuGrid === nuGrid
+      && Object.is(cache.sg, surface.sg) && Object.is(cache.ell, surface.ell)
+      && Object.is(cache.c0[0], surface.c0[0]) && Object.is(cache.c0[1], surface.c0[1])
+      && Object.is(cache.nu0[0], surface.nu0[0]) && Object.is(cache.nu0[1], surface.nu0[1])
+      && Object.is(cache.x[0], surface.x[0]) && Object.is(cache.x[1], surface.x[1]) && Object.is(cache.x[2], surface.x[2])) return cache;
+  const frame = surface.frame(), [center, tangent, normal, curvature] = frame,
+    lo = -ext * surface.ell, spacing = 2 * ext * surface.ell / (nuGrid - 1), samples = new Float64Array(5 * nuGrid);
+  for (let i = 0; i < nuGrid; i++) {
+    const at = lo + i * spacing, bend = 0.5 * curvature * at * at, slope = curvature * at, j = 5 * i;
+    samples[j] = at;
+    samples[j + 1] = (center[0] + at * tangent[0]) + bend * normal[0];
+    samples[j + 2] = (center[1] + at * tangent[1]) + bend * normal[1];
+    samples[j + 3] = tangent[0] + slope * normal[0];
+    samples[j + 4] = tangent[1] + slope * normal[1];
+  }
+  cache = { ext, nuGrid, sg: surface.sg, ell: surface.ell, c0: surface.c0.slice(), nu0: surface.nu0.slice(),
+    x: surface.x.slice(), frame, samples, positions: [] };
+  predictionCaches.set(surface, cache);
+  return cache;
+}
+
+function sampledPosition(cache, point) {
+  for (const entry of cache.positions)
+    if (Object.is(entry.x, point[0]) && Object.is(entry.y, point[1])) return entry.values;
+  const values = new Float64Array(3 * cache.nuGrid);
+  for (let i = 0; i < cache.nuGrid; i++) {
+    const dx = cache.samples[5 * i + 1] + -1 * point[0], dy = cache.samples[5 * i + 2] + -1 * point[1],
+      range = Math.hypot(dx, dy), j = 3 * i;
+    values[j] = range; values[j + 1] = dx / range; values[j + 2] = dy / range;
+  }
+  if (cache.positions.length === MAX_CACHED_POSITIONS) cache.positions.shift();
+  cache.positions.push({ x: point[0], y: point[1], values });
+  return values;
+}
+
 export class Surfel {
   constructor(c0, phi, nuRef, ell = 1, P0 = P0_DEFAULT) {
     if (c0.length !== 2 || nuRef.length !== 2 || ![...c0, ...nuRef, phi, ell].every(Number.isFinite) || ell <= 0)
@@ -84,30 +128,43 @@ export class Surfel {
   }
 
   /** Python-compatible nearest sampled stationary root, with linear interpolation.
-   * Returns [rho*,u*,d(rho*)/d(state),e_i,e_j] or null. O(nuGrid), O(1) scratch.
+   * Returns [rho*,u*,d(rho*)/d(state),e_i,e_j] or null. O(nuGrid) per pair;
+   * O(nuGrid * 24) bounded per-surface cache for grids <=257, O(1) scratch otherwise.
    * This preserves the prototype's single-root approximation; it is not all-root certification.
    */
   predict(pi, pj, { ext = 2, nuGrid = 41 } = {}) {
     if (pi.length !== 2 || pj.length !== 2 || ![...pi, ...pj, ext].every(Number.isFinite)
         || ext <= 0 || !Number.isInteger(nuGrid) || nuGrid < 2) throw new RangeError("invalid surface prediction input");
-    const [center, tangent, normal, curvature] = this.frame();
+    const cache = predictionCache(this, ext, nuGrid),
+      [center, tangent, normal, curvature] = cache ? cache.frame : this.frame(),
+      positionsI = cache ? sampledPosition(cache, pi) : null, positionsJ = cache ? sampledPosition(cache, pj) : null;
     const lo = -ext * this.ell, spacing = 2 * ext * this.ell / (nuGrid - 1);
     let us = null, previousU, previousResidual;
     for (let i = 0; i < nuGrid; i++) {
-      const at = lo + i * spacing, bend = 0.5 * curvature * at * at,
-        sx = (center[0] + at * tangent[0]) + bend * normal[0],
-        sy = (center[1] + at * tangent[1]) + bend * normal[1],
-        dix = sx + -1 * pi[0], diy = sy + -1 * pi[1],
-        djx = sx + -1 * pj[0], djy = sy + -1 * pj[1],
-        ri = Math.hypot(dix, diy), rj = Math.hypot(djx, djy);
+      const at = cache ? cache.samples[5 * i] : lo + i * spacing;
       let residual = NaN;
-      if (ri && rj) {
-        // Preserve the original dot/add operation order exactly, including its
-        // initial +0. Scalar temporaries remove hundreds of tiny arrays per call.
-        const slope = curvature * at;
-        residual = 0;
-        residual += (tangent[0] + slope * normal[0]) * (dix / ri + djx / rj);
-        residual += (tangent[1] + slope * normal[1]) * (diy / ri + djy / rj);
+      if (cache) {
+        const j = 3 * i;
+        if (positionsI[j] && positionsJ[j]) {
+          residual = 0;
+          residual += cache.samples[5 * i + 3] * (positionsI[j + 1] + positionsJ[j + 1]);
+          residual += cache.samples[5 * i + 4] * (positionsI[j + 2] + positionsJ[j + 2]);
+        }
+      } else {
+        const bend = 0.5 * curvature * at * at,
+          sx = (center[0] + at * tangent[0]) + bend * normal[0],
+          sy = (center[1] + at * tangent[1]) + bend * normal[1],
+          dix = sx + -1 * pi[0], diy = sy + -1 * pi[1],
+          djx = sx + -1 * pj[0], djy = sy + -1 * pj[1],
+          ri = Math.hypot(dix, diy), rj = Math.hypot(djx, djy);
+        if (ri && rj) {
+          // Preserve the original dot/add operation order exactly, including its
+          // initial +0. Scalar temporaries remove hundreds of tiny arrays per call.
+          const slope = curvature * at;
+          residual = 0;
+          residual += (tangent[0] + slope * normal[0]) * (dix / ri + djx / rj);
+          residual += (tangent[1] + slope * normal[1]) * (diy / ri + djy / rj);
+        }
       }
       if (i && previousResidual * residual <= 0) {
         const difference = residual - previousResidual;

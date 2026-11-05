@@ -1,4 +1,5 @@
 import { makeWire } from "./wire.mjs";
+import { validateFieldUpdateCache, findFieldIncrement, saveFieldIncrement } from "./field-reuse.mjs";
 
 const SQRT_2PI = Math.sqrt(2 * Math.PI), FOCAL_EPS = 1e-9;
 
@@ -92,10 +93,13 @@ function lowerBound(paths, value) {
  * O(C[P log P+G log P]+B) time, O(G+P) scratch; D/A accumulate float64.
  * F41 A=f(x)Σ(1/P_q); sigmaD must be equal within each configuration.
  */
-export function createField(grid, { band = 4, perimeter = "exact" } = {}) {
+export function createField(grid, { band = 4, perimeter = "exact", updateCache = null } = {}) {
+  validateFieldUpdateCache(updateCache);
   if (![3, 4, 5, "full"].includes(band) || !["exact", "ramanujan"].includes(perimeter))
     throw new RangeError("numerical settings require band 3/4/5/full and exact/ramanujan perimeter");
   const { nx, ny, x, y } = grid, count = nx * ny;
+  // Match the arrays captured by this field, even if the caller replaces grid.x/y.
+  const calculationGrid = { nx, ny, x, y };
   if (!Number.isSafeInteger(nx) || !Number.isSafeInteger(ny) || nx < 1 || ny < 1
       || x?.length !== nx || y?.length !== ny || !Array.from(x).every(Number.isFinite) || !Array.from(y).every(Number.isFinite))
     throw new RangeError("invalid grid coordinate arrays");
@@ -130,7 +134,12 @@ export function createField(grid, { band = 4, perimeter = "exact" } = {}) {
       if (wire.t !== t + 1) throw new RangeError("snapshots must be processed once in causal t=1,2,... order");
       deltaD.fill(0); deltaA.fill(0);
       let nAdmitted = 0, nRejected = 0;
-      for (const config of wire.configs) {
+      const reused = findFieldIncrement(updateCache, wire, calculationGrid, band, perimeter);
+      if (reused) {
+        deltaD.set(reused.deltaD); deltaA.set(reused.deltaA);
+        nAdmitted = reused.admitted; nRejected = reused.rejected;
+      }
+      for (const config of reused ? [] : wire.configs) {
         if (!config.paths.length) continue;
         const sigmaD = config.paths[0].sigmaD;
         if (config.paths.some((p) => p.sigmaD !== sigmaD)) throw new RangeError("configuration paths must have identical sigmaD for factorization");
@@ -162,6 +171,7 @@ export function createField(grid, { band = 4, perimeter = "exact" } = {}) {
       }
       for (let g = 0; g < count; g++) { D[g] += deltaD[g]; A[g] += deltaA[g]; }
       t = wire.t; Q += nAdmitted; admitted += nAdmitted; rejected += nRejected;
+      if (!reused) saveFieldIncrement(updateCache, wire, calculationGrid, band, perimeter, deltaD, deltaA, nAdmitted, nRejected);
       const frame = readout();
       return { ...frame, ms: performance.now() - started };
     },
