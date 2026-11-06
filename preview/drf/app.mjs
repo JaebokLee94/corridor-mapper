@@ -14,14 +14,14 @@ const state = { mode: 'idle', protocol: null, scenario: null, grid: null, frames
 let runWorker, evalWorker, hoverWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
 function renderThresholdProtocol(protocol = METHOD_PROTOCOL) {
   const { guarded, baseline } = protocol;
-  $('thresholdSummary').textContent = `Tuning ${guarded.tuning.scenes} · PSPT ${guarded.threshold.toFixed(4)} · B ${baseline.threshold.toFixed(4)}`;
+  $('thresholdSummary').textContent = `Tuning ${guarded.tuning.scenes} · WM-P ${guarded.threshold.toFixed(4)} · WM-F ${baseline.threshold.toFixed(4)}`;
   const refinement = guarded.refinement === 'shared-pose'
     ? 'Candidate refinement accounts for shared vehicle position error.'
     : guarded.refinement === 'independent-pairs' ? 'Candidate refinement treats pair errors independently.' : 'Candidate refinement is not specified in this run metadata.';
   const clustering = guarded.clustering === 'bounded-span'
     ? 'Each echo cluster is limited to the existing distance gate.'
     : guarded.clustering === 'single-link' ? 'Echo clusters use single-link distance grouping.' : 'Echo clustering is not specified in this run metadata.';
-  $('thresholdDetails').textContent = `Fixed tuning log-score thresholds: PSPT ${guarded.threshold}; B ${baseline.threshold}. ${refinement} ${clustering} ${guarded.thresholdStatus ?? 'These development thresholds are not certified.'}`;
+  $('thresholdDetails').textContent = `Fixed tuning log-score thresholds: WM-P ${guarded.threshold}; WM-F ${baseline.threshold}. ${refinement} ${clustering} ${guarded.thresholdStatus ?? 'These development thresholds are not certified.'}`;
 }
 renderThresholdProtocol();
 const fmt = (v, places = 3) => typeof v !== 'number' ? '—' : Number.isFinite(v) ? v.toFixed(places) : v === Infinity ? 'Failed (∞)' : v === -Infinity ? 'Failed (−∞)' : 'Failed (NaN)';
@@ -268,7 +268,7 @@ function renderSelected() {
     history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
   $('mapPair').dataset.mode=state.method;
   $('baselinePane').hidden=state.method!=='compare';
-  $('primaryMapName').textContent=state.method==='baseline'?'Fixed-fragment B':'Guarded PSPT';
+  $('primaryMapName').textContent=state.method==='baseline'?'WM-F':'WM-P';
   map.set({...display,mode:'geometry',xRange:[-10,90]});
   baselineMap.set({...display,candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,90]});
   const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
@@ -288,9 +288,9 @@ function renderSelected() {
     node('firstPrecisionValue').title=e ? `First-support errors: ${e.firstSupportErrors} / ${e.firstSupportCount}` : '';
   }
   for (const button of document.querySelectorAll('[data-method]')) button.setAttribute('aria-pressed',String(button.dataset.method===state.method));
-  $('methodNote').textContent=state.method==='compare' ? 'Shared snapshot and axes · zoom and pan are linked. B retains past threshold crossings.' : state.method==='guarded'
-    ? 'PSPT updates curved patches and holds geometrically ambiguous alternatives.'
-    : 'B retains fixed fragments that crossed its threshold in a past qualified snapshot; unselected fragments are held.';
+  $('methodNote').textContent=state.method==='compare' ? 'Shared snapshot and axes · zoom and pan are linked. WM-F retains past threshold crossings.' : state.method==='guarded'
+    ? 'WM-P updates curved patches and holds geometrically ambiguous alternatives.'
+    : 'WM-F retains fixed fragments that crossed its threshold in a past qualified snapshot; unselected fragments are held.';
   $('qValue').textContent = frame?.Q ?? 0; $('acceptedValue').textContent = frame?.admitted ?? 0; $('rejectedValue').textContent = frame?.rejected ?? 0;
   const diag = evaluation?.diagnostics;
   $('pathValue').textContent = diag ? `Specular ${diag.specularCount} / diffuse ${diag.diffuseCount}` : '—';

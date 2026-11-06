@@ -14,7 +14,7 @@ A research workbench for seeing how measurements become surface hypotheses, and 
 
 </div>
 
-![EchoMap: Guarded PSPT and Fixed-fragment B on the same measurement sequence](assets/echomap-comparison.png)
+![EchoMap: WM-P and WM-F on the same measurement sequence](assets/echomap-comparison.png)
 
 *One synthetic scene with independently shaped walls, two causal estimators. The screenshot uses seed 549028359, 10 vehicles, 120 snapshots, and position/range SD 0.1 m. It illustrates the interface, not aggregate performance. [Replay these settings](https://jaeboklee94.github.io/corridor-mapper/drf.html#v1=%7B%22vehicles%22%3A10%2C%22snapshots%22%3A120%2C%22sigmaP%22%3A0.1%2C%22sigmaD%22%3A0.1%2C%22seed%22%3A549028359%7D).*
 
@@ -27,7 +27,7 @@ The browser generates curved walls, vehicle motion, and specular/diffuse returns
 | Capability | What you can inspect |
 |:--|:--|
 | Compare two methods | Linked maps, common axes and snapshot, separate decisions and metrics |
-| Inspect ambiguity | Supported, held and rejected hypotheses; B has no rejection decision |
+| Inspect ambiguity | Supported, held and rejected hypotheses; WM-F has no rejection decision |
 | Replay the measurement history | Advance one snapshot, pause, replay, or inspect any completed prefix |
 | Control the scene | 2–20 vehicles, 1–120 snapshots, one or two walls, position/range noise and scattering |
 | Run paired sweeps | Both methods, fixed thresholds, current duration; mean and sample SD across seeds |
@@ -43,7 +43,7 @@ $$d = \lVert s-p_i\rVert_2 + \lVert s-p_j\rVert_2.$$
 
 A single range defines an ellipse. Multiple measurements accumulate a **Direct Residual Field (DRF)**, from which each estimator proposes local surface candidates. A bright field peak is a proposal, not wall confirmation.
 
-| | Guarded PSPT | Fixed-fragment B |
+| | WM-P | WM-F |
 |:--|:--|:--|
 | Representation | Local quadratic patches with mirror alternatives | Fixed 2 m straight fragments |
 | Evidence | Four hypotheses: neither, original, mirror, both | Gaussian range evidence with competition between fragments |
@@ -52,7 +52,7 @@ A single range defines an ellipse. Multiple measurements accumulate a **Direct R
 | Fixed tuning threshold | **6.650397183049193** | **29.108623616301394** |
 | Decisions | Supported / held / rejected | Supported / unselected |
 
-PSPT means *Paired Surfel Predictive Test*. The two score scales are different and are not calibrated probabilities. The methods share measurements and a 100 × 100 candidate grid, but their models, state sizes and computational costs differ. Changing the display-field grid does not change their candidate grids.
+WM means *wall mapping*. WM-P tracks mirror pairs. WM-F scores fixed straight segments. Both are in-house estimators. The two score scales are different and are not calibrated probabilities. The methods share measurements and a 100 × 100 candidate grid, but their models, state sizes and computational costs differ. Changing the display-field grid does not change their candidate grids.
 
 ![Measured positions, covariances and ranges feed both estimators; ground truth enters post-hoc evaluation only](assets/echomap-method-flow.svg)
 
@@ -62,13 +62,13 @@ The inference wire contains snapshot indices, measured 2D positions, reported po
 
 The current operating points come from **exploratory tuning on 200 synthetic scenes**, not an independent test. They maximise observed-wall recall subject to empirical mean grouped-fragment FP ≤ 1% in that tuning set.
 
-| Tuning-only result | Guarded PSPT | Fixed-fragment B |
+| Tuning-only result | WM-P | WM-F |
 |:--|--:|--:|
 | Mean grouped-fragment FP | 0.992% | 0.792% |
 | Mean observed-wall recall | 58.70% | 2.57% |
 | Scenes with an empty estimate | 0% | 43.5% |
 
-These are archived Python tuning aggregates, **not a fresh benchmark of the current browser release**. They used 3 vehicles, position SD 0 m, range SD 0.1 m, 120 snapshots and the earlier trajectory. Neither method simultaneously met the empirical FP ≤ 1% and recall ≥ 60% targets; neither has an LTT-certified error bound. B's low coverage at this threshold is part of the result.
+These are archived Python tuning aggregates, **not a fresh benchmark of the current browser release**. They used 3 vehicles, position SD 0 m, range SD 0.1 m, 120 snapshots and the earlier trajectory. Neither method simultaneously met the empirical FP ≤ 1% and recall ≥ 60% targets; neither has an LTT-certified error bound. WM-F's low coverage at this threshold is part of the result.
 
 The original 54-scene set was initially used for evaluation and later reused for development. Its old results must not be advertised as held-out evidence for the current method. It used 3 vehicles and position SD 0.1 m. The current unshared defaults use 10 vehicles, so the fleet size differs; the 200-scene tuning distribution and current generator settings also differ.
 
@@ -144,7 +144,7 @@ Use a normalized input JSON and identical inputs, machine and runtime for before
 
 This is a **synthetic, measurement-level simulator**, not an RF waveform or hardware validation platform. The reported noise SDs match those used to generate observations. Controlled noise/model-mismatch experiments are not implemented; curved walls, finite patches and scattering can still differ from the estimators' assumptions.
 
-Mirror ambiguity, insufficient noncollinear geometry and noisy pose information can leave candidates unresolved or produce false support. Two vehicles cannot pass PSPT's instantaneous noncollinearity guard. A high final precision can coexist with poor coverage, empty estimates or earlier false decisions. Current experiments provide no claim of robustness to unspecified mismatch, real cave performance or complete wall recovery.
+Mirror ambiguity, insufficient noncollinear geometry and noisy pose information can leave candidates unresolved or produce false support. Two vehicles cannot pass WM-P's instantaneous noncollinearity guard. A high final precision can coexist with poor coverage, empty estimates or earlier false decisions. Current experiments provide no claim of robustness to unspecified mismatch, real cave performance or complete wall recovery.
 
 ## Source and evidence map
 

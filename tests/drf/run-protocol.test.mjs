@@ -72,8 +72,8 @@ for(const filename of targets) {
     assert.doesNotMatch(elements.thresholdDetails.textContent,/accounts for shared vehicle position error|Each echo cluster is limited/);
     const current=structuredClone(METHOD_PROTOCOL);current.guarded.threshold=2.345;
     await receive({type:'prepared',requestId:7,scenario:scenario(),grid:{nx:1,ny:1},protocol:current},7);
-    assert.match(elements.thresholdSummary.textContent,/PSPT 2.3450/);
-    assert.match(elements.thresholdDetails.textContent,/PSPT 2.345;/);
+    assert.match(elements.thresholdSummary.textContent,/WM-P 2.3450/);
+    assert.match(elements.thresholdDetails.textContent,/WM-P 2.345;/);
     assert.match(elements.thresholdDetails.textContent,/accounts for shared vehicle position error/);
     assert.match(elements.thresholdDetails.textContent,/Each echo cluster is limited/);
     assert.match(elements.thresholdDetails.textContent,/not retuned or certified/);

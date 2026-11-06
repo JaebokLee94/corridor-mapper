@@ -456,7 +456,7 @@ export function drawSweep(canvas,aggregates,reference=[],metric='medianError',re
  */
 export async function sweepPng(aggregates) {
   if (!Array.isArray(aggregates)) throw new TypeError('Sweep aggregates must be an array.');
-  const methods=[['guarded','Guarded PSPT'],['baseline','Fixed-fragment B']];
+  const methods=[['guarded','WM-P'],['baseline','WM-F']];
   const rows=aggregates.filter(row=>methods.some(([method])=>row.method===method));
   if (!rows.length) throw new Error('Run a parameter sweep before exporting its charts.');
   if (rows.some(row=>!Number.isFinite(row.sigmaD) || !Number.isFinite(row.roughness) || !row.recall))

@@ -46,7 +46,7 @@ test('sweep PNG renders both actual aggregate methods at 300 dpi independently o
     assert.deepEqual(left.calls.find(c=>c.type==='scale').args,[300/96,300/96]);
     assert.equal(left.width,right.width);assert.equal(left.height,right.height);
     const labels=out.calls.filter(c=>c.type==='text').map(c=>c.text);
-    assert.ok(labels.includes('Guarded PSPT'));assert.ok(labels.includes('Fixed-fragment B'));
+    assert.ok(labels.includes('WM-P'));assert.ok(labels.includes('WM-F'));
     assert.ok(labels.some(s=>s.includes('sample SD across seeds; not confidence intervals.')));
     const panels=out.calls.filter(c=>c.type==='image' && env.canvases.includes(c.image));
     assert.equal(panels.length,2);assert.ok(panels[0].rect[0]+panels[0].rect[2]<panels[1].rect[0],'The two panels have a positive separating gap');

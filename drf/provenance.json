@@ -7,7 +7,7 @@
     "drf/field-reuse.mjs": "ddba899877d93e6139efc14672b8080238d215ec585f662e9bd8139c8a81d9cf",
     "drf/wire.mjs": "9b6636fc6c9f14577d43eaab2c98af610c8d80650389cd4a75310e0a12f73e72"
   },
-  "status": "Guarded PSPT and fixed-fragment B; causal measurement-only inputs; independent Python checkpoint parity; synthetic numerical validation only",
+  "status": "WM-P and WM-F; causal measurement-only inputs; independent Python checkpoint parity; synthetic numerical validation only",
   "referenceStatus": "Provided text fixtures only; original MATLAB/Octave files unavailable",
   "numericalConventions": [
     "numerical K may underflow to zero",
