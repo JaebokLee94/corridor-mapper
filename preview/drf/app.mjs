@@ -268,7 +268,7 @@ function renderSelected() {
     history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
   $('mapPair').dataset.mode=state.method;
   $('baselinePane').hidden=state.method!=='compare';
-  $('primaryMapName').textContent=state.method==='baseline'?'WM-F':'WM-P';
+  $('primaryMapName').textContent=state.method==='baseline'?'WM-F (Wall Mapping with Fixed Segments)':'WM-P (Wall Mapping with Pair Tracking)';
   map.set({...display,mode:'geometry',xRange:[-10,90]});
   baselineMap.set({...display,candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,90]});
   const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
