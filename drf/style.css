@@ -150,8 +150,8 @@ body[data-state="paused"] .run-state::before { background:var(--color-baseline);
 .map-toolbar { display:flex; flex-shrink:0; gap:4px; }
 .map-toolbar button { min-width:32px; min-height:32px; padding:4px 8px; background:transparent; }
 .method-switch { display:flex; gap:4px; align-items:center; flex-wrap:wrap; padding:0 18px 12px; }
-.method-switch button { color:var(--color-ink-muted); border-color:transparent; min-height:36px; }
-.method-switch button[aria-pressed="true"] { color:var(--color-accent); background:var(--color-surface-3); border-color:var(--color-surface-3); font-weight:650; }
+.method-switch button { color:var(--color-ink-muted); border-color:transparent; min-height:36px; font-weight:500; }
+.method-switch button[aria-pressed="true"] { color:var(--color-accent); background:var(--color-surface-3); border-color:var(--color-surface-3); }
 .method-switch .view-meta { margin-left:auto; }
 .view-body { min-width:0; position:relative; }
 .dashboard-canvas { display:block; width:100%; height:250px; touch-action:none; }

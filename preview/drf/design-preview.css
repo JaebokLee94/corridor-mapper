@@ -97,8 +97,8 @@ math { font-family:var(--font-math); }
 .map-heading { display:flex; align-items:center; flex-wrap:wrap; gap:26px; min-height:56px; }
 .map-heading h2 { font-size:15px; }
 .method-switch { display:flex; align-items:center; gap:22px; }
-.method-switch button { min-height:46px; padding:8px 0; color:var(--color-ink-muted); border-bottom:2px solid transparent; font-size:13px; }
-.method-switch button[aria-pressed="true"] { color:var(--color-ink); border-bottom-color:var(--color-accent); font-weight:650; }
+.method-switch button { min-height:46px; padding:8px 0; color:var(--color-ink-muted); border-bottom:2px solid transparent; font-size:13px; font-weight:500; }
+.method-switch button[aria-pressed="true"] { color:var(--color-ink); border-bottom-color:var(--color-accent); }
 .method-switch button:hover { text-decoration:none; }
 .map-toolbar { display:flex; gap:18px; align-items:center; margin-left:auto; }
 .map-toolbar button { font-size:12px; min-width:24px; }
