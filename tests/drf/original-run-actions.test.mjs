@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-// Original layout only: the separate design preview has its own run controls.
 const source = readFileSync(new URL('../../drf/app.mjs', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../../drf.html', import.meta.url), 'utf8');
 const start = source.indexOf('function controls()'), end = source.indexOf('function updateRunProgress()', start);

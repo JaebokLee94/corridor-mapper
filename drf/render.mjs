@@ -1,3 +1,4 @@
+import { interpolationPair } from './interpolation-panel.mjs';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
@@ -319,6 +320,12 @@ export class DrfMap {
     }
     // Paint every casing first so overlapping patch casings cannot erase green
     // support. Flat caps preserve endpoint gaps instead of extending each line.
+    if (layers.showProxy && this.state.interpolation !== 'off') for (const bridge of this.state.bridges ?? []) {
+      const points = this.state.interpolation === 'hermite' ? bridge.curve : bridge.points;
+      if (!points?.length) continue;
+      path(points, background, 4, [], 1, 'butt');
+      path(points, '#009e73', 2, [2, 2], 1, 'butt');
+    }
     for (const points of supportedPatches) path(points,background,8,[],1,'butt');
     for (const points of supportedPatches) path(points,'#009e73',5,[],1,'butt');
     ctx.restore();
@@ -522,16 +529,23 @@ export function drawCounts(canvas,counts,predicted) {
 /** Shared-axis comparison; one solid and one dashed curve distinguish methods.
  * Missing precision stays a gap. No smoothing, interpolation of missing data or CI.
  */
-export function drawComparisonHistory(canvas,evaluations,selection='recall',snapshots=120) {
+export function drawComparisonHistory(canvas,evaluations,selection='recall',snapshots=120,mode='compare',kind='linear') {
   const surface=chartSurface(canvas);if(!surface)return;
-  const percent=selection!=='p95',series=['guarded','baseline'].map(method=>evaluations.map(e=>{
-    const value=e.methods?.[method]?.[selection];return {x:e.t,y:value==null ? NaN : value*(percent?100:1)};
-  }));
+  const single = mode !== 'compare';
+  if (single) selection = 'mapRecall';
+  const percent = selection !== 'p95', series = [[], []];
+  for (const e of evaluations) {
+    const pair = single ? interpolationPair(e, mode, kind) : [e.methods?.guarded, e.methods?.baseline];
+    pair.forEach((record, i) => {
+      const value = record?.[single ? 'recall' : selection];
+      series[i].push({x:e.t, y:value==null ? NaN : value*(percent ? 100 : 1)});
+    });
+  }
   const [ymin,ymax]=percent?[0,100]:extent(series.flat());
   const xmax=Math.max(1,snapshots),xTicks=Array.from({length:Math.floor(xmax/20)+1},(_,i)=>20*i);
   // Short runs still show their endpoint; longer runs retain the fixed 20-snapshot scale.
   if (xmax<20) xTicks.push(xmax);
-  const metricLabels={precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
+  const metricLabels={mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
   const yLabel=(metricLabels[selection]?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
   const axes=chartAxes(surface,{xLabel:'',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks:percent?[0,25,50,75,100]:undefined,hideXZero:true,showYLabel:true,topInset:16,bottomInset:26});
   chartLine(surface,axes,series[0],surface.color('accent'),[],false,false,true);

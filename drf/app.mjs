@@ -1,3 +1,4 @@
+import { renderInterpolationPanel } from './interpolation-panel.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';
@@ -391,19 +392,22 @@ function renderSelected() {
   $('inspector').textContent = '';
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
   const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse'].map(id => [id, $(id).checked]));
-  const display={ grid: state.grid, domain: state.scenario?.domain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls: scenario?.walls ?? previewWalls(),cameraBounds:scenario?.cameraBounds ?? previewBounds,
+  const interpolate = $('showInterpolation').checked, kind = $('interpolationKind').value;
+  $('interpolationKind').disabled = !interpolate && state.method === 'compare';
+  const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: state.scenario?.domain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls: scenario?.walls ?? previewWalls(),cameraBounds:scenario?.cameraBounds ?? previewBounds,
+    bridges: frame?.methods?.[state.method === 'baseline' ? 'baseline' : 'guarded']?.bridges ?? [],
     candidates: frame?.methods?.[state.method]?.candidates ?? frame?.candidates ?? [], observed: evaluation?.observed, layers, heatField: $('heatField').value, scaleMode: $('scaleMode').value,
     history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
   $('mapPair').dataset.mode=state.method;
   $('baselinePane').hidden=state.method!=='compare';
   $('primaryMapName').textContent=state.method==='baseline'?'WM-F (Wall Mapping with Fixed Segments)':'WM-P (Wall Mapping with Pair Tracking)';
   map.set({...display,mode:'geometry',xRange:[-10,90]});
-  baselineMap.set({...display,candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,90]});
+  baselineMap.set({...display,bridges:frame?.methods?.baseline?.bridges ?? [],candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,90]});
   const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
   densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
   contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
   $('snapshotLabel').textContent = `${frame?.t ?? 0} / ${scenario?.input.snapshots ?? form.elements.namedItem('snapshots').value}`;
-  $('evaluationNote').textContent = '0.4 m tolerance · same measured prefix';
+  renderInterpolationPanel($, state.method, kind, evaluation, fmt);
   for (const [method,prefix] of [['guarded',''],['baseline','b']]) {
     const e=evaluation?.methods?.[method] ?? (method==='guarded' ? evaluation : null);
     const node=(name)=>$(prefix ? prefix+name[0].toUpperCase()+name.slice(1) : name);
@@ -413,6 +417,10 @@ function renderSelected() {
     const candidates=frame?.methods?.[method]?.candidates ?? [];
     for (const [id,status] of [['supportedValue','supported'],['pendingValue','pending'],['contradictedValue','contradicted']])
       node(id).textContent=method==='baseline' && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
+    const completed = kind === 'hermite' ? e?.interpolation?.hermite : e?.interpolation;
+    const mapRecall = node('mapRecallValue'), coverage = interpolate ? completed?.recall : e?.recall;
+    mapRecall.textContent = coverage == null ? '—' : fmt(100 * coverage, 1);
+    mapRecall.title = !interpolate ? 'Supported fragments only' : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
     node('firstPrecisionValue').title=e ? `First-support errors: ${e.firstSupportErrors} / ${e.firstSupportCount}` : '';
   }
   for (const button of document.querySelectorAll('[data-method]')) button.setAttribute('aria-pressed',String(button.dataset.method===state.method));
@@ -426,7 +434,7 @@ function renderSelected() {
   const times = state.frames.slice(0,state.selected).map(f=>f.ms+(f.methods?.guarded.ms ?? 0)+(f.methods?.baseline.ms ?? 0));
   $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
-  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),$('historyMetric').value,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value));
+  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),$('historyMetric').value,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,kind);
   renderDiagnostics();
 }
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
@@ -510,7 +518,7 @@ document.addEventListener('keydown', event => {
     $('timeSlider').value = state.selected; renderSelected();
   }
 });
-for (const id of ['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse', 'heatField', 'scaleMode','historyMetric','aspectMode']) $(id).onchange = renderSelected;
+for (const id of ['showInterpolation', 'interpolationKind', 'showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse', 'heatField', 'scaleMode','historyMetric','aspectMode']) $(id).onchange = renderSelected;
 $('fitView').onclick = () => { for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit(true); }; $('zoomIn').onclick = () => map.zoom(1.3); $('zoomOut').onclick = () => map.zoom(1 / 1.3);
 for (const [prefix,view] of [['density',densityMap],['contrast',contrastMap]]) {
   $(prefix+'ZoomIn').onclick = () => view.zoom(1.3);
@@ -610,7 +618,7 @@ $('loadSavedSweep').onclick = () => {
 };
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
 $('exportJson').onclick = () => {
-  const data = { schema: 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, toleranceM: 0.4, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
+  const data = { schema: 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, displayInterpolation: $('showInterpolation')?.checked ? $('interpolationKind').value : 'off', toleranceM: 0.4, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
     grid: state.grid ? { ...state.grid, arrayOrder: 'iy*nx+ix; ascending y; cell centers' } : null,
     input: state.scenario?.input ?? state.sweepRuns[0]?.input, measurement: state.scenario?.wire.slice(0, state.frames.length) ?? [], result: state.frames,
     evaluation: state.evaluations, truth: { role: 'evaluation only', wallModel: state.scenario?.wallModel, wallGeneration: state.scenario?.wallGeneration, walls: state.scenario?.walls ?? [], snapshots: state.scenario?.truth.slice(0, state.frames.length) ?? [] },
@@ -628,7 +636,7 @@ $('exportCsv').onclick = () => {
   const rows=[];let header;
   for (const method of ['guarded','baseline']) {
     const frames=state.frames.map(f=>({...f,candidates:f.methods[method].candidates,psptMs:f.methods[method].ms}));
-    const lines=psptSnapshotCsv(frames,state.evaluations.map(e=>e.methods[method])).replace(/^\ufeff/,'').trim().split('\r\n');
+    const lines=psptSnapshotCsv(frames,state.evaluations.map(e=>e.methods[method]),{includeInterpolation:true}).replace(/^\ufeff/,'').trim().split('\r\n');
     header=lines[0].replace('pspt_ms','estimator_ms');
     const loaded = protocol[method], revision = loaded.revision ?? 'legacy-unversioned';
     rows.push(...lines.slice(1).map(line=>[method,loaded.threshold,csvValue(loaded.tuning.id),line,csvValue(revision)].join(',')));
@@ -712,4 +720,25 @@ for(const tab of document.querySelectorAll('[data-tab]')) tab.addEventListener('
 
 $('analysisButton').onclick=()=>{$('analysisDialog').showModal();renderSelected();renderSweep();};
 $('closeAnalysis').onclick=()=>$('analysisDialog').close();
+// Native dialog backdrop events target the dialog, as does its inside padding.
+// Require both ends of a primary click outside so dragging from a chart stays open.
+{
+  const dialog = $('analysisDialog');
+  let startedOutside = false;
+  const isBackdrop = event => {
+    if (event.target !== dialog) return false;
+    const { left, right, top, bottom } = dialog.getBoundingClientRect();
+    return event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom;
+  };
+  dialog.addEventListener('pointerdown', event => {
+    startedOutside = dialog.open && event.button === 0 && event.isPrimary !== false && isBackdrop(event);
+  });
+  dialog.addEventListener('click', event => {
+    const dismiss = startedOutside && event.button === 0 && isBackdrop(event);
+    startedOutside = false;
+    if (dialog.open && dismiss) dialog.close();
+  });
+  dialog.addEventListener('pointercancel', () => { startedOutside = false; });
+  dialog.addEventListener('close', () => { startedOutside = false; });
+}
 installSidebarControls();

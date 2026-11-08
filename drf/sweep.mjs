@@ -10,6 +10,9 @@ function summarize(frame, evaluation) {
     'medianError', 'p95', 'offwall', 'f1', 'observedFraction', 'missing',
     'supportedCount', 'pendingCount', 'rejectedCount'];
   return { ...Object.fromEntries(keys.map(key => [key, evaluation[key]])),
+    mapRecall: evaluation.interpolation.recall, interpolatedLengthM: evaluation.interpolation.lengthM,
+    interpolatedOffWallM: evaluation.interpolation.offWallM, hermiteMapRecall: evaluation.interpolation.hermite.recall,
+    hermiteLengthM: evaluation.interpolation.hermite.lengthM, hermiteOffWallM: evaluation.interpolation.hermite.offWallM,
     Q: frame.Q, admitted: frame.admitted, rejected: frame.rejected };
 }
 /** Paired sweep uses the same causal estimators and thresholds as the main view.
@@ -31,8 +34,8 @@ export async function runExperiment(raw, progress = () => {}) {
     for (const key of Object.keys(methods)) estimatorMs[key] += methods[key].ms;
     timings.push(frame.ms + methods.guarded.ms + methods.baseline.ms);
     const start = performance.now();
-    const guarded = evaluators.guarded.step({ ...frame, method: 'guarded-tuned', candidates: methods.guarded.candidates });
-    const baseline = evaluators.baseline.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded);
+    const guarded = evaluators.guarded.step({ ...frame, method: 'guarded-tuned', candidates: methods.guarded.candidates }, null, methods.guarded.bridges);
+    const baseline = evaluators.baseline.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges);
     evaluations = { guarded, baseline }; evaluationMs += performance.now() - start;
     progress(frame.t, input.snapshots);
   }

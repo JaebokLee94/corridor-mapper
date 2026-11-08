@@ -5,10 +5,6 @@ import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
 import { sweepCsv } from '../../drf/sweep-export.mjs';
 
-const targets = [new URL('../../drf/app.mjs',import.meta.url),new URL('../../preview/drf/app.mjs',import.meta.url)];
-// Also exercise the user's actual temporary preview when present on this Mac.
-const localPreview='/Users/jaebok/Documents/Codex/2026-11-04/echomap-design-preview/drf/app.mjs';
-if(fs.existsSync(localPreview))targets.push(localPreview);
 const slice = (source,start,end) => {
   const a=source.indexOf(start),b=source.indexOf(end,a);
   assert.ok(a>=0&&b>a,`Missing handler boundary: ${start}`);
@@ -32,8 +28,8 @@ const initial=()=>({generation:7,protocol:null,server:{},frames:[],evaluations:[
 const scenario=()=>({input:{snapshots:1},wire:[{t:1,configs:[]}],truth:[{t:1}],walls:[]});
 const frame=()=>({type:'frame',requestId:7,next:1,frame:{t:1,methods:{guarded:{candidates:[],ms:2},baseline:{candidates:[],ms:3}}},evaluation:{methods:{guarded:{},baseline:{}}}});
 
-for(const filename of targets) {
-  const source=fs.readFileSync(filename,'utf8'),label=String(filename);
+{
+  const source=fs.readFileSync(new URL('../../drf/app.mjs',import.meta.url),'utf8'),label='Original';
   test(`${label}: reconnect keeps the producing worker protocol through JSON and CSV export`,async()=>{
     const state=initial(),receive=attachReceiver(source,state),loaded=structuredClone(METHOD_PROTOCOL);
     loaded.guarded.revision='saved-worker-revision';loaded.guarded.threshold=1.234;loaded.guarded.tuning.id='saved-development';

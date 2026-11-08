@@ -49,9 +49,9 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask } = {}) {
         frame.methods = run.estimator.step(wire);
         frame.candidates = frame.methods.guarded.candidates;
         frame.psptMs = frame.methods.guarded.ms; frame.method = 'guarded-tuned';
-        const guarded = run.guardedEvaluator.step(frame);
+        const guarded = run.guardedEvaluator.step(frame, null, frame.methods.guarded.bridges);
         const baseline = run.baselineEvaluator.step({ ...frame, method: 'baseline-b',
-          candidates: frame.methods.baseline.candidates }, guarded);
+          candidates: frame.methods.baseline.candidates }, guarded, frame.methods.baseline.bridges);
         const evaluation = { ...guarded, methods: { guarded, baseline } };
         run.next++;
         if (run.steps > 0) run.steps--;

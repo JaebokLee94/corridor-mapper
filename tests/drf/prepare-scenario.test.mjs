@@ -54,8 +54,8 @@ function calculate(scene) {
     const frame = field.step(wire), methods = estimator.step(wire);
     Object.assign(frame, { methods, candidates: methods.guarded.candidates,
       psptMs: methods.guarded.ms, method: 'guarded-tuned' });
-    const guarded = guardedEvaluator.step(frame), baseline = baselineEvaluator.step({ ...frame,
-      method: 'baseline-b', candidates: methods.baseline.candidates }, guarded);
+    const guarded = guardedEvaluator.step(frame,null,methods.guarded.bridges), baseline = baselineEvaluator.step({ ...frame,
+      method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges);
     return { frame, evaluation: { ...guarded, methods: { guarded, baseline } } };
   });
 }
@@ -226,7 +226,11 @@ test('real run engine and sweep preserve all numerical prefixes, final metrics a
   assert.deepEqual(sweep.wallGeneration, expectedScene.wallGeneration);
   assert.deepEqual(numerical(sweep.diagnostics), numerical(final.evaluation.diagnostics));
   for (const key of Object.keys(sweep.final)) assert.deepEqual(sweep.final[key], final.frame[key], `sweep final ${key}`);
-  for (const method of ['guarded', 'baseline']) for (const [key, value] of Object.entries(sweep.methods[method].summary))
-    assert.deepEqual(value, ['Q', 'admitted', 'rejected'].includes(key) ? final.frame[key] : final.evaluation.methods[method][key],
-      `${method} final ${key}`);
+  for (const method of ['guarded','baseline']) {
+    const evaluation = final.evaluation.methods[method], b = evaluation.interpolation, h = b.hermite;
+    const expectedMetrics = {...final.frame, ...evaluation, mapRecall:b.recall, interpolatedLengthM:b.lengthM,
+      interpolatedOffWallM:b.offWallM, hermiteMapRecall:h.recall, hermiteLengthM:h.lengthM, hermiteOffWallM:h.offWallM};
+    for (const [key,value] of Object.entries(sweep.methods[method].summary))
+      assert.deepEqual(value, expectedMetrics[key], `${method} final ${key}`);
+  }
 });

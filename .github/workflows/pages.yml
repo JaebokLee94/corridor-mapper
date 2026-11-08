@@ -33,3 +33,31 @@ jobs:
           path: _site
       - uses: actions/deploy-pages@v4
         id: deployment
+
+      - name: Verify published simulator
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${PAGE_URL%/}"
+          # Pages can report a deploy before the CDN has the new files.
+          for attempt in {1..12}; do
+            matched=true
+            for file in drf.html drf/app.mjs drf/style.css drf/offline.bundle.js; do
+              if ! curl -fsSL --max-time 20 "$base/$file?rev=$GITHUB_SHA-$attempt" -o "$RUNNER_TEMP/echomap-published" ||
+                 ! cmp -s "_site/$file" "$RUNNER_TEMP/echomap-published"; then
+                matched=false
+                echo "Waiting for $file"
+                break
+              fi
+            done
+            if [[ "$matched" == true ]] &&
+               [[ "$(curl -sSL --max-time 15 -o /dev/null -w '%{http_code}' "$base/preview/drf.html?rev=$GITHUB_SHA-$attempt")" == 404 ]]; then
+              echo "Published simulator matches $GITHUB_SHA; retired preview returns 404."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::The published site could not be verified against the local build."
+          exit 1

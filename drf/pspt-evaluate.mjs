@@ -76,12 +76,35 @@ function neighborhood(points) {
   };
 }
 
+// Use the rendered polyline, split into equal arc-length bins <=5 cm. Each
+// midpoint contributes its bin length to the off-wall total. Both raw endpoints
+// are already covered by the estimated patches. Truth is read only here.
+function assessBridges(bridges, shape, onWall, uncovered, observed) {
+  const interior = [];
+  let lengthM = 0, offWallM = 0, falseBridges = 0;
+  for (const bridge of bridges) {
+    const vertices = resamplePolyline(bridge[shape] ?? bridge.points);
+    let outside = 0;
+    for (let k = 1; k < vertices.length; k++) {
+      const a = vertices[k-1], b = vertices[k], ds = Math.hypot(b[0]-a[0], b[1]-a[1]);
+      const mid = {x:(a[0]+b[0])/2, y:(a[1]+b[1])/2};
+      interior.push(mid); lengthM += ds;
+      if (!onWall(mid)) outside += ds;
+    }
+    offWallM += outside;
+    if (outside > 0) falseBridges++;
+  }
+  const recovered = interior.length ? uncovered.filter(neighborhood(interior)).length : 0;
+  return { count: bridges.length, lengthM, offWallM, falseBridges, observed, recovered,
+    missing: uncovered.length - recovered, recall: fraction(observed - uncovered.length + recovered, observed) };
+}
+
 export function createPSPTEvaluator(scenario, grid) {
   const diagnostic = createReflectionDiagnostics(scenario),
     gt = wallSamples(scenario),
     mask = metrics.createObservedMask(gt), onWall = neighborhood(gt), firstSupport = new Map();
   let cursor = 0;
-  return { step(frame, sharedDiagnostics = null) {
+  return { step(frame, sharedDiagnostics = null, bridges = []) {
     if (!Array.isArray(frame.candidates)) throw new Error('PSPT evaluation requires estimator candidates');
     if (!Number.isInteger(frame.t) || frame.t < cursor || frame.t > scenario.truth.length) throw new Error('Evaluation requires a causal snapshot');
     while (cursor < frame.t) {
@@ -98,14 +121,17 @@ export function createPSPTEvaluator(scenario, grid) {
     const observed = gt.filter((_, k) => mask[k]), nearPatch = neighborhood(patches),
       precision = fraction(distances.filter(d => d <= tolerance).length, centers.length),
       surfacePrecision = fraction(patches.filter(onWall).length, patches.length),
-      recall = fraction(observed.filter(nearPatch).length, observed.length),
+      uncovered = observed.filter(p => !nearPatch(p)),
+      recall = fraction(observed.length - uncovered.length, observed.length),
       f1 = recall == null ? null : !surfacePrecision ? 0 : 2 * surfacePrecision * recall / (surfacePrecision + recall),
       pending = frame.candidates.filter(c => c.status === 'pending').length;
+    const interpolation = assessBridges(bridges, 'points', onWall, uncovered, observed.length);
+    interpolation.hermite = assessBridges(bridges, 'curve', onWall, uncovered, observed.length);
     const diagnostics = sharedDiagnostics?.diagnostics ?? diagnostic.step(frame.t);
     return { t: frame.t, diagnostics, method: frame.method ?? 'guarded45', proxy: centers.map(p => [p.x, p.y]), observed: observed.map(p => [p.x, p.y]),
       medianError: percentile(distances, .5), p95: percentile(distances, .95), offwall: precision == null ? null : 1 - precision,
-      precision, surfacePrecision, recall, f1,
-      observedFraction: fraction(observed.length, gt.length), missing: observed.length - observed.filter(nearPatch).length,
+      precision, surfacePrecision, recall, f1, interpolation,
+      observedFraction: fraction(observed.length, gt.length), missing: uncovered.length,
       firstSupportPrecision: fraction([...firstSupport.values()].filter(Boolean).length, firstSupport.size),
       firstSupportErrors: [...firstSupport.values()].filter(x => !x).length, firstSupportCount: firstSupport.size,
       holdRate: fraction(pending, frame.candidates.length), supportedCount: supported.length, pendingCount: pending,
@@ -116,15 +142,22 @@ export function createPSPTEvaluator(scenario, grid) {
 }
 
 /** Numeric snapshot export. Empty precision stays blank rather than becoming 0/1. */
-export function psptSnapshotCsv(frames, evaluations) {
+export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = false} = {}) {
   const keys = ['snapshot', 'Q', 'admitted', 'rejected', 'supported', 'pending', 'contradicted',
     'center_precision', 'observed_wall_recall', 'first_support_precision', 'first_support_errors',
     'first_support_count', 'surface_f1', 'p95_m', 'offwall_fraction', 'hold_fraction', 'field_ms', 'pspt_ms'];
+  if (includeInterpolation) keys.push('interpolated_gaps', 'linear_map_recall', 'linear_added_m', 'linear_added_offwall_m',
+    'hermite_map_recall', 'hermite_added_m', 'hermite_added_offwall_m');
   const rows = frames.map((f, k) => {
     const e = evaluations[k] ?? {};
-    return [f.t, f.Q, f.admitted, f.rejected, e.supportedCount, e.pendingCount, e.rejectedCount,
+    const row = [f.t, f.Q, f.admitted, f.rejected, e.supportedCount, e.pendingCount, e.rejectedCount,
       e.precision, e.recall, e.firstSupportPrecision, e.firstSupportErrors, e.firstSupportCount,
       e.f1, e.p95, e.offwall, e.holdRate, f.ms, f.psptMs];
+    if (includeInterpolation) {
+      const b = e.interpolation, h = b?.hermite;
+      row.push(b?.count, b?.recall, b?.lengthM, b?.offWallM, h?.recall, h?.lengthM, h?.offWallM);
+    }
+    return row;
   });
   return '\ufeff' + [keys, ...rows].map(row => row.map(v => typeof v === 'number' && !Number.isFinite(v) ? '' : v ?? '').join(',')).join('\r\n') + '\r\n';
 }

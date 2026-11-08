@@ -161,6 +161,10 @@ body[data-state="paused"] .run-state::before { background:var(--color-baseline);
 .legend li,.history-legend span { display:inline-flex; align-items:center; gap:7px; }
 .swatch { display:inline-block; width:18px; height:3px; flex:none; }
 .swatch-track { background:var(--color-track); }
+.interpolation-controls { display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; }
+.interpolation-controls select { flex:1; width:auto; min-width:0; max-width:125px; }
+body:has(#showInterpolation:not(:checked)) .legend li:has(.swatch-interpolated) { display:none; }
+.swatch-interpolated { height:0; border-top:2px dotted #009e73; }
 .swatch-supported { background:#009e73; height:4px; }
 .swatch-truth { height:0; border-top:2px dashed var(--color-truth); }
 .swatch-ellipse { height:10px; border:1.5px solid var(--color-ellipse); border-radius:50%; }

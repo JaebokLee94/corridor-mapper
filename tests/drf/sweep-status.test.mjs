@@ -3,11 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const targets = [
-  ['original', new URL('../../drf/app.mjs', import.meta.url)],
-  ['preview', new URL('../../preview/drf/app.mjs', import.meta.url)],
-];
-
 function fixture(source, { server = true, total = 6 } = {}) {
   const start = source.indexOf('async function runSweep('), end = source.indexOf("$('sweepButton').onclick", start);
   assert.ok(start >= 0 && end > start, 'Extract the actual app sweep handler');
@@ -43,8 +38,8 @@ function fixture(source, { server = true, total = 6 } = {}) {
     resolve, reject };
 }
 
-for (const [label, file] of targets) {
-  const source = readFileSync(file, 'utf8');
+{
+  const label = 'original', source = readFileSync(new URL('../../drf/app.mjs', import.meta.url), 'utf8');
   test(`${label}: interleaved sweep snapshots never replace the stable aggregate status`, async () => {
     const f = fixture(source);
     assert.equal(f.status.textContent, 'Running sweep · 0 / 6 complete');

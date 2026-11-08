@@ -194,7 +194,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
   const context=vm.createContext({state,$,form,hoverGeneration:0,hoverTimer:0,replayFrame:0,
     runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},LAYERED_DOMAIN,location:{hash:'#old'},
-    document,createDiagnosticView,setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
+    document,createDiagnosticView,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
     map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,
     fmt:v=>Number.isFinite(v) ? String(v) : '—',percentile:values=>values[0]??null,
     requestAnimationFrame:fn=>{const id=++nextFrame;pending.set(id,fn);return id;},cancelAnimationFrame:id=>pending.delete(id),clearTimeout(){},
@@ -420,7 +420,7 @@ test('timeline and replay stay locked until the run ends, including paused and p
   $('playbackSpeed').value='1';
   vm.runInContext(section('function stopReplay()','function controls()')
     +section('function replayTick(','function resetView(')
-    +section("$('timeSlider').oninput", "for (const id of ['showEllipses'"),context);
+    +section("$('timeSlider').oninput", "for (const id of ['showInterpolation'"),context);
   const key=key=>events.get('keydown')({key,code:key===' ' ? 'Space' : key,target:{matches:()=>false},preventDefault(){}});
   for (const [mode,prepared] of [['running',false],['running',true],['paused',true]]) {
     state.mode=mode;state.scenario=prepared ? {input:{snapshots:5}} : null;

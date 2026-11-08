@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <title>EchoMap</title>
-  <rect width="32" height="32" rx="7" fill="#1e6386"/>
-  <path d="M6 9c6-5 14 5 20 0M6 23c6-5 14 5 20 0M9 16h14"
-    fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>
-</svg>

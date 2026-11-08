@@ -17,11 +17,14 @@
 import { makeWire } from "./wire.mjs";
 import { DRF } from "./pspt-ridges.mjs";
 import { Surfel, refine, mirrored, dot, cov3, eigen2, matVec, matMul, transpose, solve } from "./pspt-math.mjs";
+import { curvatureConsistentUpdate } from "./pspt-curvature.mjs";
+import { planRecovery, commitRecovery } from "./pspt-recovery.mjs";
 
 const DEFAULTS = Object.freeze({ nx: 100, ny: 100, ell: 1, K: 12, frac: 0.15, sep: 1.5, dup: 1,
   alpha: 0.01, ext: 1.5, p_miss: 0.05, refinement: "independent-pairs", clustering: "single-link",
   R_span: 40, max_range: 25, explain_away: true,
-  temper: true, mirror: true, win: null, max_inc_deg: 45, geometry_alpha: 0.001, min_evidence_steps: 2 });
+  temper: true, mirror: true, win: null, max_inc_deg: 45, geometry_alpha: 0.001, min_evidence_steps: 2,
+  geometryUpdate: "ekf", recovery: "none" });
 // scipy.stats.chi2.isf(.001, df), df=1..18; vehicle counts 3..20.
 const CHI2_001 = Object.freeze([10.827566170662733, 13.815510557964274, 16.26623619623813,
   18.466826952903173, 20.51500565243288, 22.457744484825326, 24.321886347856854,
@@ -115,6 +118,8 @@ export class PSPT {
     allowKeys(options, OPTION_KEYS, "options");
     const o = { ...DEFAULTS, ...options };
     validateClustering(o.clustering);
+    if (!["ekf", "curvature-consistent"].includes(o.geometryUpdate)) throw new RangeError("invalid geometry update");
+    if (!["none", "bounded"].includes(o.recovery)) throw new RangeError("invalid candidate recovery");
     if (o.refinement !== "independent-pairs" && o.refinement !== "shared-pose")
       throw new RangeError("invalid refinement covariance mode");
     for (const name of ["nx", "ny", "K", "min_evidence_steps"])
@@ -136,16 +141,18 @@ export class PSPT {
     this.hist = []; this.groups = []; this.Dq = [];
     this.ncl = 0; this.ncfg = 0; this.sr2 = .01; this.last_t = null;
     this.geometry_statistic = 0; this.geometry_threshold = Infinity; this.geometry_informative = false;
+    if (this.recovery === "bounded") this.recoveryTombstones = [];
   }
 
   _predictAll(pre, veh) {
     const predictions = new Map();
     for (const g of this.groups) {
-      if (Math.min(...g.s.map((s) => Math.min(...veh.map((p) => distance(p, s.center))))) > this.max_range) continue;
+      if (Math.min(...g.s.filter((_, k) => !g.retired?.[k])
+        .map((s) => Math.min(...veh.map((p) => distance(p, s.center))))) > this.max_range) continue;
       for (let k = 0; k < 2; k++) {
         const s = g.s[k], entries = [];
         for (const c of pre) {
-          const p = k === 0 || this.mirror ? s.predict(c.pi, c.pj, { ext: this.ext }) : null;
+          const p = !g.retired?.[k] && (k === 0 || this.mirror) ? s.predict(c.pi, c.pj, { ext: this.ext }) : null;
           if (p === null) { entries.push(null); continue; }
           const [, tangent, normal, curvature] = s.frame(), a = curvature * p[1], denom = Math.hypot(1, a),
             rootNormal = normal.map((v, i) => (v - a * tangent[i]) / denom),
@@ -154,7 +161,7 @@ export class PSPT {
           const sr2 = Number.isFinite(c.sr2) ? c.sr2 : this.sr2,
             base = quad(p[3], c.Si) + quad(p[4], c.Sj) + quad(p[2], s.P), G = [];
           for (let m = 0; m < c.cl.length; m++) {
-            const variance = sr2 / Math.max(c.cl[m][1], 1) + base, residual = c.cl[m][0] - p[0];
+            const variance = sr2 / c.cl[m][1] + base, residual = c.cl[m][0] - p[0];
             if (!(variance > 0) || !Number.isFinite(variance)) throw new RangeError("PSPT prediction covariance is nonpositive or nonfinite");
             if (Math.abs(residual) <= Math.max(.3, 3 * Math.sqrt(variance)))
               G.push([m, Math.exp(-.5 * residual ** 2 / variance) / Math.sqrt(2 * Math.PI * variance)]);
@@ -222,7 +229,8 @@ export class PSPT {
     const pending = [], pm = this.pm;
     for (const g of this.groups) {
       if (!pred.has(key(g.gid, 0))) continue;
-      const centers = g.s.map((s) => s.center), dL = [0, 0, 0, 0], comps = [[], []], coreConfigs = [0, 0];
+      const centers = g.s.filter((_, k) => !g.retired?.[k]).map((s) => s.center),
+        dL = [0, 0, 0, 0], comps = [[], []], coreConfigs = [0, 0];
       let ncfg = 0;
       for (let ci = 0; ci < pre.length; ci++) {
         const c = pre[ci], E = [0, 1].map((k) => pred.get(key(g.gid, k))[ci]);
@@ -242,7 +250,8 @@ export class PSPT {
           if (qk.size) {
             let mb = null, best = -Infinity;
             for (const [m, value] of qk) if (value > best) { mb = m; best = value; }
-            if (best > pm) comps[k].push([c, c.cl[mb][1], e.sr2, c.cl[mb][0] - e.p[0], e.p]);
+            if (best > pm)
+              comps[k].push([c, c.cl[mb][1], e.sr2, c.cl[mb][0] - e.p[0], e.p, c.cl[mb][2]]);
           }
           return qk;
         });
@@ -285,6 +294,10 @@ export class PSPT {
 
   _kf(s, comps) {
     if (!comps.length) return;
+    if (this.geometryUpdate === "curvature-consistent") {
+      curvatureConsistentUpdate(s, comps);
+      return;
+    }
     const M = comps.length, A = comps.map((cm) => cm[4][2]), residual = comps.map((cm) => cm[3]),
       R = Array.from({ length: M }, (_, i) => Array.from({ length: M }, (_, j) => i === j ? comps[i][2] / comps[i][1] : 0));
     for (let a = 0; a < M; a++) for (let b = 0; b < M; b++) {
@@ -313,12 +326,21 @@ export class PSPT {
     let gid = this.groups.reduce((next, g) => Math.max(next, g.gid + 1), 0);
     for (const [x, y, phi] of candidates) {
       const q = [x, y];
-      if (centers.some((c) => distance(q, c) < this.dup)) continue;
+      const recoveryPlan = this.recovery === "bounded"
+        ? planRecovery(this.groups, this.recoveryTombstones, q, this.dup) : null;
+      if (recoveryPlan ? recoveryPlan.blocked : centers.some((c) => distance(q, c) < this.dup)) continue;
       const h = new Surfel(q, phi, vehicleMean.map((v, i) => v - q[i]), this.ell), c = mirrored(h, m, Rm, theta);
       if (refine(h, snaps, { refinement: this.refinement }) < 3) continue;
-      if (centers.some((center) => distance(h.center, center) < .5)) continue;
+      const fittedPlan = recoveryPlan ? planRecovery(this.groups, this.recoveryTombstones, h.center, .5, this.dup) : null;
+      if (fittedPlan ? fittedPlan.blocked : centers.some((center) => distance(h.center, center) < .5)) continue;
+      const recoveryParents = recoveryPlan ? [...recoveryPlan.parents, ...fittedPlan.parents]
+        .filter(e => distance(h.center, e.center) < this.dup) : [];
+      // A proposal that escaped the rejected parent's neighborhood after fitting
+      // is not allowed to consume or silently bypass that parent's retry budget.
+      if (recoveryPlan?.parents.length && !recoveryParents.length) continue;
       refine(c, snaps, { refinement: this.refinement });
       const g = newGroup(gid++, h, c, t, [this.hist[0][0], t]);
+      if (recoveryPlan) commitRecovery(this.groups, this.recoveryTombstones, g, recoveryParents, t, this.dup);
       this._status(g, t); this.groups.push(g); centers.push(h.center, c.center);
     }
   }
@@ -329,7 +351,8 @@ export class PSPT {
     for (let k = 0; k < 2; k++) {
       const score = g.r[k], active = g.qualified_active[k], matched = g.qualified_matched[k];
       let state, reason;
-      if (g.nobs === 0) { state = "pending"; reason = "no predictive observation"; }
+      if (g.retired?.[k]) { state = "contradicted"; reason = `retired: ${g.retired[k].reason}`; }
+      else if (g.nobs === 0) { state = "pending"; reason = "no predictive observation"; }
       else if (active < this.min_evidence_steps) { state = "pending"; reason = "pose geometry not distinguished from noise in two active snapshots"; }
       else if (score >= 1 - this.alpha && matched < this.min_evidence_steps) { state = "pending"; reason = "fewer than two own-patch range matches"; }
       else if (score >= 1 - this.alpha) { state = "supported"; reason = "composite score and local evidence requirements passed"; }
@@ -351,6 +374,9 @@ export class PSPT {
       first_matched: g.first_match[k], n_matched_configs: g.matched_configs[k],
       own_core_snapshots: g.own_core_snapshots[k], own_matched_snapshots: g.own_matched_snapshots[k], first_own_range_match: g.first_own_range_match[k],
       qualified_active: g.qualified_active[k], qualified_matched: g.qualified_matched[k],
+      ...(this.recovery === "bounded" ? { retired: Boolean(g.retired?.[k]),
+        retiredReason: g.retired?.[k]?.reason ?? null, replacedBy: g.retired?.[k]?.replacement ?? null,
+        recoveryAttempt: g.recoveryAttempts?.[k] ?? 0, replaces: (g.replaces?.[k] ?? []).slice() } : {}),
       geometry_statistic: this.geometry_statistic, geometry_threshold: this.geometry_threshold, geometry_informative: this.geometry_informative })));
   }
 }

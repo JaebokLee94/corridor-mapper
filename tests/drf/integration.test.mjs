@@ -161,14 +161,20 @@ test('paired sweep matches both main-view estimators on the same wire and reques
   let last,expected;
   for (const wire of scene.wire) {
     last=field.step(wire);const methods=comparison.step(wire);
-    const guarded=evaluators.guarded.step({...last,candidates:methods.guarded.candidates});
-    expected={guarded,baseline:evaluators.baseline.step({...last,candidates:methods.baseline.candidates},guarded)};
+    const guarded=evaluators.guarded.step({...last,candidates:methods.guarded.candidates},null,methods.guarded.bridges);
+    expected={guarded,baseline:evaluators.baseline.step({...last,candidates:methods.baseline.candidates},guarded,methods.baseline.bridges)};
   }
   const run=await runExperiment(input,t=>progress.push(t));
   assert.deepEqual(progress,[1,2,3]);assert.deepEqual(run.input,scene.input);
   assert.deepEqual(run.protocol,METHOD_PROTOCOL);assert.equal(run.method,'paired-comparison');
-  for (const method of ['guarded','baseline']) for (const [key,value] of Object.entries(run.methods[method].summary))
-    assert.deepEqual(value, ['Q','admitted','rejected'].includes(key)?last[key]:expected[method][key],`${method}/${key}`);
+  for (const method of ['guarded','baseline']) {
+    const e = expected[method], linear = e.interpolation, cubic = linear.hermite;
+    const metrics = {...e, Q:last.Q, admitted:last.admitted, rejected:last.rejected,
+      mapRecall:linear.recall, interpolatedLengthM:linear.lengthM, interpolatedOffWallM:linear.offWallM,
+      hermiteMapRecall:cubic.recall, hermiteLengthM:cubic.lengthM, hermiteOffWallM:cubic.offWallM};
+    for (const [key,value] of Object.entries(run.methods[method].summary))
+      assert.deepEqual(value, metrics[key], `${method}/${key}`);
+  }
   assert.deepEqual(run.final.Dbar,last.Dbar);assert.deepEqual(run.final.betaHat,last.betaHat);
   assert.equal(run.final.t,input.snapshots);assert.deepEqual(run.diagnostics,expected.guarded.diagnostics);
 });
@@ -236,11 +242,11 @@ test('actual CSV download exports distinct per-method rows and leaves missing pr
   button.onclick();
   assert.equal(downloads[0].name,'echomap-method-comparison.csv');
   const rows=(await downloads[0].blob.text()).trim().split('\r\n').map(line=>line.split(','));
-  assert.equal(rows.length,5);assert.equal(rows[0].length,22);assert.equal(rows[0][0],'method');assert.equal(rows[0].at(-2),'estimator_ms');assert.equal(rows[0].at(-1),'implementation_revision');
+  assert.equal(rows.length,5);assert.equal(rows[0].length,29);assert.equal(rows[0][0],'method');assert.ok(rows[0].includes('linear_map_recall') && rows[0].includes('hermite_map_recall'));assert.equal(rows[0].at(-1),'implementation_revision');
   assert.deepEqual(rows.slice(1).map(row=>row[0]),['guarded','guarded','baseline','baseline']);
   assert.equal(rows[3][10],'','Undefined precision must not become zero');
   assert.equal(Number(rows[1][1]),METHOD_PROTOCOL.guarded.threshold);assert.equal(rows[3][2],METHOD_PROTOCOL.baseline.tuning.id);
-  assert.equal(rows[1].at(-2),'2');assert.equal(rows[3].at(-2),'3');assert.equal(rows[1].at(-1),METHOD_PROTOCOL.guarded.revision);
+  const timingColumn = rows[0].indexOf('estimator_ms'); assert.equal(rows[1][timingColumn],'2');assert.equal(rows[3][timingColumn],'3');assert.equal(rows[1].at(-1),METHOD_PROTOCOL.guarded.revision);
   assert.equal(snapshotCsv(manual.frames,manual.evaluations).trim().split('\r\n')[0].split(',').length,12);
 });
 
