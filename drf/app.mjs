@@ -1,4 +1,4 @@
-import { renderInterpolationPanel } from './interpolation-panel.mjs';
+import { renderInterpolationPanel } from './interpolation-panel.mjs?v=20261108-history';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';
@@ -9,7 +9,7 @@ import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-background2';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261104-diagnostics1';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261108-history';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -434,7 +434,8 @@ function renderSelected() {
   const times = state.frames.slice(0,state.selected).map(f=>f.ms+(f.methods?.guarded.ms ?? 0)+(f.methods?.baseline.ms ?? 0));
   $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
-  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),$('historyMetric').value,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,kind);
+  const historyMetric = $(state.method === 'compare' ? 'historyMetric' : 'interpolationChartMetric').value;
+  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,kind);
   renderDiagnostics();
 }
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
@@ -518,7 +519,7 @@ document.addEventListener('keydown', event => {
     $('timeSlider').value = state.selected; renderSelected();
   }
 });
-for (const id of ['showInterpolation', 'interpolationKind', 'showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse', 'heatField', 'scaleMode','historyMetric','aspectMode']) $(id).onchange = renderSelected;
+for (const id of ['showInterpolation', 'interpolationKind', 'showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse', 'heatField', 'scaleMode','historyMetric','interpolationChartMetric','aspectMode']) $(id).onchange = renderSelected;
 $('fitView').onclick = () => { for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit(true); }; $('zoomIn').onclick = () => map.zoom(1.3); $('zoomOut').onclick = () => map.zoom(1 / 1.3);
 for (const [prefix,view] of [['density',densityMap],['contrast',contrastMap]]) {
   $(prefix+'ZoomIn').onclick = () => view.zoom(1.3);

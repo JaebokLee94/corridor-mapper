@@ -20,9 +20,11 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
     : '0.4 m tolerance · same measured prefix';
   get('historyFirst').textContent = single ? 'Before' : 'WM-P';
   get('historySecond').textContent = single ? 'After' : 'WM-F';
+  const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');
+  const metric = selector.selectedOptions[0].textContent;
   get('metricChart').setAttribute('aria-label', single
-    ? name + ' map recall before and after ' + (kind === 'hermite' ? 'cubic Hermite' : 'linear') + ' interpolation over computed snapshots.'
-    : 'Comparison of both methods over computed snapshots. Export CSV for all numerical values.');
+    ? name + ' ' + metric + ' before and after ' + (kind === 'hermite' ? 'cubic Hermite' : 'linear') + ' interpolation over computed snapshots.'
+    : metric + ' for WM-P and WM-F over computed snapshots.');
   if (!single) return;
   const pair = interpolationPair(frame, mode, kind);
   for (const row of get('interpolationMetrics').tBodies[0].rows) {

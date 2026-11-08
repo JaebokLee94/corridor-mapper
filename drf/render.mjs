@@ -1,4 +1,4 @@
-import { interpolationPair } from './interpolation-panel.mjs';
+import { interpolationPair } from './interpolation-panel.mjs?v=20261108-history';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
@@ -532,22 +532,31 @@ export function drawCounts(canvas,counts,predicted) {
 export function drawComparisonHistory(canvas,evaluations,selection='recall',snapshots=120,mode='compare',kind='linear') {
   const surface=chartSurface(canvas);if(!surface)return;
   const single = mode !== 'compare';
-  if (single) selection = 'mapRecall';
-  const percent = selection !== 'p95', series = [[], []];
+  const percent = single ? selection === 'recall' : selection !== 'p95';
+  const count = single && ['missing','count','falseBridges'].includes(selection);
+  const series = [[], []];
   for (const e of evaluations) {
     const pair = single ? interpolationPair(e, mode, kind) : [e.methods?.guarded, e.methods?.baseline];
     pair.forEach((record, i) => {
-      const value = record?.[single ? 'recall' : selection];
+      const value = record?.[selection];
       series[i].push({x:e.t, y:value==null ? NaN : value*(percent ? 100 : 1)});
     });
   }
-  const [ymin,ymax]=percent?[0,100]:extent(series.flat());
+  let [ymin,ymax]=percent?[0,100]:extent(series.flat());
+  let yTicks = percent ? [0,25,50,75,100] : undefined;
+  if (count) {
+    const peak = series.flat().reduce((max,p) => Number.isFinite(p.y) ? Math.max(max,p.y) : max,0);
+    const step = Math.max(1, Math.ceil(peak / 4));
+    ymax = Math.max(step, Math.ceil(peak / step) * step);
+    yTicks = Array.from({length:ymax / step + 1},(_,i)=>i * step);
+  }
   const xmax=Math.max(1,snapshots),xTicks=Array.from({length:Math.floor(xmax/20)+1},(_,i)=>20*i);
   // Short runs still show their endpoint; longer runs retain the fixed 20-snapshot scale.
   if (xmax<20) xTicks.push(xmax);
-  const metricLabels={mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
-  const yLabel=(metricLabels[selection]?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
-  const axes=chartAxes(surface,{xLabel:'',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks:percent?[0,25,50,75,100]:undefined,hideXZero:true,showYLabel:true,topInset:16,bottomInset:26});
+  const metricLabels={missing:['Missed wall samples','Missed samples'],count:['Gaps joined','Gaps joined'],lengthM:['Added length [m]','Added [m]'],offWallM:['Off-wall added [m]','Off-wall [m]'],falseBridges:['Off-wall joins','Off-wall joins'],mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
+  const labelKey = single && selection === 'recall' ? 'mapRecall' : selection;
+  const yLabel=(metricLabels[labelKey]?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
+  const axes=chartAxes(surface,{xLabel:'',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks,hideXZero:true,showYLabel:true,topInset:16,bottomInset:26});
   chartLine(surface,axes,series[0],surface.color('accent'),[],false,false,true);
   chartLine(surface,axes,series[1],surface.color('baseline'),[6,4],false,false,true);
 }
