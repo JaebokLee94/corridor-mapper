@@ -14,16 +14,17 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
   get('bridgeTableNote').hidden = !single;
   get('historyMetric').hidden = single;
   get('interpolationChartMetric').hidden = !single;
+  const interpolation = kind === 'hermite' ? 'Cubic Hermite' : 'Linear';
   get('resultsTitle').textContent = single ? name + ' interpolation' : 'Method comparison';
   get('evaluationNote').textContent = single
-    ? (kind === 'hermite' ? 'Cubic Hermite' : 'Linear') + ' · 0.4 m tolerance'
+    ? interpolation + ' · 0.4 m tolerance'
     : '0.4 m tolerance · same measured prefix';
-  get('historyFirst').textContent = single ? 'Before' : 'WM-P';
-  get('historySecond').textContent = single ? 'After' : 'WM-F';
+  get('historyFirst').textContent = single ? 'No interpolation' : 'WM-P';
+  get('historySecond').textContent = single ? interpolation + ' interpolation' : 'WM-F';
   const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');
   const metric = selector.selectedOptions[0].textContent;
   get('metricChart').setAttribute('aria-label', single
-    ? name + ' ' + metric + ' before and after ' + (kind === 'hermite' ? 'cubic Hermite' : 'linear') + ' interpolation over computed snapshots.'
+    ? name + ' ' + metric + ' before and after ' + interpolation.toLowerCase() + ' interpolation over computed snapshots.'
     : metric + ' for WM-P and WM-F over computed snapshots.');
   if (!single) return;
   const pair = interpolationPair(frame, mode, kind);

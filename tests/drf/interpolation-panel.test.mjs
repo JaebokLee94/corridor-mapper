@@ -10,13 +10,14 @@ test('interpolation panel follows method and geometry without changing raw recal
   const frame={methods:{guarded:{recall:.5,missing:5,interpolation:{recall:.7,missing:3,hermite:{recall:.8,missing:2}}},baseline:{recall:.4,missing:6,interpolation:{recall:.6,missing:4}}}};
   const render=(mode,kind='linear',f=frame)=>renderInterpolationPanel($,mode,kind,f,fmt);
   const recalls=()=>Array.from($('interpolationMetrics').rows[1].cells).slice(1).map(c=>c.textContent);
-  render('guarded');assert.deepEqual(recalls(),['50.0','70.0']);assert.equal($('historyFirst').textContent,'Before');assert.equal($('methodMetrics').hidden,true);
+  render('guarded');assert.deepEqual(recalls(),['50.0','70.0']);assert.equal($('historyFirst').textContent,'No interpolation');assert.equal($('methodMetrics').hidden,true);
   const selector=$('interpolationChartMetric');
   assert.equal(selector.hidden,false);
   assert.deepEqual(Array.from(selector.options,o=>o.value),Array.from($('interpolationMetrics').tBodies[0].rows,r=>r.dataset.metric));
   selector.value='count';
   render('guarded','hermite');assert.deepEqual(recalls(),['50.0','80.0']);
-  render('baseline');assert.deepEqual(recalls(),['40.0','60.0']);
+  assert.equal($('historySecond').textContent,'Cubic Hermite interpolation');
+  render('baseline');assert.equal($('historySecond').textContent,'Linear interpolation');assert.deepEqual(recalls(),['40.0','60.0']);
   render('baseline','hermite');assert.deepEqual(recalls(),['40.0','—']);
   render('guarded','linear',null);assert.deepEqual(recalls(),['—','—']);
   render('compare');assert.equal($('interpolationMetrics').hidden,true);assert.equal($('methodMetrics').hidden,false);assert.equal($('historySecond').textContent,'WM-F');assert.equal($('historyMetric').hidden,false);

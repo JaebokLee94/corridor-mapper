@@ -233,6 +233,12 @@ kbd { font:inherit; color:var(--color-ink-muted); padding:2px 4px; background:va
 .history-footer { display:grid; grid-template-columns:minmax(max-content,1fr) auto minmax(0,1fr); column-gap:8px; align-items:center; padding:0 12px 3px; color:var(--color-ink-muted); line-height:17px; }
 .history-legend { display:flex; justify-content:flex-start; gap:15px; font-size:12px; }
 .history-axis-title { font-size:14px; }
+#viewMetrics:has(#interpolationChartMetric:not([hidden])) { container-type:inline-size; grid-template-rows:auto minmax(0,1fr) auto; }
+@container (max-width:36rem) {
+  .history-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:0 8px; }
+  .history-legend { flex-wrap:wrap; gap:0 12px; }
+}
+
 .line-pspt,.line-baseline { width:18px; height:0; border-top:2px solid var(--color-accent); }
 .line-baseline { border-color:var(--color-baseline); border-top-style:dashed; }
 .inspector { padding:12px 0 16px; font-size:14px; color:var(--color-ink-muted); min-height:3em; overflow-wrap:anywhere; }

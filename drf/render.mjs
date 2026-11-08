@@ -1,4 +1,4 @@
-import { interpolationPair } from './interpolation-panel.mjs?v=20261108-history';
+import { interpolationPair } from './interpolation-panel.mjs?v=20261108-history2';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
