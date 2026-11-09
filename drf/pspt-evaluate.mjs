@@ -104,7 +104,7 @@ export function createPSPTEvaluator(scenario, grid) {
     gt = wallSamples(scenario),
     mask = metrics.createObservedMask(gt), onWall = neighborhood(gt), firstSupport = new Map();
   let cursor = 0;
-  return { step(frame, sharedDiagnostics = null, bridges = []) {
+  return { step(frame, sharedDiagnostics = null, bridges = [], extendedBridges) {
     if (!Array.isArray(frame.candidates)) throw new Error('PSPT evaluation requires estimator candidates');
     if (!Number.isInteger(frame.t) || frame.t < cursor || frame.t > scenario.truth.length) throw new Error('Evaluation requires a causal snapshot');
     while (cursor < frame.t) {
@@ -126,6 +126,9 @@ export function createPSPTEvaluator(scenario, grid) {
       f1 = recall == null ? null : !surfacePrecision ? 0 : 2 * surfacePrecision * recall / (surfacePrecision + recall),
       pending = frame.candidates.filter(c => c.status === 'pending').length;
     const interpolation = assessBridges(bridges, 'points', onWall, uncovered, observed.length);
+    if (extendedBridges) interpolation.extended = extendedBridges.length
+      ? assessBridges([...bridges, ...extendedBridges], 'points', onWall, uncovered, observed.length)
+      : {...interpolation};
     interpolation.hermite = assessBridges(bridges, 'curve', onWall, uncovered, observed.length);
     const diagnostics = sharedDiagnostics?.diagnostics ?? diagnostic.step(frame.t);
     return { t: frame.t, diagnostics, method: frame.method ?? 'guarded45', proxy: centers.map(p => [p.x, p.y]), observed: observed.map(p => [p.x, p.y]),
@@ -147,7 +150,8 @@ export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = fal
     'center_precision', 'observed_wall_recall', 'first_support_precision', 'first_support_errors',
     'first_support_count', 'surface_f1', 'p95_m', 'offwall_fraction', 'hold_fraction', 'field_ms', 'pspt_ms'];
   if (includeInterpolation) keys.push('interpolated_gaps', 'linear_map_recall', 'linear_added_m', 'linear_added_offwall_m',
-    'hermite_map_recall', 'hermite_added_m', 'hermite_added_offwall_m');
+    'hermite_map_recall', 'hermite_added_m', 'hermite_added_offwall_m',
+    'extended_gaps','extended_map_recall','extended_added_m','extended_added_offwall_m','extended_false_bridges');
   const rows = frames.map((f, k) => {
     const e = evaluations[k] ?? {};
     const row = [f.t, f.Q, f.admitted, f.rejected, e.supportedCount, e.pendingCount, e.rejectedCount,
@@ -155,7 +159,8 @@ export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = fal
       e.f1, e.p95, e.offwall, e.holdRate, f.ms, f.psptMs];
     if (includeInterpolation) {
       const b = e.interpolation, h = b?.hermite;
-      row.push(b?.count, b?.recall, b?.lengthM, b?.offWallM, h?.recall, h?.lengthM, h?.offWallM);
+      row.push(b?.count, b?.recall, b?.lengthM, b?.offWallM, h?.recall, h?.lengthM, h?.offWallM,
+        b?.extended?.count, b?.extended?.recall, b?.extended?.lengthM, b?.extended?.offWallM, b?.extended?.falseBridges);
     }
     return row;
   });

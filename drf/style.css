@@ -1,4 +1,5 @@
 :root {
+  --color-interpolated:#38a67d;
   color-scheme: light;
   --color-bg:#f3f5f7; --color-surface-1:#fff; --color-surface-2:#f5f7f9; --color-surface-3:#e8f1f8;
   --color-ink:#172c3b; --color-ink-muted:#536572; --color-ink-faint:#536572;
@@ -161,10 +162,11 @@ body[data-state="paused"] .run-state::before { background:var(--color-baseline);
 .legend li,.history-legend span { display:inline-flex; align-items:center; gap:7px; }
 .swatch { display:inline-block; width:18px; height:3px; flex:none; }
 .swatch-track { background:var(--color-track); }
-.interpolation-controls { display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; }
-.interpolation-controls select { flex:1; width:auto; min-width:0; max-width:125px; }
+.interpolation-controls { display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
+.interpolation-controls label.toggle { gap:4px; }
+#interpolationKind { flex:1; width:auto; min-width:0; max-width:125px; padding-inline:3px; font-size:.9em; }
 body:has(#showInterpolation:not(:checked)) .legend li:has(.swatch-interpolated) { display:none; }
-.swatch-interpolated { height:0; border-top:2px dotted #009e73; }
+.swatch-interpolated { height:0; border-top:3.5px dotted var(--color-interpolated); }
 .swatch-supported { background:#009e73; height:4px; }
 .swatch-truth { height:0; border-top:2px dashed var(--color-truth); }
 .swatch-ellipse { height:10px; border:1.5px solid var(--color-ellipse); border-radius:50%; }

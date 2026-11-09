@@ -48,14 +48,14 @@ function assertScenario(actual, expected, message) {
 function calculate(scene) {
   const grid = createGrid(scene.input.grid, scene.input.grid, scene.domain);
   const field = createField(grid, { band: scene.input.band, perimeter: scene.input.perimeter });
-  const estimator = new MethodComparison({ sigmaR: scene.input.sigmaD });
+  const estimator = new MethodComparison({ sigmaR: scene.input.sigmaD, includeExtended:true });
   const guardedEvaluator = createPSPTEvaluator(scene, grid), baselineEvaluator = createPSPTEvaluator(scene, grid);
   return scene.wire.map(wire => {
     const frame = field.step(wire), methods = estimator.step(wire);
     Object.assign(frame, { methods, candidates: methods.guarded.candidates,
       psptMs: methods.guarded.ms, method: 'guarded-tuned' });
-    const guarded = guardedEvaluator.step(frame,null,methods.guarded.bridges), baseline = baselineEvaluator.step({ ...frame,
-      method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges);
+    const guarded = guardedEvaluator.step(frame,null,methods.guarded.bridges,methods.guarded.extendedBridges), baseline = baselineEvaluator.step({ ...frame,
+      method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges, methods.baseline.extendedBridges);
     return { frame, evaluation: { ...guarded, methods: { guarded, baseline } } };
   });
 }
@@ -186,7 +186,7 @@ test('cached wire keeps truth and future measurements outside both inference ker
     Object.defineProperty(changed, key, { get() { throw new Error(`forbidden oracle access: ${key}`); } });
   Object.defineProperty(changed.wire, 2, { get() { throw new Error('future measured snapshot read'); } });
   const grid = createGrid(100, 100, scene.domain), fields = [createField(grid), createField(grid)];
-  const estimators = [new MethodComparison({ sigmaR: scene.input.sigmaD }), new MethodComparison({ sigmaR: scene.input.sigmaD })];
+  const estimators = [new MethodComparison({ sigmaR: scene.input.sigmaD, includeExtended:true }), new MethodComparison({ sigmaR: scene.input.sigmaD, includeExtended:true })];
   for (let t = 0; t < 2; t++) {
     assert.deepEqual(numerical(fields[0].step(scene.wire[t])), numerical(fields[1].step(changed.wire[t])));
     assert.deepEqual(numerical(estimators[0].step(scene.wire[t])), numerical(estimators[1].step(changed.wire[t])));

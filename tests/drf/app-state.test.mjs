@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput } from '../../drf/scenario.mjs';
 import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
+import { interpolationResult } from '../../drf/interpolation-panel.mjs';
 import { createDiagnosticView } from '../../drf/diagnostic-ui.mjs';
 
 const source=readFileSync(process.env.DRF_APP_SOURCE || new URL('../../drf/app.mjs',import.meta.url),'utf8');
@@ -193,8 +194,9 @@ test('actual view reset preserves simulation, selection and replay; experiment r
     scenario:{input:{snapshots:3},truth:[{configs:[]},{configs:[]},{configs:[]}],wire:[],walls:[]},
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
   const context=vm.createContext({state,$,form,hoverGeneration:0,hoverTimer:0,replayFrame:0,
-    runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},LAYERED_DOMAIN,location:{hash:'#old'},
-    document,createDiagnosticView,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
+    runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},LAYERED_DOMAIN,URL,location:new URL('http://localhost/drf.html?interpolation=extended#old'),
+    history:{replaceState(_state,_title,url){context.location=url;}},
+    document,createDiagnosticView,interpolationResult,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
     map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,
     fmt:v=>Number.isFinite(v) ? String(v) : '—',percentile:values=>values[0]??null,
     requestAnimationFrame:fn=>{const id=++nextFrame;pending.set(id,fn);return id;},cancelAnimationFrame:id=>pending.delete(id),clearTimeout(){},
@@ -203,7 +205,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
     fillSettings:input=>{snapshots.value=String(input.snapshots);},renderSweep(){},notice:text=>{$('status').textContent=text;},
   });
   attachProtocolView(context);
-  const reset=source.match(/^\$\('resetButton'\)\.onclick = .*;$/m)?.[0];assert.ok(reset,'Actual reset handler exists');
+  const reset=section("$('resetButton').onclick =", "form.addEventListener('change'");
   const viewReset=source.match(/^\$\('firstSnapshot'\)\.onclick = .*;$/m)?.[0];assert.ok(viewReset,'Actual view reset handler exists');
   vm.runInContext([
     section('function stopReplay()','async function prepare('),

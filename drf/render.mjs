@@ -1,4 +1,4 @@
-import { interpolationPair } from './interpolation-panel.mjs?v=20261108-history2';
+import { interpolationPair } from './interpolation-panel.mjs?v=20261109-gaps';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
@@ -320,11 +320,12 @@ export class DrfMap {
     }
     // Paint every casing first so overlapping patch casings cannot erase green
     // support. Flat caps preserve endpoint gaps instead of extending each line.
+    const interpolatedColor = token('interpolated', '#38a67d');
     if (layers.showProxy && this.state.interpolation !== 'off') for (const bridge of this.state.bridges ?? []) {
       const points = this.state.interpolation === 'hermite' ? bridge.curve : bridge.points;
       if (!points?.length) continue;
-      path(points, background, 4, [], 1, 'butt');
-      path(points, '#009e73', 2, [2, 2], 1, 'butt');
+      path(points, background, 5.5, [], 1, 'butt');
+      path(points, interpolatedColor, 3.5, [3.5, 2.5], 1, 'butt');
     }
     for (const points of supportedPatches) path(points,background,8,[],1,'butt');
     for (const points of supportedPatches) path(points,'#009e73',5,[],1,'butt');

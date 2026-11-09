@@ -49,9 +49,9 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask } = {}) {
         frame.methods = run.estimator.step(wire);
         frame.candidates = frame.methods.guarded.candidates;
         frame.psptMs = frame.methods.guarded.ms; frame.method = 'guarded-tuned';
-        const guarded = run.guardedEvaluator.step(frame, null, frame.methods.guarded.bridges);
+        const guarded = run.guardedEvaluator.step(frame, null, frame.methods.guarded.bridges, frame.methods.guarded.extendedBridges);
         const baseline = run.baselineEvaluator.step({ ...frame, method: 'baseline-b',
-          candidates: frame.methods.baseline.candidates }, guarded, frame.methods.baseline.bridges);
+          candidates: frame.methods.baseline.candidates }, guarded, frame.methods.baseline.bridges, frame.methods.baseline.extendedBridges);
         const evaluation = { ...guarded, methods: { guarded, baseline } };
         run.next++;
         if (run.steps > 0) run.steps--;
@@ -84,7 +84,7 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask } = {}) {
       run.scenario = scenario;
       run.grid = createGrid(input.grid, input.grid, scenario.domain);
       run.field = createField(run.grid, { band: input.band, perimeter: input.perimeter });
-      run.estimator = new MethodComparison({ sigmaR: input.sigmaD });
+      run.estimator = new MethodComparison({includeExtended:true,  sigmaR: input.sigmaD });
       run.guardedEvaluator = createPSPTEvaluator(scenario, run.grid);
       run.baselineEvaluator = createPSPTEvaluator(scenario, run.grid);
       send(run, 'prepared', { scenario, grid: run.grid, protocol: METHOD_PROTOCOL });

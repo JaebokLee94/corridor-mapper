@@ -14,8 +14,8 @@ self.onmessage = ({ data }) => {
     }
     if (data.type === 'init') { scenario = data.scenario; evaluator = createPSPTEvaluator(scenario, data.grid); baselineEvaluator = createPSPTEvaluator(scenario, data.grid); self.postMessage({ type: 'initialized', requestId: data.requestId }); }
     if (data.type === 'evaluate') {
-      const guarded=evaluator.step(data.frame, null, data.frame.methods?.guarded?.bridges);
-      const baseline=data.frame.methods ? baselineEvaluator.step({...data.frame,method:'baseline-b',candidates:data.frame.methods.baseline.candidates},guarded,data.frame.methods.baseline.bridges) : null;
+      const guarded=evaluator.step(data.frame, null, data.frame.methods?.guarded?.bridges, data.frame.methods?.guarded?.extendedBridges);
+      const baseline=data.frame.methods ? baselineEvaluator.step({...data.frame,method:'baseline-b',candidates:data.frame.methods.baseline.candidates},guarded,data.frame.methods.baseline.bridges, data.frame.methods.baseline.extendedBridges) : null;
       self.postMessage({type:'evaluation',requestId:data.requestId,evaluation:baseline ? {...guarded,methods:{guarded,baseline}} : guarded});
     }
     if (data.type === 'profile') {

@@ -6,7 +6,7 @@ globalThis.onmessage=({data})=>{
     const allowed=data.type==='init' ? ['type','requestId','sigmaR'] : ['type','requestId','snapshot'];
     if (Object.keys(data).some(k=>!allowed.includes(k))) throw new Error('Non-measurement worker input');
     if (data.type==='init') {
-      estimator=new MethodComparison({sigmaR:data.sigmaR});
+      estimator=new MethodComparison({includeExtended:true, sigmaR:data.sigmaR});
       globalThis.postMessage({type:'initialized',requestId:data.requestId});
     } else if (data.type==='step') {
       if (!estimator) throw new Error('Comparison worker must be initialized');

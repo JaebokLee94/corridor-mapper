@@ -42,10 +42,15 @@ export function selectGuarded(estimator,rows=estimator.report()) {
   });
 }
 export class MethodComparison {
-  constructor(options={}) {this.guarded=new PSPT({refinement:METHOD_PROTOCOL.guarded.refinement,clustering:METHOD_PROTOCOL.guarded.clustering});this.baseline=new Baseline(options);}
+  constructor(options={}) {
+    this.includeExtended = options.includeExtended ?? false;
+    this.guarded = new PSPT({refinement:METHOD_PROTOCOL.guarded.refinement,clustering:METHOD_PROTOCOL.guarded.clustering});
+    this.baseline = new Baseline(options);
+  }
   step(wire) {
-    let start=performance.now();const guarded=selectGuarded(this.guarded,this.guarded.step(wire)),guardedBridges=completeWallGaps(guarded),guardedMs=performance.now()-start;
-    start=performance.now();const baseline=this.baseline.step(wire,METHOD_PROTOCOL.baseline.threshold),baselineBridges=completeWallGaps(baseline),baselineMs=performance.now()-start;
-    return {guarded:{candidates:guarded,bridges:guardedBridges,ms:guardedMs},baseline:{candidates:baseline,bridges:baselineBridges,ms:baselineMs}};
+    const guardedExtras = this.includeExtended ? [] : undefined, baselineExtras = this.includeExtended ? [] : undefined;
+    let start=performance.now();const guarded=selectGuarded(this.guarded,this.guarded.step(wire)),guardedBridges=completeWallGaps(guarded, guardedExtras),guardedMs=performance.now()-start;
+    start=performance.now();const baseline=this.baseline.step(wire,METHOD_PROTOCOL.baseline.threshold),baselineBridges=completeWallGaps(baseline, baselineExtras),baselineMs=performance.now()-start;
+    return {guarded:{candidates:guarded,bridges:guardedBridges,extendedBridges:guardedExtras,ms:guardedMs},baseline:{candidates:baseline,bridges:baselineBridges,extendedBridges:baselineExtras,ms:baselineMs}};
   }
 }

@@ -83,7 +83,7 @@ The original 54-scene set was initially used for evaluation and later reused for
 - **First support** records centre precision at each candidate's first support decision. Later corrections do not erase an earlier error.
 - **P95 distance** and **off-wall centres** describe supported-centre error. They are not the grouped-fragment loss used for tuning.
 
-D̄ is the mean residual density in m⁻². β̂ is a dimensionless field-contrast index, not a probability. True walls and reflection points are optional evaluation overlays. When interpolation is enabled, both methods join unambiguous, aligned endpoints up to the nominal length of the shorter fragment. A dotted line marks the inferred gap. Map recall includes this line, while observed recall uses the supported fragments alone.
+D̄ is the mean residual density in m⁻². β̂ is a dimensionless field-contrast index, not a probability. True walls and reflection points are optional evaluation overlays. Linear interpolation is on by default. Both methods join unambiguous, aligned endpoints up to the nominal length of the shorter fragment. The optional Extended linear view can also join exposed endpoints within four shorter fragment lengths and 45°, skipping occupied or ambiguous gaps. It can bridge real openings; its extra links are evaluated separately. A dotted line marks the inferred gap. Map recall includes this line, while observed recall uses the supported fragments alone.
 
 ## Run and share an experiment
 

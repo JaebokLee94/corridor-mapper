@@ -242,7 +242,7 @@ test('actual CSV download exports distinct per-method rows and leaves missing pr
   button.onclick();
   assert.equal(downloads[0].name,'echomap-method-comparison.csv');
   const rows=(await downloads[0].blob.text()).trim().split('\r\n').map(line=>line.split(','));
-  assert.equal(rows.length,5);assert.equal(rows[0].length,29);assert.equal(rows[0][0],'method');assert.ok(rows[0].includes('linear_map_recall') && rows[0].includes('hermite_map_recall'));assert.equal(rows[0].at(-1),'implementation_revision');
+  assert.equal(rows.length,5);assert.equal(rows[0].length,34);assert.equal(rows[0][0],'method');assert.ok(rows[0].includes('linear_map_recall') && rows[0].includes('hermite_map_recall') && rows[0].includes('extended_map_recall'));assert.equal(rows[0].at(-1),'implementation_revision');
   assert.deepEqual(rows.slice(1).map(row=>row[0]),['guarded','guarded','baseline','baseline']);
   assert.equal(rows[3][10],'','Undefined precision must not become zero');
   assert.equal(Number(rows[1][1]),METHOD_PROTOCOL.guarded.threshold);assert.equal(rows[3][2],METHOD_PROTOCOL.baseline.tuning.id);

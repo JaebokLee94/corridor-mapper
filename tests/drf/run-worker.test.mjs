@@ -51,13 +51,13 @@ test('autonomous engine matches the existing foreground kernels for every measur
   assert.deepEqual(numerical(prepared.scenario), numerical(scene)); assert.deepEqual(prepared.grid, grid);
   assert.deepEqual(prepared.protocol, METHOD_PROTOCOL);
   const field = createField(grid, { band: scene.input.band, perimeter: scene.input.perimeter });
-  const estimator = new MethodComparison({ sigmaR: scene.input.sigmaD });
+  const estimator = new MethodComparison({ sigmaR: scene.input.sigmaD, includeExtended:true });
   const guardedEvaluator = createPSPTEvaluator(scene, grid), baselineEvaluator = createPSPTEvaluator(scene, grid);
   assert.equal(frames.length, input.snapshots);
   for (let i = 0; i < frames.length; i++) {
     const wire = scene.wire[i], frame = field.step(wire), methods = estimator.step(wire);
     Object.assign(frame, { methods, candidates: methods.guarded.candidates, psptMs: methods.guarded.ms, method: 'guarded-tuned' });
-    const guarded = guardedEvaluator.step(frame), baseline = baselineEvaluator.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded);
+    const guarded = guardedEvaluator.step(frame,null,methods.guarded.bridges,methods.guarded.extendedBridges), baseline = baselineEvaluator.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded,methods.baseline.bridges,methods.baseline.extendedBridges);
     assert.deepEqual(numerical(frames[i].frame), numerical(frame), `unchanged numerical frame at t=${i + 1}`);
     assert.deepEqual(numerical(frames[i].evaluation), numerical({ ...guarded, methods: { guarded, baseline } }));
     assert.equal(frames[i].next, i + 1);

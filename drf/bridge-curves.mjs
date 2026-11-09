@@ -6,8 +6,8 @@ import { wallBridges } from './wall-bridges.mjs';
  * Input: this method's candidates in metres/radians; output: two polylines per
  * gap. Extra work/memory O(candidates + total displayed vertices).
  */
-export function completeWallGaps(candidates) {
-  const bridges = wallBridges(candidates);
+export function completeWallGaps(candidates, extendedBridges = null) {
+  const bridges = wallBridges(candidates, extendedBridges);
   if (!bridges.length) return bridges;
   const byId = new Map(candidates.map(c => [c.id,c]));
   for (const bridge of bridges) {

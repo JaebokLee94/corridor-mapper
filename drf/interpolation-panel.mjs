@@ -1,9 +1,13 @@
 // Read only the post-hoc evaluation for one method at the selected snapshot.
+export function interpolationResult(e, kind) {
+  return kind === 'linear' ? e?.interpolation : e?.interpolation?.[kind];
+}
+
 export function interpolationPair(frame, method, kind) {
   const e = frame?.methods?.[method] ?? (method === 'guarded' ? frame : null);
   if (!e) return [null, null];
   const raw = {recall:e.recall, missing:e.missing, count:0, lengthM:0, offWallM:0, falseBridges:0};
-  return [raw, (kind === 'hermite' ? e.interpolation?.hermite : e.interpolation) ?? null];
+  return [raw, interpolationResult(e, kind) ?? null];
 }
 
 export function renderInterpolationPanel(get, mode, kind, frame, format) {
@@ -14,11 +18,13 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
   get('bridgeTableNote').hidden = !single;
   get('historyMetric').hidden = single;
   get('interpolationChartMetric').hidden = !single;
-  const interpolation = kind === 'hermite' ? 'Cubic Hermite' : 'Linear';
+  const interpolation = kind === 'extended' ? 'Extended linear' : kind === 'hermite' ? 'Cubic Hermite' : 'Linear';
   get('resultsTitle').textContent = single ? name + ' interpolation' : 'Method comparison';
   get('evaluationNote').textContent = single
     ? interpolation + ' · 0.4 m tolerance'
     : '0.4 m tolerance · same measured prefix';
+  if (kind === 'extended' && (single || get('showInterpolation').checked))
+    get('evaluationNote').textContent = 'Extended linear · may cross openings';
   get('historyFirst').textContent = single ? 'No interpolation' : 'WM-P';
   get('historySecond').textContent = single ? interpolation + ' interpolation' : 'WM-F';
   const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');

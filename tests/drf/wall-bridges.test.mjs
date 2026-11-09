@@ -50,3 +50,20 @@ test('observed missing samples and added off-wall length measure different outco
   assert.equal(rows[0].split(',').length,rows[1].split(',').length);
   assert.ok(rows[0].includes('hermite_added_offwall_m'));
 });
+
+test('wide linear joins remain optional, reject ambiguous partners, and report closing a real opening', () => {
+  const a = patch('left', 0), b = patch('right', 7);
+  const extra = [];
+  assert.deepEqual(completeWallGaps([a, b], extra), []);
+  assert.deepEqual(extra.map(link => link.points), [[[1,0],[6,0]]]);
+  for (const input of [[a,patch('distant',10.1)], [a,b,patch('fork',7,.5)]]) {
+    const alternatives = [];
+    completeWallGaps(input,alternatives);
+    assert.deepEqual(alternatives, []);
+  }
+  const scene = {walls:[[[-1,0],[1,0]], [[6,0],[8,0]]],truth:[{configs:[]}]};
+  const e = createPSPTEvaluator(scene).step({t:1,candidates:[a,b]}, {diagnostics:{}}, [], extra);
+  assert.equal(e.interpolation.count,0);
+  assert.equal(e.interpolation.extended.falseBridges,1);
+  assert.ok(Math.abs(e.interpolation.extended.offWallM - 4.2) < 1e-9);
+});

@@ -1,4 +1,4 @@
-import { renderInterpolationPanel } from './interpolation-panel.mjs?v=20261108-history2';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261109-gaps';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';
@@ -9,7 +9,7 @@ import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-background2';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261108-history2';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261109-gaps';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -394,15 +394,19 @@ function renderSelected() {
   const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse'].map(id => [id, $(id).checked]));
   const interpolate = $('showInterpolation').checked, kind = $('interpolationKind').value;
   $('interpolationKind').disabled = !interpolate && state.method === 'compare';
+  const visibleBridges = method => {
+    const map = frame?.methods?.[method];
+    return kind === 'extended' && map?.extendedBridges?.length ? [...map.bridges, ...map.extendedBridges] : map?.bridges ?? [];
+  };
   const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: state.scenario?.domain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls: scenario?.walls ?? previewWalls(),cameraBounds:scenario?.cameraBounds ?? previewBounds,
-    bridges: frame?.methods?.[state.method === 'baseline' ? 'baseline' : 'guarded']?.bridges ?? [],
+    bridges: visibleBridges(state.method === 'baseline' ? 'baseline' : 'guarded'),
     candidates: frame?.methods?.[state.method]?.candidates ?? frame?.candidates ?? [], observed: evaluation?.observed, layers, heatField: $('heatField').value, scaleMode: $('scaleMode').value,
     history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
   $('mapPair').dataset.mode=state.method;
   $('baselinePane').hidden=state.method!=='compare';
   $('primaryMapName').textContent=state.method==='baseline'?'WM-F (Wall Mapping with Fixed Segments)':'WM-P (Wall Mapping with Pair Tracking)';
   map.set({...display,mode:'geometry',xRange:[-10,90]});
-  baselineMap.set({...display,bridges:frame?.methods?.baseline?.bridges ?? [],candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,90]});
+  baselineMap.set({...display,bridges:visibleBridges('baseline'),candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,90]});
   const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
   densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
   contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
@@ -417,7 +421,7 @@ function renderSelected() {
     const candidates=frame?.methods?.[method]?.candidates ?? [];
     for (const [id,status] of [['supportedValue','supported'],['pendingValue','pending'],['contradictedValue','contradicted']])
       node(id).textContent=method==='baseline' && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
-    const completed = kind === 'hermite' ? e?.interpolation?.hermite : e?.interpolation;
+    const completed = interpolationResult(e, kind);
     const mapRecall = node('mapRecallValue'), coverage = interpolate ? completed?.recall : e?.recall;
     mapRecall.textContent = coverage == null ? '—' : fmt(100 * coverage, 1);
     mapRecall.title = !interpolate ? 'Supported fragments only' : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
@@ -494,7 +498,13 @@ $('pauseButton').onclick = () => commandRun(state.mode === 'paused' ? 'resume' :
 $('stepButton').onclick = () => { state.mode === 'paused' ? commandRun('step') : prepare(true); };
 $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
-$('resetButton').onclick = () => { state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(DEFAULT_INPUT); renderSelected(); location.hash = ''; renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.'); };
+$('resetButton').onclick = () => {
+  state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(DEFAULT_INPUT);
+  $('showInterpolation').checked = true; $('interpolationKind').value = 'linear';
+  const url = new URL(location.href); url.hash = ''; url.searchParams.delete('interpolation');
+  history.replaceState(null, '', url); renderSelected(); renderSweep();
+  $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.');
+};
 form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { location.hash = `v1=${encodeURIComponent(JSON.stringify(settings()))}`; } catch (e) { notice(e.message); } });
 form.addEventListener('change', () => warmSelectedInput());
 $('resetButton').addEventListener('click', () => warmSelectedInput());
@@ -674,6 +684,11 @@ try {
     initialInput={...initialInput,seed:1+draw[0]%10};
   }
 } catch (error) { notice(`Could not restore URL settings: ${error.message}`); }
+if (location.search) {
+  const sharedInterpolation = new URLSearchParams(location.search).get('interpolation');
+  if (['linear','hermite','extended'].includes(sharedInterpolation)) $('interpolationKind').value = sharedInterpolation;
+  $('showInterpolation').checked = sharedInterpolation !== 'off';
+}
 fillSettings(initialInput);
 history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialInput))}`);
 if (matchMedia('(max-width: 760px)').matches) $('settingsDetails').open=false;
@@ -705,9 +720,13 @@ $('newSeed').onclick=()=>{
 $('shareButton').onclick=async()=>{
   try {
     const input=state.scenario?.input ?? settings();location.hash=`v1=${encodeURIComponent(JSON.stringify(input))}`;
-    $('shareLink').value=location.href;$('shareDialog').showModal();
+    const shared = new URL(location.href);
+    const interpolation = $('showInterpolation').checked ? $('interpolationKind').value : 'off';
+    if (interpolation === 'linear') shared.searchParams.delete('interpolation');
+    else shared.searchParams.set('interpolation', interpolation);
+    $('shareLink').value=shared.href;$('shareDialog').showModal();
     if(location.protocol==='file:') {$('shareStatus').textContent='This is a local file URL. Share the hosted page or downloaded JSON with collaborators.';return;}
-    try {await navigator.clipboard.writeText(location.href);$('shareStatus').textContent='Link copied. The seed and parameters are preserved.';}
+    try {await navigator.clipboard.writeText(shared.href);$('shareStatus').textContent='Link copied. The seed and parameters are preserved.';}
     catch {$('shareStatus').textContent='Select and copy the link above.';}
   } catch(error) {notice(error.message);}
 };
