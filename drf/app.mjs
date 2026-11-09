@@ -1,4 +1,4 @@
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261109-gaps';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261109-map-headings';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';

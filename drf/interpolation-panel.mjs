@@ -25,8 +25,10 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
     : '0.4 m tolerance · same measured prefix';
   if (kind === 'extended' && (single || get('showInterpolation').checked))
     get('evaluationNote').textContent = 'Extended linear · may cross openings';
-  get('historyFirst').textContent = single ? 'No interpolation' : 'WM-P';
-  get('historySecond').textContent = single ? interpolation + ' interpolation' : 'WM-F';
+  const completedLabel = interpolation + ' interpolation';
+  get('interpolatedMapHeading').textContent = completedLabel;
+  get('historyFirst').textContent = single ? get('rawMapHeading').textContent : 'WM-P';
+  get('historySecond').textContent = single ? completedLabel : 'WM-F';
   const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');
   const metric = selector.selectedOptions[0].textContent;
   get('metricChart').setAttribute('aria-label', single
