@@ -1,4 +1,4 @@
-import { interpolationPair } from './interpolation-panel.mjs?v=20261109-gaps';
+import { interpolationPair } from './interpolation-panel.mjs?v=20261109-interp-first';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
@@ -563,8 +563,9 @@ export function drawComparisonHistory(canvas,evaluations,selection='recall',snap
   const yLabel=(metricLabels[labelKey]?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
   const tight=single && surface.width<=560;
   const axes=chartAxes(surface,{xLabel:tight ? 'Snapshot' : '',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks,hideXZero:true,showYLabel:true,tight,topInset:tight ? 9 : 16,bottomInset:tight ? 30 : 26});
-  chartLine(surface,axes,series[0],surface.color(single ? 'baseline' : 'accent'),single ? [6,4] : [],false,false,true);
-  chartLine(surface,axes,series[1],surface.color(single ? 'accent' : 'baseline'),single ? [] : [6,4],false,false,true);
+  // Keep the interpolated trace visible when both histories coincide.
+  for (const i of single ? [1,0] : [0,1])
+    chartLine(surface,axes,series[i],surface.color(i ? 'baseline' : 'accent'),i ? [6,4] : [],false,false,true);
 }
 
 /** Link user navigation only; each view retains its own data and heatmap. */

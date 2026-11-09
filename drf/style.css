@@ -240,8 +240,6 @@ kbd { font:inherit; color:var(--color-ink-muted); padding:2px 4px; background:va
 #viewMetrics:has(#interpolationChartMetric:not([hidden])) { container:history / inline-size; grid-template-rows:auto minmax(0,1fr) auto; }
 #viewMetrics:has(#interpolationChartMetric:not([hidden])) .vlabel { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; }
 #viewMetrics #interpolationChartMetric { width:auto; min-width:0; field-sizing:content; justify-self:end; }
-#viewMetrics:has(#interpolationChartMetric:not([hidden])) .line-pspt { border-color:var(--color-baseline); border-top-style:dashed; }
-#viewMetrics:has(#interpolationChartMetric:not([hidden])) .line-baseline { border-color:var(--color-accent); border-top-style:solid; }
 @container history (max-width:560px) {
   .history-footer { display:block; padding:0 10px 3px; }
   .history-axis-title { display:none; } /* Drawn at the plot midpoint on the compact canvas. */

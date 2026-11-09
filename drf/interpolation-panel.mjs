@@ -7,7 +7,7 @@ export function interpolationPair(frame, method, kind) {
   const e = frame?.methods?.[method] ?? (method === 'guarded' ? frame : null);
   if (!e) return [null, null];
   const raw = {recall:e.recall, missing:e.missing, count:0, lengthM:0, offWallM:0, falseBridges:0};
-  return [raw, interpolationResult(e, kind) ?? null];
+  return [interpolationResult(e, kind) ?? null, raw];
 }
 
 export function renderInterpolationPanel(get, mode, kind, frame, format) {
@@ -27,12 +27,12 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
     get('evaluationNote').textContent = 'Extended linear · may cross openings';
   const completedLabel = interpolation + ' interpolation';
   get('interpolatedMapHeading').textContent = completedLabel;
-  get('historyFirst').textContent = single ? get('rawMapHeading').textContent : 'WM-P';
-  get('historySecond').textContent = single ? completedLabel : 'WM-F';
+  get('historyFirst').textContent = single ? completedLabel : 'WM-P';
+  get('historySecond').textContent = single ? get('rawMapHeading').textContent : 'WM-F';
   const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');
   const metric = selector.selectedOptions[0].textContent;
   get('metricChart').setAttribute('aria-label', single
-    ? name + ' ' + metric + ' before and after ' + interpolation.toLowerCase() + ' interpolation over computed snapshots.'
+    ? name + ' ' + metric + ' with ' + completedLabel.toLowerCase() + ' and without interpolation over computed snapshots.'
     : metric + ' for WM-P and WM-F over computed snapshots.');
   if (!single) return;
   const pair = interpolationPair(frame, mode, kind);

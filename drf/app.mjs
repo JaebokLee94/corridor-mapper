@@ -1,4 +1,4 @@
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261109-map-headings';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261109-interp-first';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';
@@ -9,7 +9,7 @@ import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-background2';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261109-history';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261109-interp-first';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
