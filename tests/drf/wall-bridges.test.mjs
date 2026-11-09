@@ -67,3 +67,41 @@ test('wide linear joins remain optional, reject ambiguous partners, and report c
   assert.equal(e.interpolation.extended.falseBridges,1);
   assert.ok(Math.abs(e.interpolation.extended.offWallM - 4.2) < 1e-9);
 });
+
+test('a wider linear link requires repeated, local range support throughout the gap', async () => {
+  const {GapRangeEvidence} = await import('../../drf/bridge-evidence.mjs');
+  const left = patch('L',0), right = patch('R',6), pieces = [left,right];
+  function lineSnapshot(t, {opening=false, clutter=false}={}) {
+    const configs = [];
+    for (const centre of [1.5,2.5,3.5,4.5]) {
+      // For these poses above y=0, the mirror path has length hypot(2*h, 0.4).
+      for (const h of [2,2.5,3,3.5]) {
+        const ranges = opening && centre===2.5 ? [] : clutter ? [2*h-.6,2*h,2*h+.6] : [2*h];
+        configs.push({pHat_i:[centre-.2,h],pHat_j:[centre+.2,h],
+          paths:ranges.map(r=>({dHat:Math.hypot(r,.4)}))});
+      }
+    }
+    return {t,configs};
+  }
+  function run(cfg) {
+    const evidence = new GapRangeEvidence(.1);
+    for (let t=1;t<=2;t++) {
+      evidence.add(lineSnapshot(t,cfg));
+      assert.equal(completeWallGaps(pieces,[],evidence).length,0);
+    }
+    evidence.add(lineSnapshot(3,cfg));
+    const extra=[], base=completeWallGaps(pieces,extra,evidence);
+    assert.equal(extra.length+base.length,1);
+    return base;
+  }
+  const joined=run({});
+  assert.deepEqual(joined[0].points,[[1,0],[5,0]]);
+  assert.equal(joined[0].measuredLinear,true);
+  assert.equal(joined[0].curve,undefined);
+  assert.equal(run({opening:true}).length,0);
+  assert.equal(run({clutter:true}).length,0);
+  const scene={walls:[[[-1,0],[7,0]]],truth:[{configs:[{specular:[{s:[3,0]}],diffuse:[]}]}]};
+  const score=createPSPTEvaluator(scene).step({t:1,candidates:pieces},{diagnostics:{}},joined,[]).interpolation;
+  assert.ok(score.recall>score.hermite.recall);
+  assert.equal(score.extended.count,1);
+});

@@ -6,11 +6,12 @@ import { wallBridges } from './wall-bridges.mjs';
  * Input: this method's candidates in metres/radians; output: two polylines per
  * gap. Extra work/memory O(candidates + total displayed vertices).
  */
-export function completeWallGaps(candidates, extendedBridges = null) {
-  const bridges = wallBridges(candidates, extendedBridges);
+export function completeWallGaps(candidates, extendedBridges = null, evidence = null) {
+  const bridges = wallBridges(candidates, extendedBridges, evidence);
   if (!bridges.length) return bridges;
   const byId = new Map(candidates.map(c => [c.id,c]));
   for (const bridge of bridges) {
+    if (bridge.measuredLinear) continue; // Range confirmation applies to the straight chord only.
     const [a,b] = bridge.points, length = Math.hypot(b[0]-a[0], b[1]-a[1]);
     const tx = (b[0]-a[0])/length, ty = (b[1]-a[1])/length;
     const slope = (point,c) => {

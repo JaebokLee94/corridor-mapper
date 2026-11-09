@@ -129,7 +129,7 @@ export function createPSPTEvaluator(scenario, grid) {
     if (extendedBridges) interpolation.extended = extendedBridges.length
       ? assessBridges([...bridges, ...extendedBridges], 'points', onWall, uncovered, observed.length)
       : {...interpolation};
-    interpolation.hermite = assessBridges(bridges, 'curve', onWall, uncovered, observed.length);
+    interpolation.hermite = assessBridges(bridges.filter(b => !b.measuredLinear), 'curve', onWall, uncovered, observed.length);
     const diagnostics = sharedDiagnostics?.diagnostics ?? diagnostic.step(frame.t);
     return { t: frame.t, diagnostics, method: frame.method ?? 'guarded45', proxy: centers.map(p => [p.x, p.y]), observed: observed.map(p => [p.x, p.y]),
       medianError: percentile(distances, .5), p95: percentile(distances, .95), offwall: precision == null ? null : 1 - precision,

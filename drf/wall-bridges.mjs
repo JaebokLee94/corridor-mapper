@@ -1,12 +1,14 @@
+import { RANGE_SUPPORT } from './bridge-evidence.mjs';
+
 /** Linear map completion on the current supported fragments, in metres and radians.
  * Two outward tangents must face along the chord. At a branch both ends must
  * have exactly one partner. Inferred segments never become candidate endpoints.
  * With N patches, sorting costs O(N log N); pair checks are O(N²) worst case.
  */
-export const BRIDGE_RULE = Object.freeze({ maxGap: "shorter full fragment", maxAngleDeg: 15, overlapDistanceM: 0.10, extendedLengthFactor: 4, extendedMaxAngleDeg: 45 });
+export const BRIDGE_RULE = Object.freeze({ maxGap: "shorter full fragment", maxAngleDeg: 15, overlapDistanceM: 0.10, extendedLengthFactor: 4, extendedMaxAngleDeg: 45, rangeSupport:RANGE_SUPPORT });
 const cosine = Math.cos(BRIDGE_RULE.maxAngleDeg * Math.PI / 180);
 
-export function wallBridges(candidates, extendedBridges = null) {
+export function wallBridges(candidates, extendedBridges = null, evidence = null) {
   const patches = [], ends = [];
   for (const c of candidates) {
     if (c.status !== 'supported') continue;
@@ -49,15 +51,15 @@ export function wallBridges(candidates, extendedBridges = null) {
       bridges.push({from: a.patch.c.id, to: b.patch.c.id, points: [a.point, b.point]});
     }
   }
-  if (extendedBridges) addExtendedBridges(patches, ends, used, extendedBridges);
+  if (extendedBridges || evidence) addExtendedBridges(patches, ends, used, extendedBridges, bridges, evidence);
   return bridges;
 }
 
 // Extra linear links for inspecting wider gaps. Only exposed tips of supported
 // pieces are eligible. With N pieces and S chord samples, the occupancy veto
 // costs O(S*N) per plausible pair. An added link never becomes a new endpoint.
-function addExtendedBridges(patches, ends, used, extra) {
-  const cosine = Math.cos(BRIDGE_RULE.extendedMaxAngleDeg * Math.PI / 180);
+function addExtendedBridges(patches, ends, used, extra, bridges, evidence) {
+  const wideCosine = Math.cos(BRIDGE_RULE.extendedMaxAngleDeg * Math.PI / 180);
   const spanFactor = 2 * BRIDGE_RULE.extendedLengthFactor;
   function covered(x, y, first, second) {
     return patches.some(patch => {
@@ -79,8 +81,8 @@ function addExtendedBridges(patches, ends, used, extra) {
       if (dx > spanFactor * a.patch.c.ell) break;
       const gap = Math.hypot(dx, dy);
       if (a.patch === b.patch || gap < 1e-8 || gap > spanFactor * Math.min(a.patch.c.ell, b.patch.c.ell)) continue;
-      if (a.dx * dx + a.dy * dy < cosine * gap || -(b.dx * dx + b.dy * dy) < cosine * gap ||
-          -(a.dx * b.dx + a.dy * b.dy) < cosine) continue;
+      if (a.dx * dx + a.dy * dy < wideCosine * gap || -(b.dx * dx + b.dy * dy) < wideCosine * gap ||
+          -(a.dx * b.dx + a.dy * b.dy) < wideCosine) continue;
       const steps = Math.max(2, Math.ceil(gap / 0.2));
       let occupied = false;
       for (let k = 1; k < steps && !occupied; k++)
@@ -92,7 +94,14 @@ function addExtendedBridges(patches, ends, used, extra) {
     }
   }
   for (const [a, b] of choices) {
-    if (degree.get(a) === 1 && degree.get(b) === 1)
-      extra.push({from: a.patch.c.id, to: b.patch.c.id, points: [a.point, b.point]});
+    if (degree.get(a) !== 1 || degree.get(b) !== 1) continue;
+    const link = {from:a.patch.c.id, to:b.patch.c.id, points:[a.point, b.point]};
+    const dx = b.point[0] - a.point[0], dy = b.point[1] - a.point[1], gap = Math.hypot(dx,dy);
+    if (evidence && a.dx*dx + a.dy*dy >= cosine*gap && -(b.dx*dx + b.dy*dy) >= cosine*gap &&
+        -(a.dx*b.dx + a.dy*b.dy) >= cosine && evidence.confirms(link.points)) {
+      bridges.push({...link, measuredLinear:true});
+    } else {
+      extra?.push(link);
+    }
   }
 }

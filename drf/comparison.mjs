@@ -3,6 +3,7 @@
  * Provenance and selection losses: THRESHOLD_PROTOCOL.md. No error certificate.
  */
 import { completeWallGaps } from './bridge-curves.mjs';
+import { GapRangeEvidence } from './bridge-evidence.mjs';
 import { BRIDGE_RULE } from './wall-bridges.mjs';
 import { PSPT } from './pspt.mjs';
 import { Baseline } from './baseline.mjs?v=20261022-audit1';
@@ -46,11 +47,15 @@ export class MethodComparison {
     this.includeExtended = options.includeExtended ?? false;
     this.guarded = new PSPT({refinement:METHOD_PROTOCOL.guarded.refinement,clustering:METHOD_PROTOCOL.guarded.clustering});
     this.baseline = new Baseline(options);
+    this.gapEvidence = new GapRangeEvidence(this.baseline.sigmaR);
   }
   step(wire) {
     const guardedExtras = this.includeExtended ? [] : undefined, baselineExtras = this.includeExtended ? [] : undefined;
-    let start=performance.now();const guarded=selectGuarded(this.guarded,this.guarded.step(wire)),guardedBridges=completeWallGaps(guarded, guardedExtras),guardedMs=performance.now()-start;
-    start=performance.now();const baseline=this.baseline.step(wire,METHOD_PROTOCOL.baseline.threshold),baselineBridges=completeWallGaps(baseline, baselineExtras),baselineMs=performance.now()-start;
+    let start = performance.now();
+    const guarded = selectGuarded(this.guarded, this.guarded.step(wire));
+    this.gapEvidence.add(wire);
+    const guardedBridges = completeWallGaps(guarded, guardedExtras, this.gapEvidence), guardedMs = performance.now() - start;
+    start=performance.now();const baseline=this.baseline.step(wire,METHOD_PROTOCOL.baseline.threshold),baselineBridges=completeWallGaps(baseline, baselineExtras, this.gapEvidence),baselineMs=performance.now()-start;
     return {guarded:{candidates:guarded,bridges:guardedBridges,extendedBridges:guardedExtras,ms:guardedMs},baseline:{candidates:baseline,bridges:baselineBridges,extendedBridges:baselineExtras,ms:baselineMs}};
   }
 }
