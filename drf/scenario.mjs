@@ -11,7 +11,7 @@ import { createRng } from './rng.mjs';
 import { makeWire } from './wire.mjs';
 
 export const DEFAULT_INPUT = Object.freeze({
-  scene: 'layered', wallSide: 'both', vehicles: 10, snapshots: 120, sigmaP: 0.1, sigmaD: 0.1,
+  scene: 'layered', wallSide: 'both', vehicles: 10, snapshots: 120, sigmaP: 0, sigmaD: 0.4,
   sigmaM: 6, deltaM: 20, sigmaDGeometry: 0.33, deltaD: 4,
   roughness: 2, lambda0: 10, cellStep: 0.02, resolution: 0, specular: true,
   grid: 150, band: 4, perimeter: 'exact', seed: 1,

@@ -32,7 +32,13 @@ test('DRF DOM contract and readable stylesheet', () => {
     }
   }
   assert.match(readFileSync(new URL('../../drf/style.css',import.meta.url),'utf8'),/body\s*\{[^}]*font:14px/,'Main text and controls retain a 14 px base');
-  assert.match(html,/name="sigmaP"[^>]*value="0.1"/);
+  const defaults=normalizeInput({});
+  assert.deepEqual([defaults.sigmaP,defaults.sigmaD],[0,.4]);
+  for(const name of ['sigmaP','sigmaD']){
+    const value=html.match(new RegExp('name="'+name+'"[^>]*value="([^"]+)"'))[1];
+    assert.equal(Number(value),defaults[name]);
+  }
+  assert.match(html,/name="sweepNoise" value="0\.4,0\.7,1\.0"/);
   assert.match(html,/name="roughness"[\s\S]*?value="2" selected/);
 });
 

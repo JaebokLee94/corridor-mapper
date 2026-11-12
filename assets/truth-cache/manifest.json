@@ -5,7 +5,7 @@
     "drf/diffuse.mjs": "6a9f63bf383dd7cfb14cd2dab94ecc013f0ec551d1f036b12a8de33ca62b87de",
     "drf/poly.mjs": "b3284159beebcf135d70df9ba5601b6cbdfe5d0d1416a067ff6991a4d77e3fa2",
     "drf/rng.mjs": "b5be48effcf70dc4a86a19fc01d3a1e2ca5b80e1af5bea3a2b14f286704da6b0",
-    "drf/scenario.mjs": "caa30d07e47f3e840af1300903821de68efcb348561c3c5629e10c759e836539",
+    "drf/scenario.mjs": "8069f66764ae91b3458673d5897bb08c1191378d5a37e56d0cf15936dd49b2db",
     "drf/specular.mjs": "99e85d304c00692d086282b5838765677b6e5849a174fa35cdf9a9fdfb20e098",
     "drf/truth-cache.mjs": "0a4108275d964c606591de04b2bd7d1607827393c38b7bb4d4998dfe75d69e73",
     "drf/wall.mjs": "78ef4f5a2ae12e55c65d08f9110e2c73dcdda3af80a81f3666dfa92e5a46d7fa",

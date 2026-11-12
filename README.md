@@ -16,6 +16,8 @@ A research workbench for seeing how measurements become surface hypotheses, and 
 
 ![EchoMap: WM-P and WM-F on the same measurement sequence](assets/echomap-comparison.png)
 
+Default measurement noise (local and shared): position SD **0 m** (implementing the negligible localization noise assumed by Jung et al., §II-C) and echo-range SD **0.40 m** (wall reconstruction in §VI-A). The default range-noise sweep uses 0.40, 0.70 and 1.00 m. Explicit values in replay links and exports retain their original meaning. Published thresholds below were selected under their documented noise conditions.
+
 *One synthetic scene with independently shaped walls, two causal estimators. The screenshot uses seed 549028359, 10 vehicles, 120 snapshots, and position/range SD 0.1 m. It illustrates the interface, not aggregate performance. [Replay these settings](https://jaeboklee94.github.io/corridor-mapper/drf.html#v1=%7B%22vehicles%22%3A10%2C%22snapshots%22%3A120%2C%22sigmaP%22%3A0.1%2C%22sigmaD%22%3A0.1%2C%22seed%22%3A549028359%7D).*
 
 EchoMap is developed by **Jaebok Lee, Wireless Systems Laboratory, Hanyang University**. It studies a question in collaborative sensing: can noisy, unlabeled path lengths distinguish a wall patch from a plausible geometric alternative?

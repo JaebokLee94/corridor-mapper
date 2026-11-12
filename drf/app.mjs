@@ -3,7 +3,7 @@ import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';
 import { sweepCsv } from './sweep-export.mjs';
-import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261104-truthcache1';
+import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261112-paper-noise';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 import { METHOD_PROTOCOL, protocolForFleet } from './comparison.mjs?v=20261112-wmf-fleet';
