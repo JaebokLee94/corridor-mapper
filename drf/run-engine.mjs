@@ -25,7 +25,7 @@ export function yieldWorkerTask() {
  * O(scenario + grid + estimator/evaluator state); frame history belongs to the UI.
  * emit must be nonblocking: the controller never waits for the page to consume it.
  */
-export function createRunEngine({ emit, yieldTask = yieldWorkerTask } = {}) {
+export function createRunEngine({ emit, yieldTask = yieldWorkerTask, prepare = generateScenario } = {}) {
   if (typeof emit !== 'function') throw new TypeError('A result emitter is required');
   let epoch = 0, active = null;
   const send = (run, type, value = {}) => {
@@ -76,7 +76,7 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask } = {}) {
       target: message.single ? 'paused' : 'running', steps: message.single ? 1 : 0, busy: false };
     active = run; status(run, 'running');
     try {
-      const scenario = await generateScenario(input, (t, total) => {
+      const scenario = await prepare(input, (t, total) => {
         if (active !== run || run.epoch !== epoch) throw new Error('Cancelled');
         send(run, 'progress', { t, total });
       }, { onPhase: phase => send(run, 'preparation', { phase }) });

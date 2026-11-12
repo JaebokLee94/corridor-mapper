@@ -6,7 +6,7 @@ originalCacheFiles.push(...truthBank.entries.map(entry => `assets/truth-cache/${
 // Only public viewer dependencies belong in the shared-site artifact.
 const originalDiagnosticFiles = ['diagnostic-ui.mjs', 'diagnostic-profile.mjs', 'sweep-export.mjs'].map(path => `drf/${path}`);
 const originalMathFiles = ['latex-LICENSE.txt', 'latex.mjs', 'latex-assets.mjs', 'dom-math.mjs', 'render-math.mjs'].map(path => `drf/${path}`);
-const originalComputeFiles = ['drf/field-reuse.mjs', 'drf/pspt-curvature.mjs', 'drf/pspt-recovery.mjs'];
+const originalComputeFiles = ['drf/public-measure.mjs','drf/field-reuse.mjs', 'drf/pspt-curvature.mjs', 'drf/pspt-recovery.mjs'];
 export const runtimeFiles = [
   ...originalMathFiles, ...originalDiagnosticFiles, ...originalCacheFiles, ...originalComputeFiles,
   'drf.html', 'wall_metrics.js', 'surf/map.mjs', 'surf/exports.mjs',

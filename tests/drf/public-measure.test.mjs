@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {gzipSync} from 'node:zlib';
+import {normalizeInput,createSceneGeometry,generateTruthSnapshot,measureTruthSnapshot} from '../../drf/scenario.mjs';
+import {fetchPublicScene} from '../../drf/public-measure.mjs';
+import relay,{publicBlock} from '../../tools/dgx/public/relay.mjs';
+test('public transport preserves seeded noise, pair identity and chronology; wrong endpoint, missing frames and order are rejected',async()=>{
+ const input=normalizeInput({scene:'reference',vehicles:3,snapshots:13,seed:21933,roughness:0});
+ const geometry=createSceneGeometry(input);
+ const truth=Array.from({length:13},(_,k)=>generateTruthSnapshot(input,geometry.spans,k+1,geometry.wallModel));let corrupt=false;
+ const fromGPU=async(_,req)=>{const {start,end}=publicBlock(JSON.parse(req.body));
+ const frames=truth.slice(start-1,end);if(corrupt)frames.reverse();
+ return new Response(gzipSync(JSON.stringify({start,end,geometry,frames})));};
+ const trace=[],r=await fetchPublicScene(input,n=>trace.push(n),fromGPU);
+ assert.deepEqual(trace,[12,13]);assert.deepEqual(r.wire,truth.map(s=>measureTruthSnapshot(input,s).wire));
+ corrupt=true;await assert.rejects(fetchPublicScene(input,()=>{},fromGPU),/out of order/);
+ assert.throws(()=>publicBlock({input:{vehicles:20},start:1,end:12}));
+ const forbidden=await relay.fetch(new Request('https://example.org/v1/physical',{method:'POST'}),{});assert.equal(forbidden.status,403);
+ assert.equal((await relay.fetch(new Request('https://example.org/agent'),{})).status,403);
+});

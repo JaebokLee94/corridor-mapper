@@ -172,7 +172,10 @@ function controls() {
   renderExportControls();
   document.body.dataset.state = state.mode;
   $('runState').textContent = ({idle:'Ready',running:'Computing',paused:'Paused',cancelled:'Partial run',done:'Complete'})[state.mode] ?? 'Stopped';
-  if (state.server) $('runState').textContent += ' · Server';
+  const backend=state.scenario?.measurementBackend;
+  const source={'public-dgx-cuda':'H200 paths','dgx-cuda':'H200 paths','dgx-cuda-physical':'H200 paths','local-physical-cache':'Saved paths','saved-physical-paths':'Saved paths','dgx-physical-cache':'Saved H200 paths','cpu-fallback':'CPU paths','browser-fallback':'Browser paths',browser:'Browser paths'}[backend];
+  if(source) $('runState').textContent += ' · '+source;
+  else if (state.server) $('runState').textContent += ' · Server';
   $('newSeed').disabled = active || sweeping;
 }
 function renderExportControls() {
@@ -215,7 +218,7 @@ function cancel(clear = false) {
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
-    state.generatedSnapshots = 0; state.measurementTotal = 0;
+    state.measurementLabel=''; state.generatedSnapshots = 0; state.measurementTotal = 0;
     renderThresholdProtocol();
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
@@ -286,10 +289,11 @@ async function receiveRunMessage(data, generation) {
     }
     if (data.type === 'progress') {
       state.measurementTotal = data.total; state.generatedSnapshots = Math.max(state.generatedSnapshots ?? 0, data.t);
-      updateRunProgress(); notice(`Generating measurements ${data.t} / ${data.total}`); return;
+      updateRunProgress(); notice(`${state.measurementLabel || 'Generating measurements'} ${data.t} / ${data.total}`); return;
     }
     if (data.type === 'preparation') {
-      const label = { loading: 'Loading saved paths…', generating: 'Generating wall geometry and measurements.',
+      state.measurementLabel=({dgx:'H200 measurements', 'local-fallback':'Local measurements', browser:'Browser measurements', measuring:'Applying noise'})[data.phase] || '';
+      const label = { dgx:'Preparing measurements on H200…', 'local-fallback':'H200 busy or unavailable. Preparing measurements locally.', browser:'Preparing measurements in this browser.', loading: 'Loading saved paths…', generating: 'Generating wall geometry and measurements.',
         measuring: 'Applying measurement noise…' }[data.phase];
       if (label) notice(label);
       return;
@@ -635,7 +639,7 @@ $('loadSavedSweep').onclick = () => {
 };
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
 $('exportJson').onclick = () => {
-  const data = { schema: 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, displayInterpolation: $('showInterpolation')?.checked ? $('interpolationKind').value : 'off', toleranceM: 0.4, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
+  const data = { schema: 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, displayInterpolation: $('showInterpolation')?.checked ? $('interpolationKind').value : 'off', toleranceM: 0.4, measurementBackend:state.scenario?.measurementBackend, measurementPreparationMs:state.scenario?.simulatorMs, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
     grid: state.grid ? { ...state.grid, arrayOrder: 'iy*nx+ix; ascending y; cell centers' } : null,
     input: state.scenario?.input ?? state.sweepRuns[0]?.input, measurement: state.scenario?.wire.slice(0, state.frames.length) ?? [], result: state.frames,
     evaluation: state.evaluations, truth: { role: 'evaluation only', wallModel: state.scenario?.wallModel, wallGeneration: state.scenario?.wallGeneration, walls: state.scenario?.walls ?? [], snapshots: state.scenario?.truth.slice(0, state.frames.length) ?? [] },

@@ -1,3 +1,4 @@
+import { prepareNodeScenario } from './dgx/client.mjs';
 import { parentPort, workerData } from 'node:worker_threads';
 import { createRunEngine } from '../drf/run-engine.mjs';
 import { createMessageEncoder, encodePacket } from '../drf/simulation-codec.mjs';
@@ -15,14 +16,14 @@ if (workerData.mode === 'sweep') {
     try {
       const result = await runExperiment(message.input, (t, total) => {
         if (t === 1 || t % 10 === 0 || t === total) send({ type: 'sweep-progress', id: message.id, t, total });
-      });
+      }, prepareNodeScenario);
       const { final, ...record } = result;
       send({ type: 'sweep-result', id: message.id, result: record });
     } catch (error) { send({ type: 'error', message: error.message }); }
   });
 } else {
   const transport = createMessageEncoder();
-  const engine = createRunEngine({ emit: message => send(message, transport.encode),
+  const engine = createRunEngine({ prepare: prepareNodeScenario, emit: message => send(message, transport.encode),
     yieldTask: () => new Promise(resolve => setImmediate(resolve)) });
   parentPort.on('message', message => {
     try { Promise.resolve(engine.command(message)).catch(error => send({ type: 'error', message: error.message })); }

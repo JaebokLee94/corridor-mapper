@@ -130,8 +130,9 @@ export async function buildTruthBank(request = {}, { onProgress = () => {} } = {
   await mkdir(output, { recursive: true });
   for (const seed of options.seeds) for (const roughness of options.roughness) {
     const start = performance.now(), input = normalizeInput({ seed, roughness, vehicles: maximumVehicles, snapshots: options.snapshots });
-    const geometry = createSceneGeometry(input), truth = [];
-    for (let t = 1; t <= input.snapshots; t++) {
+    const remote=process.env.ECHOMAP_BUILD_DGX_URL;
+    const {geometry,truth}=remote ? await (await import('./dgx/client.mjs')).remoteScenario(input,remote,()=>{},true) : {geometry:createSceneGeometry(input),truth:[]};
+    for (let t = 1; !remote && t <= input.snapshots; t++) {
       truth.push(generateTruthSnapshot(input, geometry.spans, t, geometry.wallModel));
       onProgress({ phase: 'generate', seed, roughness, vehicles: maximumVehicles, snapshot: t, snapshots: input.snapshots });
       // Yield between snapshots without requiring a browser or altering RNG.
@@ -150,7 +151,7 @@ export async function buildTruthBank(request = {}, { onProgress = () => {} } = {
       assert.deepEqual(restored, bundle, 'gzip JSON round trip changed physical truth values');
       const file = `${sha256(key)}.v${vehicles}.t${input.snapshots}.json.gz`;
       assets.push({ file, bytes });
-      entries.push({ key, file, sha256: sha256(bytes), vehicles, snapshots: input.snapshots });
+      entries.push({ key, file, sha256: sha256(bytes), ...(remote?{backend:'dgx-h200'}:{}), vehicles, snapshots: input.snapshots });
       sizes.push({ vehicles, rawBytes: Buffer.byteLength(json), gzipBytes: bytes.length });
     }
     assert.deepEqual(await truthBankSourceHashes(), sourceHashes, 'Generator source changed before manifest publication');

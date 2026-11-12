@@ -1,3 +1,4 @@
+import { preparePublicScenario } from './public-measure.mjs';
 import { createRunEngine } from './run-engine.mjs?v=20261112-chain-tips';
 import { warmTruthCache } from './prepare-scenario.mjs?v=20261104-background2';
 import { normalizeInput } from './scenario.mjs?v=20261104-truthcache1';
@@ -9,7 +10,7 @@ const identity = raw => {
 };
 let warming, pendingStart;
 
-const engine = createRunEngine({ emit(message) {
+const engine = createRunEngine({ prepare:preparePublicScenario, emit(message) {
   // Only per-frame readout buffers move to the page; accumulator buffers stay here.
   const transfer = message.type === 'frame'
     ? [message.frame.Dbar.buffer, message.frame.betaHat.buffer] : [];

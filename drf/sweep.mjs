@@ -23,10 +23,10 @@ function summarize(frame, evaluation) {
  * Each seed generates one shared measurement sequence. No per-condition tuning.
  * Memory O(field + truth + estimator state); frame history is not retained.
  */
-export async function runExperiment(raw, progress = () => {}) {
+export async function runExperiment(raw, progress = () => {}, prepare = generateScenario) {
   const input = normalizeInput(raw);
   if (input.sigmaD === 0) throw new Error('Both methods require range SD σd > 0; exact zero range noise is unsupported.');
-  const scenario = await generateScenario(input), grid = createGrid(input.grid, input.grid, scenario.domain),
+  const scenario = await prepare(input), grid = createGrid(input.grid, input.grid, scenario.domain),
     field = createField(grid, { band: input.band, perimeter: input.perimeter }),
     evaluators = Object.fromEntries(['guarded', 'baseline'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
     estimator = new MethodComparison({ sigmaR: input.sigmaD, includeExtended:true }), timings = [];
@@ -46,7 +46,7 @@ export async function runExperiment(raw, progress = () => {}) {
   return { input, wallGeneration: scenario.wallGeneration, method: 'paired-comparison', protocol: METHOD_PROTOCOL,
     methods: Object.fromEntries(Object.entries(evaluations).map(([key, evaluation]) => [key, { summary: summarize(frame, evaluation) }])),
     diagnostics: evaluations.guarded.diagnostics,
-    timing: { simulatorMs: scenario.simulatorMs, fieldMs, estimatorMs, evaluationMs,
+    timing: { ...(scenario.measurementBackend ? { measurementBackend:scenario.measurementBackend } : {}), simulatorMs: scenario.simulatorMs, fieldMs, estimatorMs, evaluationMs,
       frameP50: percentile(timings, .5), frameP95: percentile(timings, .95) },
     final: { t: frame.t, Dbar: frame.Dbar, betaHat: frame.betaHat, Q: frame.Q, admitted: frame.admitted, rejected: frame.rejected },
   };
