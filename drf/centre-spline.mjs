@@ -1,5 +1,5 @@
 // All positions/lengths in metres and phi in radians; no wall labels or truth inputs.
-export const CENTRE_RULE = Object.freeze({maxDistanceM:4, maxAngleDeg:15, association:'reciprocal-nearest-per-side', curve:'centre-tangent-hermite-v1'});
+export const CENTRE_RULE = Object.freeze({maxDistanceM:4, maxAngleDeg:15, association:'reciprocal-nearest-per-side', beyondMaxDistance:'range-confirmed-pair-only', curve:'centre-tangent-hermite-v2'});
 const cosine = Math.cos(CENTRE_RULE.maxAngleDeg*Math.PI/180), step = .05;
 
 export function patchPoints(c, start=-c.ell, end=c.ell) {
@@ -13,7 +13,10 @@ export function patchPoints(c, start=-c.ell, end=c.ell) {
 
 // N current supported fragments -> links and retained ends, O(N² + vertices) time,
 // O(N + vertices) space. Each side accepts only a unique, mutual nearest centre.
-export function centreSpline(candidates) {
+export function centreSpline(candidates, bridges=[]) {
+  // A long pair can compete only when its gap was confirmed from past measured ranges.
+  const key=(a,b)=>a<b?a+':'+b:b+':'+a;
+  const confirmed=new Set(bridges.filter(b=>b.measuredLinear).map(b=>key(b.from,b.to)));
   const nodes=candidates.filter(c=>c.status==='supported').map(c=>({c,x:Math.cos(c.phi),y:Math.sin(c.phi),
     sides:[0,1].map(()=>({first:Infinity,second:Infinity,partner:-1,used:false}))}));
   const offer=(side,d,j)=>{
@@ -23,7 +26,7 @@ export function centreSpline(candidates) {
   for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
     const a=nodes[i], b=nodes[j], dx=b.c.center[0]-a.c.center[0], dy=b.c.center[1]-a.c.center[1];
     const d=Math.hypot(dx,dy), u=dx*a.x+dy*a.y, v=dx*b.x+dy*b.y;
-    if(d<=1e-9 || d>CENTRE_RULE.maxDistanceM || Math.min(Math.abs(u),Math.abs(v))<d*cosine || Math.abs(a.x*b.x+a.y*b.y)<cosine)continue;
+    if(d<=1e-9 || (d>CENTRE_RULE.maxDistanceM && !confirmed.has(key(a.c.id,b.c.id))) || Math.min(Math.abs(u),Math.abs(v))<d*cosine || Math.abs(a.x*b.x+a.y*b.y)<cosine)continue;
     offer(a.sides[Number(u>0)],d,j); offer(b.sides[Number(v<0)],d,i);
   }
   const links=[], ends=[];

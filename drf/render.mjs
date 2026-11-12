@@ -1,5 +1,5 @@
 import { centreSpline } from './centre-spline.mjs';
-import { centreMetricNames, interpolationPair } from './interpolation-panel.mjs?v=20261112-centre';
+import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261112-mapf1';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
@@ -235,8 +235,9 @@ export class DrfMap {
     // Truth and other overlays stay behind the supported patches. Each patch is
     // a separate path: do not join candidates or snap their geometry to truth.
     const useCentres=layers.showProxy && this.state.interpolation==='centre';
-    if(useCentres && this.centreCandidates!==candidates) {
-      this.centreCandidates=candidates; this.centreGeometry=centreSpline(candidates);
+    if(useCentres && (this.centreCandidates!==candidates || this.centreEvidence!==this.state.bridges)) {
+      this.centreCandidates=candidates; this.centreEvidence=this.state.bridges;
+      this.centreGeometry=centreSpline(candidates,this.centreEvidence);
     }
     const supportedPatches=useCentres?this.centreGeometry.ends:[];
     // Drawing budget only: the estimator still receives every measured path.
@@ -544,16 +545,16 @@ export function drawCounts(canvas,counts,predicted) {
 /** Shared-axis comparison; one solid and one dashed curve distinguish methods.
  * Missing precision stays a gap. No smoothing, interpolation of missing data or CI.
  */
-export function drawComparisonHistory(canvas,evaluations,selection='recall',snapshots=120,mode='compare',kind='linear') {
+export function drawComparisonHistory(canvas,evaluations,selection='mapF1',snapshots=120,mode='compare',kind='linear') {
   const surface=chartSurface(canvas);if(!surface)return;
   const single = mode !== 'compare';
-  const percent = single ? selection === 'recall' : selection !== 'p95';
+  const percent = single ? ['recall','mapF1'].includes(selection) : selection !== 'p95';
   const count = single && ['missing','count','falseBridges'].includes(selection);
   const series = [[], []];
   for (const e of evaluations) {
     const pair = single ? interpolationPair(e, mode, kind) : [e.methods?.guarded, e.methods?.baseline];
     pair.forEach((record, i) => {
-      const value = record?.[selection];
+      const value = !single && selection==='mapF1' ? interpolationResult(record,kind)?.mapF1 : record?.[selection];
       series[i].push({x:e.t, y:value==null ? NaN : value*(percent ? 100 : 1)});
     });
   }
@@ -568,7 +569,7 @@ export function drawComparisonHistory(canvas,evaluations,selection='recall',snap
   const xmax=Math.max(1,snapshots),xTicks=Array.from({length:Math.floor(xmax/20)+1},(_,i)=>20*i);
   // Short runs still show their endpoint; longer runs retain the fixed 20-snapshot scale.
   if (xmax<20) xTicks.push(xmax);
-  const metricLabels={missing:['Missed wall samples','Missed samples'],count:['Gaps joined','Gaps joined'],lengthM:['Added length [m]','Added [m]'],offWallM:['Off-wall added [m]','Off-wall [m]'],falseBridges:['Off-wall joins','Off-wall joins'],mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
+  const metricLabels={mapF1:['Map $F_1$ [%]','Map $F_1$ [%]'],missing:['Missed wall samples','Missed samples'],count:['Gaps joined','Gaps joined'],lengthM:['Added length [m]','Added [m]'],offWallM:['Off-wall added [m]','Off-wall [m]'],falseBridges:['Off-wall joins','Off-wall joins'],mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
   const labelKey = single && selection === 'recall' ? 'mapRecall' : selection;
   const yLabel=((single && kind==='centre' && centreMetricNames[selection] ? centreMetricNames[selection] : metricLabels[labelKey])?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
   const tight=single && surface.width<=560;

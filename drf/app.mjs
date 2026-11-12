@@ -1,15 +1,15 @@
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261112-centre';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261112-mapf1';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';
 import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261104-truthcache1';
 import { percentile } from './statistics.mjs';
-import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261103-defaults1';
+import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-mapf1';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-background2';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-centre';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-mapf1';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -423,6 +423,8 @@ function renderSelected() {
     for (const [id,status] of [['supportedValue','supported'],['pendingValue','pending'],['contradictedValue','contradicted']])
       node(id).textContent=method==='baseline' && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
     const completed = interpolationResult(e, kind);
+    const mapScore=interpolationResult(e,interpolate ? kind : 'off')?.mapF1;
+    node('mapF1Value').textContent=mapScore==null ? '—' : fmt(100*mapScore,1);
     const mapRecall = node('mapRecallValue'), coverage = interpolate ? completed?.recall : e?.recall;
     mapRecall.textContent = coverage == null ? '—' : fmt(100 * coverage, 1);
     mapRecall.title = !interpolate ? 'Supported fragments only' : completed && kind==='centre' ? `${completed.count} centre links · ${fmt(completed.lengthM,2)} m of mapped wall · ${fmt(completed.offWallM,2)} m outside tolerance` : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
@@ -440,7 +442,7 @@ function renderSelected() {
   $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
   const historyMetric = $(state.method === 'compare' ? 'historyMetric' : 'interpolationChartMetric').value;
-  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,kind);
+  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind);
   renderDiagnostics();
 }
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.

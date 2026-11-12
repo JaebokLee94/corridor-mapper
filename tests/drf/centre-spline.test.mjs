@@ -23,3 +23,13 @@ test('replacing inward halves can remove coverage; truth labels do not choose li
   assert.equal(e.centre.count,1);
   const flat=measure([[[-2,0],[4,0]]]);assert.equal(flat.centre.count,1);assert.equal(flat.centre.falseBridges,0);
 });
+
+test('long centre links require evidence for the exact pair and still obey tangent and nearest-side checks',()=>{
+  const a=patch('a',0),b=patch('b',5),c=patch('c',2);
+  const evidence={from:'b',to:'a',measuredLinear:true};
+  assert.equal(centreSpline([a,b],[{...evidence,measuredLinear:false}]).links.length,0);
+  assert.equal(centreSpline([a,b],[{...evidence,to:'c'}]).links.length,0);
+  assert.equal(centreSpline([a,{...b,phi:Math.PI/6}],[evidence]).links.length,0);
+  assert.deepEqual(centreSpline([a,b],[evidence]).links[0].points.filter((_,i,p)=>i===0||i===p.length-1),[a.center,b.center]);
+  assert.equal(centreSpline([a,b,c],[evidence]).links.some(l=>l.from==='a'&&l.to==='b'),false);
+});

@@ -170,3 +170,18 @@ test('current evaluation does not read field peaks and is invariant to a wall cr
   assert.deepEqual(a.diagnostics,b.diagnostics);
   for (const key of ['offset','observedColumns','caMsd','caHd95']) assert.equal(Object.hasOwn(b,key),false,key);
 });
+
+test('map F1 counts unseen wall, penalizes spurious map length, and never fills an aperture in truth',()=>{
+  const C=(x)=>[[x,22],[2,0],[0,0],[0,0]];
+  const s={...scene(),spans:[{wall:0,C:C(0)},{wall:0,C:C(4)}]};
+  const run=(cs,bridges=[])=>createPSPTEvaluator(s,grid).step(frame(0,cs),{diagnostics:{}},bridges).interpolation;
+  const a=candidate('a',[1,22]),b=candidate('b',[5,22]),out=candidate('x',[1,10]);
+  assert.equal(run([]).rawMap.mapF1,0);
+  assert.equal(run([a]).recall,null);
+  assert.equal(run([a]).rawMap.mapF1,2/3);
+  assert.equal(run([a,b]).rawMap.mapF1,1);
+  assert.ok(Math.abs(run([a,b,out]).rawMap.mapF1-.8)<1e-10);
+  const points=[[2,22],[4,22]],mapped=run([a,b],[{from:'a',to:'b',points,curve:points}]);
+  assert.ok(mapped.offWallM>1 && mapped.mapF1<1 && mapped.mapF1>.85);
+  assert.ok(mapped.centre.mapF1<1 && mapped.hermite.mapF1===mapped.mapF1);
+});

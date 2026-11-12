@@ -2,7 +2,7 @@ import { normalizeInput } from './scenario.mjs?v=20261104-truthcache1';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-background2';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261103-defaults1';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-mapf1';
 import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
 
 function summarize(frame, evaluation) {
@@ -10,6 +10,8 @@ function summarize(frame, evaluation) {
     'medianError', 'p95', 'offwall', 'f1', 'observedFraction', 'missing',
     'supportedCount', 'pendingCount', 'rejectedCount'];
   return { ...Object.fromEntries(keys.map(key => [key, evaluation[key]])),
+    rawMapF1:evaluation.interpolation.rawMap.mapF1, linearMapF1:evaluation.interpolation.mapF1,
+    hermiteMapF1:evaluation.interpolation.hermite.mapF1, centreMapF1:evaluation.interpolation.centre.mapF1,
     mapRecall: evaluation.interpolation.recall, interpolatedLengthM: evaluation.interpolation.lengthM,
     interpolatedOffWallM: evaluation.interpolation.offWallM, hermiteMapRecall: evaluation.interpolation.hermite.recall,
     hermiteLengthM: evaluation.interpolation.hermite.lengthM, hermiteOffWallM: evaluation.interpolation.hermite.offWallM,

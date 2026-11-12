@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261112-centre" />
+  <link rel="stylesheet" href="drf/style.css?v=20261112-mapf1" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -106,7 +106,8 @@
           <section class="view results-panel" aria-labelledby="resultsTitle">
             <div class="results-heading"><h2 id="resultsTitle">Method comparison</h2><span class="evaluation" title="Post-hoc ground-truth evaluation">Evaluation only</span></div>
             <p id="evaluationNote" class="note">0.4 m tolerance · same measured prefix</p>
-            <table id="interpolationMetrics" class="comparison-table" hidden><caption class="sr-only">Interpolation results at the same snapshot.</caption><thead><tr><th scope="col">Metric</th><th scope="col" id="interpolatedMapHeading">Gap Hermite interpolation</th><th scope="col" id="rawMapHeading">No interpolation</th></tr></thead><tbody>
+            <table id="interpolationMetrics" class="comparison-table" hidden><caption class="sr-only">Interpolation results at the same snapshot.</caption><thead><tr><th scope="col">Metric</th><th scope="col" id="interpolatedMapHeading" title="Reconstruction with the selected interpolation method">Gap Hermite</th><th scope="col" id="rawMapHeading" title="Supported wall fragments without interpolation">Raw map</th></tr></thead><tbody>
+              <tr data-metric="mapF1" data-digits="1" class="major-metric"><th scope="row" title="Harmonic mean of correct mapped length and coverage of the entire true wall, including unobserved wall (0.4 m tolerance).">Map <span data-tex="F_1">F₁</span> <small>%</small></th><td>—</td><td>—</td></tr>
               <tr data-metric="recall" data-digits="1" class="major-metric"><th scope="row">Map recall <small>%</small></th><td>—</td><td>—</td></tr>
               <tr data-metric="missing" data-digits="0" class="major-metric"><th scope="row">Missed wall samples</th><td>—</td><td>—</td></tr>
               <tr data-metric="count" data-digits="0"><th scope="row">Gaps joined</th><td>—</td><td>—</td></tr>
@@ -115,10 +116,11 @@
               <tr data-metric="falseBridges" data-digits="0"><th scope="row">Off-wall joins</th><td>—</td><td>—</td></tr>
             </tbody></table>
             <table id="methodMetrics" class="comparison-table"><caption class="sr-only">Results for the selected snapshot. Precision is undefined when no candidates are supported.</caption><thead><tr><th scope="col">Metric</th><th scope="col" data-method-col="guarded">WM-P</th><th scope="col" data-method-col="baseline">WM-F</th></tr></thead><tbody>
+              <tr class="major-metric"><th scope="row" title="Harmonic mean of correct mapped length and coverage of the entire true wall, including unobserved wall (0.4 m tolerance).">Map <span data-tex="F_1">F₁</span> <small>%</small></th><td id="mapF1Value">—</td><td id="bMapF1Value">—</td></tr>
               <tr class="major-metric"><th scope="row" title="Supported candidate centres within 0.4 m of the true wall. Undefined for an empty estimate.">Centre precision <small>%</small></th><td id="precisionValue">—</td><td id="bPrecisionValue">—</td></tr>
               <tr class="major-metric"><th scope="row" title="Observed wall samples within 0.4 m of supported patches. Observed means within 1 m of a past generated reflection point.">Observed recall <small>%</small></th><td id="recallValue">—</td><td id="bRecallValue">—</td></tr>
               <tr><th scope="row" title="Observed wall coverage with the selected interpolation setting (0.4 m tolerance). Hover over the values for added and off-wall lengths.">Map recall <small>%</small></th><td id="mapRecallValue">—</td><td id="bMapRecallValue">—</td></tr>
-              <tr><th scope="row">Surface <span data-tex="F_1">F₁</span></th><td id="f1Value">—</td><td id="bF1Value">—</td></tr>
+              <tr><th scope="row" title="Supported fragments only; recall counts observed wall samples only.">Raw surface <span data-tex="F_1">F₁</span></th><td id="f1Value">—</td><td id="bF1Value">—</td></tr>
               <tr><th scope="row">P95 distance <small>m</small></th><td id="p95Value">—</td><td id="bP95Value">—</td></tr>
               <tr><th scope="row">Off-wall centres <small>%</small></th><td id="offwallValue">—</td><td id="bOffwallValue">—</td></tr>
               <tr><th scope="row" title="Centre precision when each candidate was first supported, including subsequently corrected decisions.">First support <small>%</small></th><td id="firstPrecisionValue">—</td><td id="bFirstPrecisionValue">—</td></tr>
@@ -135,7 +137,7 @@
         <div class="field-grid">
           <figure class="view" id="viewDensity"><figcaption class="vlabel"><div class="field-heading"><h2><span data-tex="\bar{D}">D̄</span> · Mean residual density</h2><p class="view-meta"><span data-tex="\mathrm{m}^{-2}">m⁻²</span> · shared by both methods</p></div><div class="map-toolbar"><button id="densityZoomOut" type="button" aria-label="Zoom density out">−</button><button id="densityZoomIn" type="button" aria-label="Zoom density in">+</button><button id="densityResetView" type="button" aria-label="Reset density view">↺</button></div></figcaption><div class="view-body"><canvas id="densityCanvas" class="dashboard-canvas" role="img" aria-label="Mean accumulated residual density"></canvas></div></figure>
           <figure class="view" id="viewContrast"><figcaption class="vlabel"><div class="field-heading"><h2><span data-tex="\hat{\beta}">β̂</span> · Field contrast</h2><p class="view-meta">Dimensionless · not a probability</p></div><div class="map-toolbar"><button id="contrastZoomOut" type="button" aria-label="Zoom contrast out">−</button><button id="contrastZoomIn" type="button" aria-label="Zoom contrast in">+</button><button id="contrastResetView" type="button" aria-label="Reset contrast view">↺</button></div></figcaption><div class="view-body"><canvas id="contrastCanvas" class="dashboard-canvas" role="img" aria-label="Dimensionless field contrast"></canvas></div></figure>
-          <figure class="view" id="viewMetrics"><figcaption class="vlabel"><h2>Performance over time</h2><select id="historyMetric" aria-label="Metric over time"><option value="precision">Centre precision [%]</option><option value="recall" selected>Observed recall [%]</option><option value="firstSupportPrecision">First support [%]</option><option value="holdRate">Held / unselected [%]</option><option value="p95">P95 distance [m]</option><option value="offwall">Off-wall centres [%]</option></select><select id="interpolationChartMetric" aria-label="Interpolation metric over time" hidden><option value="recall">Map recall [%]</option><option value="missing">Missed wall samples</option><option value="count">Gaps joined</option><option value="lengthM">Added length [m]</option><option value="offWallM">Off-wall added [m]</option><option value="falseBridges">Off-wall joins</option></select></figcaption><div class="view-body"><canvas id="metricChart" class="dashboard-canvas compact-chart" role="img" aria-label="Comparison of both methods over computed snapshots. Export CSV for all numerical values."></canvas></div><div class="history-footer"><div class="history-legend"><span><i class="line-pspt"></i><span id="historyFirst">WM-P</span></span><span><i class="line-baseline"></i><span id="historySecond">WM-F</span></span></div><span class="history-axis-title">Snapshot</span></div></figure>
+          <figure class="view" id="viewMetrics"><figcaption class="vlabel"><h2>Performance over time</h2><select id="historyMetric" aria-label="Metric over time"><option value="mapF1" selected>Map F₁ [%]</option><option value="precision">Centre precision [%]</option><option value="recall">Observed recall [%]</option><option value="firstSupportPrecision">First support [%]</option><option value="holdRate">Held / unselected [%]</option><option value="p95">P95 distance [m]</option><option value="offwall">Off-wall centres [%]</option></select><select id="interpolationChartMetric" aria-label="Interpolation metric over time" hidden><option value="mapF1" selected>Map F₁ [%]</option><option value="recall">Map recall [%]</option><option value="missing">Missed wall samples</option><option value="count">Gaps joined</option><option value="lengthM">Added length [m]</option><option value="offWallM">Off-wall added [m]</option><option value="falseBridges">Off-wall joins</option></select></figcaption><div class="view-body"><canvas id="metricChart" class="dashboard-canvas compact-chart" role="img" aria-label="Comparison of both methods over computed snapshots. Export CSV for all numerical values."></canvas></div><div class="history-footer"><div class="history-legend"><span><i class="line-pspt"></i><span id="historyFirst">WM-P</span></span><span><i class="line-baseline"></i><span id="historySecond">WM-F</span></span></div><span class="history-axis-title">Snapshot</span></div></figure>
         </div>
         <p id="inspector" class="inspector"></p>
       </section>
@@ -170,8 +172,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261112-centre';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261112-centre';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261112-mapf1';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261112-mapf1';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

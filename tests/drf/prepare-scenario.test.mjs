@@ -229,7 +229,7 @@ test('real run engine and sweep preserve all numerical prefixes, final metrics a
   for (const method of ['guarded','baseline']) {
     const evaluation = final.evaluation.methods[method], b = evaluation.interpolation, h = b.hermite;
     const expectedMetrics = {...final.frame, ...evaluation, mapRecall:b.recall, interpolatedLengthM:b.lengthM,
-      interpolatedOffWallM:b.offWallM, hermiteMapRecall:h.recall, hermiteLengthM:h.lengthM, hermiteOffWallM:h.offWallM, centreMapRecall:evaluation.interpolation.centre.recall, centreMapLengthM:evaluation.interpolation.centre.lengthM, centreMapOffWallM:evaluation.interpolation.centre.offWallM};
+      interpolatedOffWallM:b.offWallM, hermiteMapRecall:h.recall, hermiteLengthM:h.lengthM, hermiteOffWallM:h.offWallM, rawMapF1:evaluation.interpolation.rawMap.mapF1,linearMapF1:evaluation.interpolation.mapF1,hermiteMapF1:evaluation.interpolation.hermite.mapF1,centreMapF1:evaluation.interpolation.centre.mapF1, centreMapRecall:evaluation.interpolation.centre.recall, centreMapLengthM:evaluation.interpolation.centre.lengthM, centreMapOffWallM:evaluation.interpolation.centre.offWallM};
     for (const [key,value] of Object.entries(sweep.methods[method].summary))
       assert.deepEqual(value, expectedMetrics[key], `${method} final ${key}`);
   }

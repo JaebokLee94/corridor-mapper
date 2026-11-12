@@ -34,19 +34,23 @@ function resamplePolyline(points) {
 }
 
 function wallSamples(scenario) {
-  const walls = new Map();
+  const walls = new Map(), pieces = [];
   if (scenario.spans?.length) {
     for (const span of scenario.spans) {
       const C = span.C, speedBound = [1, 2, 3].reduce((sum, k) => sum + k * Math.hypot(...C[k]), 0),
         count = Math.max(2, Math.ceil(speedBound / sampleStep) + 1), wall = span.wall ?? 0;
-      if (!walls.has(wall)) walls.set(wall, []);
+      const end=walls.get(wall)?.at(-1);
+      // Separate physical components: never resample an imaginary wall across an opening.
+      if (!end || Math.hypot(end[0]-C[0][0], end[1]-C[0][1])>1e-7) {
+        const piece=[]; pieces.push(piece); walls.set(wall,piece);
+      }
       for (let k = 0; k < count; k++) {
         const u = k / (count - 1);
         walls.get(wall).push([0, 1].map(axis => C.reduce((sum, coefficient, degree) => sum + coefficient[axis] * u ** degree, 0)));
       }
     }
-  } else for (const [wall, points] of scenario.walls.entries()) if (points.length) walls.set(wall, points);
-  return [...walls.values()].flatMap(resamplePolyline).map(([x, y]) => ({ x, y }));
+  } else for (const points of scenario.walls) if (points.length) pieces.push(points);
+  return pieces.flatMap(resamplePolyline).map(([x, y]) => ({ x, y }));
 }
 
 function surfelSamples(candidate) {
@@ -72,7 +76,13 @@ function neighborhood(points) {
 // Use the rendered polyline, split into equal arc-length bins <=5 cm. Each
 // midpoint contributes its bin length to the off-wall total. Both raw endpoints
 // are already covered by the estimated patches. Truth is read only here.
-function assessBridges(bridges, shape, onWall, uncovered, observed) {
+function mapF1(length, outside, hits, total) {
+  if (!total) return null;
+  const p=length ? Math.max(0,1-outside/length) : 0, r=hits/total;
+  return p+r ? 2*p*r/(p+r) : 0;
+}
+
+function assessBridges(bridges, shape, onWall, uncovered, observed, full) {
   const interior = [];
   let lengthM = 0, offWallM = 0, falseBridges = 0;
   for (const bridge of bridges) {
@@ -87,8 +97,10 @@ function assessBridges(bridges, shape, onWall, uncovered, observed) {
     offWallM += outside;
     if (outside > 0) falseBridges++;
   }
-  const recovered = interior.length ? uncovered.filter(neighborhood(interior)).length : 0;
-  return { count: bridges.length, lengthM, offWallM, falseBridges, observed, recovered,
+  const near = interior.length && neighborhood(interior);
+  const recovered = near ? uncovered.filter(near).length : 0;
+  const allHits = full.hits + recovered + (near ? full.unseenMisses.filter(near).length : 0);
+  return { mapF1:mapF1(full.length+lengthM,full.outside+offWallM,allHits,full.total), count: bridges.length, lengthM, offWallM, falseBridges, observed, recovered,
     missing: uncovered.length - recovered, recall: fraction(observed - uncovered.length + recovered, observed) };
 }
 
@@ -104,8 +116,8 @@ function pathLength(points, onWall) {
   return {lengthM,offWallM};
 }
 
-function assessCentres(supported,onWall,observed,raw) {
-  const {links,ends}=centreSpline(supported);
+function assessCentres(supported,onWall,observed,raw,gt,mask,bridges) {
+  const {links,ends}=centreSpline(supported,bridges);
   if(!links.length)return {...raw};
   const samples=[];
   let lengthM=0,offWallM=0,falseBridges=0;
@@ -117,8 +129,10 @@ function assessCentres(supported,onWall,observed,raw) {
   };
   for(const end of ends)add(end,false);
   for(const link of links)add(link.points,true);
-  const hits=observed.filter(neighborhood(samples)).length;
-  return {count:links.length,lengthM,offWallM,falseBridges,missing:observed.length-hits,recall:fraction(hits,observed.length)};
+  const near=neighborhood(samples);
+  let hits=0,allHits=0;
+  for(let i=0;i<gt.length;i++) if(near(gt[i])){allHits++;if(mask[i])hits++;}
+  return {mapF1:mapF1(lengthM,offWallM,allHits,gt.length),count:links.length,lengthM,offWallM,falseBridges,missing:observed.length-hits,recall:fraction(hits,observed.length)};
 }
 
 export function createPSPTEvaluator(scenario, grid) {
@@ -149,13 +163,15 @@ export function createPSPTEvaluator(scenario, grid) {
       recall = fraction(observed.length - uncovered.length, observed.length),
       f1 = recall == null ? null : !surfacePrecision ? 0 : 2 * surfacePrecision * recall / (surfacePrecision + recall),
       pending = frame.candidates.filter(c => c.status === 'pending').length;
-    const interpolation = assessBridges(bridges, 'points', onWall, uncovered, observed.length);
+    const unseenMisses=gt.filter((p,i)=>!mask[i] && !nearPatch(p));
+    const full={length:rawLengthM,outside:rawOffWallM,hits:gt.length-uncovered.length-unseenMisses.length,total:gt.length,unseenMisses};
+    const interpolation = assessBridges(bridges, 'points', onWall, uncovered, observed.length, full);
     if (extendedBridges) interpolation.extended = extendedBridges.length
-      ? assessBridges([...bridges, ...extendedBridges], 'points', onWall, uncovered, observed.length)
+      ? assessBridges([...bridges, ...extendedBridges], 'points', onWall, uncovered, observed.length, full)
       : {...interpolation};
-    interpolation.hermite = assessBridges(bridges, 'curve', onWall, uncovered, observed.length);
-    const rawMap={count:0,lengthM:rawLengthM,offWallM:rawOffWallM,falseBridges:0,missing:uncovered.length,recall};
-    interpolation.centre=assessCentres(supported,onWall,observed,rawMap);
+    interpolation.hermite = assessBridges(bridges, 'curve', onWall, uncovered, observed.length, full);
+    const rawMap={mapF1:mapF1(rawLengthM,rawOffWallM,full.hits,full.total),count:0,lengthM:rawLengthM,offWallM:rawOffWallM,falseBridges:0,missing:uncovered.length,recall};
+    interpolation.centre=assessCentres(supported,onWall,observed,rawMap,gt,mask,bridges);
     interpolation.rawMap=rawMap;
     const diagnostics = sharedDiagnostics?.diagnostics ?? diagnostic.step(frame.t);
     return { t: frame.t, diagnostics, method: frame.method ?? 'guarded45', proxy: centers.map(p => [p.x, p.y]), observed: observed.map(p => [p.x, p.y]),
@@ -179,7 +195,7 @@ export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = fal
   if (includeInterpolation) keys.push('interpolated_gaps', 'linear_map_recall', 'linear_added_m', 'linear_added_offwall_m',
     'hermite_map_recall', 'hermite_added_m', 'hermite_added_offwall_m',
     'extended_gaps','extended_map_recall','extended_added_m','extended_added_offwall_m','extended_false_bridges',
-    'centre_links','centre_map_recall','centre_map_missed_samples','centre_map_length_m','centre_map_offwall_m','centre_offwall_links','raw_map_length_m','raw_map_offwall_m');
+    'centre_links','centre_map_recall','centre_map_missed_samples','centre_map_length_m','centre_map_offwall_m','centre_offwall_links','raw_map_length_m','raw_map_offwall_m','raw_map_f1','linear_map_f1','hermite_map_f1','centre_map_f1','extended_map_f1');
   const rows = frames.map((f, k) => {
     const e = evaluations[k] ?? {};
     const row = [f.t, f.Q, f.admitted, f.rejected, e.supportedCount, e.pendingCount, e.rejectedCount,
@@ -189,7 +205,7 @@ export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = fal
       const b = e.interpolation, h = b?.hermite;
       row.push(b?.count, b?.recall, b?.lengthM, b?.offWallM, h?.recall, h?.lengthM, h?.offWallM,
         b?.extended?.count, b?.extended?.recall, b?.extended?.lengthM, b?.extended?.offWallM, b?.extended?.falseBridges,
-        b?.centre?.count,b?.centre?.recall,b?.centre?.missing,b?.centre?.lengthM,b?.centre?.offWallM,b?.centre?.falseBridges,b?.rawMap?.lengthM,b?.rawMap?.offWallM);
+        b?.centre?.count,b?.centre?.recall,b?.centre?.missing,b?.centre?.lengthM,b?.centre?.offWallM,b?.centre?.falseBridges,b?.rawMap?.lengthM,b?.rawMap?.offWallM,b?.rawMap?.mapF1,b?.mapF1,h?.mapF1,b?.centre?.mapF1,b?.extended?.mapF1);
     }
     return row;
   });

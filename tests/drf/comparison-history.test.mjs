@@ -20,7 +20,7 @@ test('comparison history uses 20-snapshot grid labels and quarter-scale percenta
   const canvas={clientWidth:400,clientHeight:220,getContext:()=>ctx};
   const stubs={window:{devicePixelRatio:1,dispatchEvent(){}},document:{documentElement:{}},Image:class{set src(value){this._src=value;queueMicrotask(()=>this.onload?.());}get src(){return this._src;}},getComputedStyle:()=>({getPropertyValue:name=>name==='--color-grid'?'#grid':'#111111'})};
   const saved=Object.fromEntries(Object.keys(stubs).map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
-  const evaluations=[{t:1,methods:{guarded:{recall:.25,p95:2,missing:7,interpolation:{recall:.75,missing:3,count:2,lengthM:1.5,offWallM:.2,falseBridges:1,hermite:{recall:.8,lengthM:1.75}}},baseline:{recall:.75,p95:1}}}],before=JSON.stringify(evaluations);
+  const evaluations=[{t:1,methods:{guarded:{recall:.25,p95:2,missing:7,interpolation:{mapF1:.5,rawMap:{mapF1:.375},recall:.75,missing:3,count:2,lengthM:1.5,offWallM:.2,falseBridges:1,hermite:{mapF1:.875,recall:.8,lengthM:1.75}}},baseline:{recall:.75,p95:1}}}],before=JSON.stringify(evaluations);
   const render=(selection,snapshots,mode='compare',kind='linear')=>{endpoints.length=0;labels.length=0;grids.length=0;mathImages.length=0;drawComparisonHistory(canvas,evaluations,selection,snapshots,mode,kind);};
   const xLabels=()=>labels.filter(label=>label.align==='center');
   const yLabels=()=>labels.filter(label=>label.align==='right');
@@ -42,6 +42,10 @@ test('comparison history uses 20-snapshot grid labels and quarter-scale percenta
     const horizontal=grids.filter(([a,b])=>a[1]===b[1]);
     assert.equal(horizontal.length,3,'The percentage grid aligns with 25, 50 and 75 percent');
     horizontal.forEach(([a],i)=>close(100-(a[1]-box.y)/box.h*100,(i+1)*25));
+    for(const [kind,want] of [['off',.375],['linear',.5],['hermite',.875]]) {
+      render('mapF1',120,'compare',kind);
+      assert.equal(endpoints.length,1);close(endpoints[0][1],box.y+box.h*(1-want));
+    }
     render('recall',8);
     assert.deepEqual(xLabels().map(label=>label.text),['8'],'A short run labels its endpoint while hiding the numeric zero');
     assert.ok(grids.every(([a,b])=>a[1]===b[1]),'Short runs have no spurious fractional snapshot grid');
@@ -51,7 +55,7 @@ test('comparison history uses 20-snapshot grid labels and quarter-scale percenta
     assert.ok(labels.some(label=>label.text==='P95 distance '));
     assert.ok(mathImages.some(svg=>svg.includes('data-c="6D"')),'The metre unit is rendered as a LaTeX SVG glyph');
     for (const [metric,raw,after,maximum] of [
-      ['recall',25,75,100], ['missing',7,3,8], ['count',0,2,2], ['falseBridges',0,1,1],
+      ['mapF1',37.5,50,100], ['recall',25,75,100], ['missing',7,3,8], ['count',0,2,2], ['falseBridges',0,1,1],
       ['lengthM',0,1.5,1.68], ['offWallM',0,.2,.224],
     ]) {
       render(metric,120,'guarded');

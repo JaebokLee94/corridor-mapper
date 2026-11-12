@@ -198,9 +198,10 @@ table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums;
 .comparison-table .major-metric td { font-weight:700; }
 .comparison-table .major-metric th { color:var(--color-ink); }
 .comparison-table .count-row>* { border-top:1px solid var(--color-line); padding-top:13px; }
-#interpolationMetrics thead th:nth-child(2) { padding-right:6px; }
-#interpolationMetrics thead th:first-child { width:40%; }
-#interpolationMetrics thead th { vertical-align:bottom; white-space:normal; line-height:1.2; }
+#interpolationMetrics { table-layout:auto; }
+#interpolationMetrics thead th:first-child { width:auto; }
+#interpolationMetrics :is(th,td):not(:first-child) { padding-inline-start:12px; }
+#interpolationMetrics thead th { white-space:nowrap; }
 .comparison-table th[data-method-col="guarded"], #interpolatedMapHeading { color:var(--color-accent); }
 .comparison-table th[data-method-col="baseline"], #rawMapHeading { color:var(--color-baseline); }
 .comparison-note { margin-top:14px; padding-top:12px; border-top:1px solid var(--color-line); color:var(--color-ink-muted); font-size:14px; line-height:1.5; }

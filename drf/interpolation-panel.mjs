@@ -2,14 +2,14 @@
 export const centreMetricNames = {count:['Centre links','Centre links'], lengthM:['Map length [m]','Map [m]'], offWallM:['Off-wall length [m]','Off-wall [m]'], falseBridges:['Off-wall links','Off-wall links']};
 // Read only the post-hoc evaluation for one method at the selected snapshot.
 export function interpolationResult(e, kind) {
-  return kind === 'linear' ? e?.interpolation : e?.interpolation?.[kind];
+  return kind === 'linear' ? e?.interpolation : e?.interpolation?.[kind==='off'?'rawMap':kind];
 }
 
 export function interpolationPair(frame, method, kind) {
   const e = frame?.methods?.[method] ?? (method === 'guarded' ? frame : null);
   if (!e) return [null, null];
   if(kind==='centre')return [e.interpolation?.centre ?? null,e.interpolation?.rawMap ?? null];
-  const raw = {recall:e.recall, missing:e.missing, count:0, lengthM:0, offWallM:0, falseBridges:0};
+  const raw = {mapF1:e.interpolation?.rawMap?.mapF1, recall:e.recall, missing:e.missing, count:0, lengthM:0, offWallM:0, falseBridges:0};
   return [interpolationResult(e, kind) ?? null, raw];
 }
 
@@ -29,7 +29,7 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
     : '0.4 m tolerance · same measured prefix';
   if (kind === 'extended' && (single || get('showInterpolation').checked))
     get('evaluationNote').textContent = 'Extended linear · may cross openings';
-  const completedLabel = centre ? interpolation : interpolation + ' interpolation';
+  const completedLabel = interpolation;
   get('interpolatedMapHeading').textContent = completedLabel;
   get('historyFirst').textContent = single ? completedLabel : 'WM-P';
   get('historySecond').textContent = single ? get('rawMapHeading').textContent : 'WM-F';
@@ -51,7 +51,7 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
   }
   const metric = selector.selectedOptions[0].textContent;
   get('metricChart').setAttribute('aria-label', single
-    ? name + ' ' + metric + ' with ' + completedLabel.toLowerCase() + ' and without interpolation over computed snapshots.'
+    ? name + ' ' + metric + ' with ' + completedLabel.toLowerCase() + ' and the raw map without interpolation over computed snapshots.'
     : metric + ' for WM-P and WM-F over computed snapshots.');
   if (!single) return;
   const pair = interpolationPair(frame, mode, kind);
@@ -59,7 +59,7 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
     const {metric, digits} = row.dataset;
     pair.forEach((record, i) => {
       const v = record?.[metric];
-      row.cells[i+1].textContent = v == null ? '—' : format(metric === 'recall' ? v*100 : v, Number(digits));
+      row.cells[i+1].textContent = v == null ? '—' : format((metric === 'recall' || metric === 'mapF1') ? v*100 : v, Number(digits));
     });
   }
 }
