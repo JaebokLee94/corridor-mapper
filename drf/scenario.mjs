@@ -10,6 +10,8 @@ import { diffuseProfile, sampleDiffuse } from './diffuse.mjs?v=20261002-model8';
 import { createRng } from './rng.mjs';
 import { makeWire } from './wire.mjs';
 
+import { PAPER_SETTINGS, PAPER_DOMAIN } from './paper-preset.mjs';
+
 export const DEFAULT_INPUT = Object.freeze({
   scene: 'layered', wallSide: 'both', vehicles: 10, snapshots: 120, sigmaP: 0, sigmaD: 0.4,
   sigmaM: 6, deltaM: 20, sigmaDGeometry: 0.33, deltaD: 4,
@@ -18,15 +20,16 @@ export const DEFAULT_INPUT = Object.freeze({
 });
 export function normalizeInput(raw = {}) {
   const p = {};
-  for (const key of Object.keys(DEFAULT_INPUT)) p[key] = raw[key] ?? DEFAULT_INPUT[key];
+  for (const key of Object.keys(DEFAULT_INPUT)) p[key] = raw[key] ?? (raw.scene === PAPER_SETTINGS.scene ? PAPER_SETTINGS[key] : undefined) ?? DEFAULT_INPUT[key];
   for (const key of ['vehicles', 'snapshots', 'sigmaP', 'sigmaD', 'sigmaM', 'deltaM', 'sigmaDGeometry', 'deltaD', 'roughness', 'lambda0', 'cellStep', 'resolution', 'grid', 'seed']) {
     p[key] = Number(p[key]);
     if (!Number.isFinite(p[key])) throw new Error(`${key}: finite number required`);
   }
   p.band = p.band === 'full' ? 'full' : Number(p.band);
   p.specular = p.specular === true || p.specular === 'true';
-  if (!['layered', 'reference', 'random'].includes(p.scene)) throw new Error('Unknown corridor scene');
+  if (!['layered', 'reference', 'random', PAPER_SETTINGS.scene].includes(p.scene)) throw new Error('Unknown corridor scene');
   if (!['both', 'upper', 'lower'].includes(p.wallSide)) throw new Error('Wall side must be both, upper or lower');
+  if (p.scene === PAPER_SETTINGS.scene && p.wallSide !== 'upper') throw new Error('The straight-route upper-wall experiment requires the upper wall');
   if (!Number.isInteger(p.vehicles) || p.vehicles < 2 || p.vehicles > 20 || !Number.isInteger(p.snapshots) || p.snapshots < 1 || p.snapshots > 120)
     throw new Error('Reference trajectories support 2–20 vehicles and 1–120 snapshots');
   if (![100, 150, 200].includes(p.grid) || ![3, 4, 5, 'full'].includes(p.band) || !['exact', 'ramanujan'].includes(p.perimeter))
@@ -52,16 +55,17 @@ const MIN_VERTICAL_GAP = 2 * (LATERAL_AMPLITUDE + VERTICAL_CLEARANCE);
  * Accepted statistics are conditional on this protocol, not iid Gaussian walls. */
 export function createSceneGeometry(input) {
   const wallSide = input.wallSide ?? 'both', activeWalls = wallSide === 'both' ? [0, 1] : [wallSide === 'lower' ? 0 : 1];
-  if (input.scene !== 'layered') {
+  const paper = input.scene === PAPER_SETTINGS.scene, domain = paper ? PAPER_DOMAIN : LAYERED_DOMAIN;
+  if (!paper && input.scene !== 'layered') {
     const spans = createWalls(input).filter(span => activeWalls.includes(span.wall));
     return { spans, walls: sampleWalls(spans, 0.1), wallModel: null, domain: [0, 60, 0, 30], wallGeneration: null };
   }
   const rejections = [];
   for (let attempt = 0; attempt < 256; attempt++) {
-    const wallModel = createTwoLayerWallModel({ ...input, wallSide, L: LAYERED_DOMAIN[1], attempt,
+    const wallModel = createTwoLayerWallModel({ ...input, wallSide, L: domain[1], attempt,
       independent: wallSide === 'both', minWidth: MIN_VERTICAL_GAP }), bounds = twoLayerWallBounds(wallModel), reasons = [];
     if (wallSide === 'both' && !(bounds.minWidth > MIN_VERTICAL_GAP)) reasons.push('passage-width');
-    if (bounds.ymin < LAYERED_DOMAIN[2] || bounds.ymax > LAYERED_DOMAIN[3]) reasons.push('domain');
+    if (bounds.ymin < domain[2] || bounds.ymax > domain[3]) reasons.push('domain');
     let minVehicleClearance = Infinity;
     for (let t = 1; t <= 120; t++) for (const [x, y] of truePoses(t, 20, wallModel)) {
       if (x > wallModel.L) continue; // Open exit: poses continue, finite walls do not.
@@ -71,11 +75,19 @@ export function createSceneGeometry(input) {
     if (minVehicleClearance < VERTICAL_CLEARANCE) reasons.push('vehicle-clearance');
     if (reasons.length) { rejections.push({ attempt, reasons }); continue; }
     const spans = twoLayerWallSpans(wallModel);
-    return { spans, walls: sampleWalls(spans, 0.1), wallModel, domain: [...LAYERED_DOMAIN],
+    // Keep the calibrated wall acceptance sequence, then place the straight tracks below that wall.
+    if (paper) wallModel.starts = Array.from({length:20}, (_, i) => {
+      const rng = createRng(input.seed, 'paper-initial', i + 1);
+      return [1 + 10 * rng.normal(), Math.min(1 + 10 * rng.normal(), bounds.ymin - 3)];
+    });
+    const starts = wallModel.starts;
+    return { spans, walls: sampleWalls(spans, 0.1), wallModel, domain: [...domain],
       // Static display envelope: existing wall + all centreline offsets, never future measurements.
-      ...(wallSide === 'both' ? {} : { cameraBounds: [0, wallModel.L,
+      ...(paper ? { cameraBounds: [0, domain[1], Math.min(bounds.ymin, ...starts.map(p=>p[1])), bounds.ymax] }
+        : wallSide === 'both' ? {} : { cameraBounds: [0, wallModel.L,
         Math.min(bounds.ymin, bounds.centreRange[0] - 2), Math.max(bounds.ymax, bounds.centreRange[1] + 2)] }),
       wallGeneration: { attempt, attempts: attempt + 1, rejections, bounds, minVehicleClearance,
+        ...(paper ? {trajectory:'straight +x, 1 m per snapshot', minVehicleClearance: bounds.ymin - Math.max(...starts.map(p=>p[1]))} : {}),
         wallSide, activeWalls, minWidthRequired: wallSide === 'both' ? MIN_VERTICAL_GAP : null,
         vehicleClearanceRequired: VERTICAL_CLEARANCE, clearanceAxis: 'y',
         validationFleet: { vehicles: 20, snapshots: 120, wallInterval: [0, wallModel.L] } } };
@@ -83,6 +95,7 @@ export function createSceneGeometry(input) {
   throw new Error('All 256 wall-generation attempts were rejected. Reduce geometry amplitudes or choose another seed.');
 }
 export function truePoses(t, vehicles = 3, wallModel = null) {
+  if (wallModel?.starts) return wallModel.starts.slice(0, vehicles).map(([x,y]) => [x + t - 1, y]);
   return Array.from({ length: vehicles }, (_, v) => {
     // Fixed initial slots and RNG addresses keep fleet prefixes equal.
     // Layered routes advance 80 m in 120 snapshots (2/3 m per snapshot).
@@ -110,7 +123,7 @@ export function truePoses(t, vehicles = 3, wallModel = null) {
  */
 export function generateTruthSnapshot(raw, spans, t, wallModel = null) {
   const input = normalizeInput(raw);
-  if (input.scene === 'layered' && !wallModel) throw new Error('Layered snapshots require their accepted truth wall model');
+  if ((input.scene === 'layered' || input.scene === PAPER_SETTINGS.scene) && !wallModel) throw new Error('Layered snapshots require their accepted truth wall model');
   if (!Number.isInteger(t) || t < 1 || t > input.snapshots) throw new RangeError('Truth snapshot is outside the requested time prefix');
   const p = truePoses(t, input.vehicles, wallModel),
     activeWalls = [...new Set(spans.map(span => span.wall))];

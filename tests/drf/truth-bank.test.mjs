@@ -100,7 +100,7 @@ test('source provenance mismatch refuses to publish a mixed-generation manifest'
   } finally { await rm(output, { recursive: true, force: true }); }
 });
 
-test('packaged default bank covers all 40 physical settings at four capacities with current source hashes and intact gzip bytes', async () => {
+test('packaged default bank covers all 40 physical settings and the straight-route examples with current source hashes and intact gzip bytes', async () => {
   const location = new URL('../../assets/truth-cache/manifest.json', import.meta.url);
   const packaged = JSON.parse(await readFile(location, 'utf8'));
   assert.equal(packaged.schema, TRUTH_CACHE_SCHEMA); assert.equal(packaged.generator, TRUTH_CACHE_GENERATOR);
@@ -110,11 +110,15 @@ test('packaged default bank covers all 40 physical settings at four capacities w
     const input = normalizeInput({ seed, roughness, vehicles, snapshots: 120 });
     expected.add(`${truthCacheKey(input)}|${vehicles}|120`);
   }
-  assert.equal(packaged.entries.length, 160);
-  assert.equal(new Set(packaged.entries.map(entry => entry.file)).size, 160);
+  for (let seed=1;seed<=10;seed++) for (const vehicles of [3,10]) {
+    const input=normalizeInput({scene:'paper-upper',seed,vehicles});
+    expected.add(`${truthCacheKey(input)}|${vehicles}|100`);
+  }
+  assert.equal(packaged.entries.length, expected.size);
+  assert.equal(new Set(packaged.entries.map(entry => entry.file)).size, expected.size);
   for (const entry of packaged.entries) {
     assert.ok(expected.delete(`${entry.key}|${entry.vehicles}|${entry.snapshots}`), 'No extra or duplicate physical setting/capacity');
-    assert.ok(/^[a-f0-9]{64}\.v\d+\.t120\.json\.gz$/.test(entry.file));
+    assert.ok(/^[a-f0-9]{64}\.v\d+\.t(?:100|120)\.json\.gz$/.test(entry.file));
     const bytes = await readFile(new URL(entry.file, location));
     assert.deepEqual([...bytes.subarray(0, 2)], [0x1f, 0x8b]);
     assert.equal(digest(bytes), entry.sha256, entry.file);

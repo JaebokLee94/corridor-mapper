@@ -51,7 +51,7 @@ A single range defines an ellipse. Multiple measurements accumulate a **Direct R
 | Evidence | Four hypotheses: neither, original, mirror, both | Gaussian range evidence with competition between fragments |
 | Geometry | Updated after predictive scoring | Fixed after proposal |
 | Decision score | Current marginal log-odds, with geometry/evidence guards | Highest qualified Gaussian log-score reached so far |
-| Fixed tuning threshold | **6.650397183049193** | **28** for 3 vehicles, **29.108623616301394** otherwise |
+| Fixed tuning threshold | **10.754131418601359** for 3 vehicles, **4.5** for 10, **6.650397183049193** otherwise | **28** for 3 vehicles, **29.108623616301394** otherwise |
 | Decisions | Supported / held / rejected | Supported / unselected |
 
 WM means *wall mapping*. WM-P tracks mirror pairs. WM-F scores fixed straight segments. Both are in-house estimators. The two score scales are different and are not calibrated probabilities. The methods share measurements and a 100 × 100 candidate grid, but their models, state sizes and computational costs differ. Changing the display-field grid does not change their candidate grids.
@@ -102,11 +102,11 @@ In the legacy Gap Hermite mode, across short gaps the curve matches the local ta
 3. Open **Experiments, diagnostics & exports** for paired sweeps and post-hoc scattering diagnostics.
 4. Choose **Share experiment** to copy a seeded settings URL, or download JSON/CSV to retain results.
 
-New visits and Reset use **3 vehicles on localhost** and **10 on the shared site**, with 120 snapshots on both. Shared URLs preserve their explicit settings, including seed, fleet size and snapshot count, on reload. An unseeded visit chooses a new seed. A URL shares settings, not computed outputs or an immutable software revision; retain the JSON and repository commit for a research record.
+New visits and Reset use **3 vehicles on localhost** and **10 on the shared site**, with a 100 m upper wall, 100 snapshots, straight vehicle tracks (1 m per snapshot), specular returns, 0.6 m range resolution and interpolation off. WM-P loads the fleet-specific parameters and score threshold in [the comparison protocol](THRESHOLD_PROTOCOL.md). Shared URLs preserve their explicit settings, including seed, fleet size and snapshot count, on reload. An unseeded visit chooses a new seed. A URL shares settings, not computed outputs or an immutable software revision; retain the JSON and repository commit for a research record.
 
 In **Both walls**, the upper and lower boundaries have independent large-scale curves and small-scale perturbations. A constant vertical shift, applied only when needed, keeps their minimum vertical separation above 6 m without bending or clipping either curve. The route follows the midpoint of the finished walls with its full ±2 m lateral oscillation. The 6 m gap covers this 4 m motion envelope plus 1 m vertical truth-pose clearance on each side, for all supported vehicles and phases. Single-wall modes retain their earlier generator.
 
-The layered wall spans x = 0–80 m. Vehicles advance ⅔ m in x per snapshot, so 120 snapshots cover 80 m from their initial positions. Physical time per snapshot is unspecified. Large fleets cost more: 10 vehicles produce 45 unordered pairs per snapshot. Use progress, pause and cancel rather than interpreting elapsed browser time as a method benchmark.
+The corridor-following scene spans x = 0–80 m. Vehicles advance ⅔ m in x per snapshot, so 120 snapshots cover 80 m from their initial positions. Physical time per snapshot is unspecified. Large fleets cost more: 10 vehicles produce 45 unordered pairs per snapshot. Use progress, pause and cancel rather than interpreting elapsed browser time as a method benchmark.
 
 ## Reproduce locally
 

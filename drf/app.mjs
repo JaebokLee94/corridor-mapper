@@ -1,14 +1,15 @@
 import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261112-checkedcentre';
+import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
-import { createDiagnosticView } from './diagnostic-ui.mjs';
+import { createDiagnosticView } from './diagnostic-ui.mjs?v=20261112-upper-wmp';
 import { sweepCsv } from './sweep-export.mjs';
-import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261112-paper-noise';
+import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261112-upper-wmp';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-chain-tips';
-import { METHOD_PROTOCOL, protocolForFleet } from './comparison.mjs?v=20261112-wmf-fleet';
+import { METHOD_PROTOCOL, protocolForFleet } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261112-wmf-fleet';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261112-upper-wmp';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-chain-tips';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -29,7 +30,9 @@ function renderThresholdProtocol(protocol = METHOD_PROTOCOL) {
   const clustering = guarded.clustering === 'bounded-span'
     ? 'Each echo cluster is limited to the existing distance gate.'
     : guarded.clustering === 'single-link' ? 'Echo clusters use single-link distance grouping.' : 'Echo clustering is not specified in this run metadata.';
-  $('thresholdDetails').textContent = `Fixed log-score thresholds: WM-P ${guarded.threshold}; WM-F ${baseline.threshold}. ${baseline.thresholdStatus ? baseline.thresholdStatus+' ' : ''}${refinement} ${clustering} ${guarded.thresholdStatus ?? 'These development thresholds are not certified.'}`;
+  const params = guarded.parameters;
+  const model = params ? `WM-P starts with ${2*params.ell} m fragments, uses a missed-detection probability of ${params.p_miss} and checks candidates within ${params.max_range} m. ` : '';
+  $('thresholdDetails').textContent = `Fixed log-score thresholds: WM-P ${guarded.threshold}; WM-F ${baseline.threshold}. ${model}${baseline.thresholdStatus ? baseline.thresholdStatus+' ' : ''}${refinement} ${clustering} ${guarded.thresholdStatus ?? 'These development thresholds are not certified.'}`;
 }
 renderThresholdProtocol();
 const fmt = (v, places = 3) => typeof v !== 'number' ? '—' : Number.isFinite(v) ? v.toFixed(places) : v === Infinity ? 'Failed (∞)' : v === -Infinity ? 'Failed (−∞)' : 'Failed (NaN)';
@@ -93,6 +96,8 @@ function fillSettings(input) {
     const field = form.elements.namedItem(key);
     if (field) field.type === 'checkbox' ? field.checked = value : field.value = String(value);
   }
+  $('wallConfiguration').value = input.scene === PAPER_SETTINGS.scene ? input.scene : input.wallSide;
+  $('wallGapNote').hidden = input.wallSide !== 'both';
   if (!state.protocol) renderThresholdProtocol(protocolForFleet(input.vehicles));
 }
 function settings() {
@@ -102,7 +107,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261112-wmf-fleet';
+  const revision = '20261112-upper-wmp';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -379,13 +384,13 @@ const inspect = point => {
 };
 const map = new DrfMap($('mapCanvas'),inspect),baselineMap=new DrfMap($('baselineCanvas'),inspect),densityMap=new DrfMap($('densityCanvas'),inspect),contrastMap=new DrfMap($('contrastCanvas'),inspect);
 linkMapCameras(map,baselineMap,()=>state.method==='compare');
-let previewKey='',preview=[],previewBounds;
+let previewKey='',preview=[],previewBounds,previewDomain;
 function previewWalls() {
   // Static truth preview uses exactly the accepted geometry used by the worker.
   try {
     const input = state.pendingInput ?? normalizeInput(Object.fromEntries(new FormData(form))),
-      key = JSON.stringify([input.scene, input.wallSide, input.seed, input.sigmaM, input.deltaM, input.sigmaDGeometry, input.deltaD]);
-    if (key !== previewKey) { const geometry=createSceneGeometry(input);preview=geometry.walls;previewBounds=geometry.cameraBounds;previewKey=key; }
+      key = JSON.stringify([input.scene, input.wallSide, input.vehicles, input.seed, input.sigmaM, input.deltaM, input.sigmaDGeometry, input.deltaD]);
+    if (key !== previewKey) { const geometry=createSceneGeometry(input);preview=geometry.walls;previewDomain=geometry.domain;previewBounds=geometry.cameraBounds;previewKey=key; }
     return preview;
   } catch (error) { notice(error.message); return []; }
 }
@@ -406,15 +411,16 @@ function renderSelected() {
     }
     return (kind === 'extended' || kind === 'checked') && map?.extendedBridges?.length ? [...map.bridges, ...map.extendedBridges] : map?.bridges ?? [];
   };
-  const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: state.scenario?.domain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls: scenario?.walls ?? previewWalls(),cameraBounds:scenario?.cameraBounds ?? previewBounds,
+  const walls = scenario?.walls ?? previewWalls();
+  const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: scenario?.domain ?? previewDomain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls,cameraBounds:scenario?.cameraBounds ?? previewBounds,
     bridges: visibleBridges(state.method === 'baseline' ? 'baseline' : 'guarded'),
     candidates: frame?.methods?.[state.method]?.candidates ?? frame?.candidates ?? [], observed: evaluation?.observed, layers, heatField: $('heatField').value, scaleMode: $('scaleMode').value,
     history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
   $('mapPair').dataset.mode=state.method;
   $('baselinePane').hidden=state.method!=='compare';
   $('primaryMapName').textContent=state.method==='baseline'?'WM-F (Wall Mapping with Fixed Segments)':'WM-P (Wall Mapping with Pair Tracking)';
-  map.set({...display,mode:'geometry',xRange:[-10,90]});
-  baselineMap.set({...display,bridges:visibleBridges('baseline'),candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,90]});
+  map.set({...display,mode:'geometry',xRange:[-10,display.domain[1]+10]});
+  baselineMap.set({...display,bridges:visibleBridges('baseline'),candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,display.domain[1]+10]});
   const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
   densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
   contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
@@ -508,9 +514,22 @@ $('pauseButton').onclick = () => commandRun(state.mode === 'paused' ? 'resume' :
 $('stepButton').onclick = () => { state.mode === 'paused' ? commandRun('step') : prepare(true); };
 $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
+$('wallConfiguration').onchange = event => {
+  const selected = event.target.value, paper = selected === PAPER_SETTINGS.scene;
+  const wasPaper = form.elements.scene.value === PAPER_SETTINGS.scene;
+  form.elements.scene.value = paper ? selected : 'layered';
+  form.elements.wallSide.value = paper ? 'upper' : selected;
+  $('wallGapNote').hidden = selected !== 'both';
+  if (paper !== wasPaper) {
+    const defaults = paper ? PAPER_SETTINGS : DEFAULT_INPUT;
+    for (const key of ['snapshots','roughness','lambda0','resolution']) form.elements[key].value = defaults[key];
+    form.elements.specular.checked = defaults.specular;
+    $('showInterpolation').checked = !paper;
+  }
+};
 $('resetButton').onclick = () => {
   state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(pageDefaults);
-  $('showInterpolation').checked = true; $('interpolationKind').value = 'checked';
+  $('showInterpolation').checked = false; $('interpolationKind').value = 'checked';
   const url = new URL(location.href); url.hash = ''; url.searchParams.delete('interpolation');
   history.replaceState(null, '', url); renderSelected(); renderSweep();
   $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.');
@@ -682,12 +701,12 @@ window.addEventListener('beforeunload', () => {
   for (const worker of state.workers) worker.detach ? worker.detach() : worker.stop();
   if (state.sweep?.detach) state.sweep.detach(); else state.sweep?.cancel();
 });
-const pageDefaults = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)
-  ? {...DEFAULT_INPUT, vehicles: 3} : DEFAULT_INPUT;
+const pageDefaults = {...DEFAULT_INPUT, ...PAPER_SETTINGS,
+  vehicles:['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname) ? 3 : 10};
 let initialInput = pageDefaults;
 try {
   const hasSharedInput=location.hash.startsWith('#v1='),raw=hasSharedInput ? JSON.parse(decodeURIComponent(location.hash.slice(4))) : pageDefaults;
-  initialInput=normalizeInput({...raw,scene:'layered'});
+  initialInput=normalizeInput({...raw,scene:raw.scene === PAPER_SETTINGS.scene ? raw.scene : 'layered'});
   // Keep shared experiments reproducible. Bare visits use the precomputed bank.
   if (!hasSharedInput) {
     const draw=new Uint32Array(1);
@@ -696,6 +715,7 @@ try {
     initialInput={...initialInput,seed:1+draw[0]%10};
   }
 } catch (error) { notice(`Could not restore URL settings: ${error.message}`); }
+$('showInterpolation').checked = initialInput.scene !== PAPER_SETTINGS.scene;
 if (location.search) {
   const sharedInterpolation = new URLSearchParams(location.search).get('interpolation');
   const selector = $('interpolationKind');
@@ -707,7 +727,8 @@ if (location.search) {
     selector.add(option);
   }
   if (Array.from(selector.options).some(option => option.value === sharedInterpolation)) selector.value = sharedInterpolation;
-  $('showInterpolation').checked = sharedInterpolation !== 'off';
+  if (sharedInterpolation === 'off' || Array.from(selector.options).some(option => option.value === sharedInterpolation))
+    $('showInterpolation').checked = sharedInterpolation !== 'off';
 }
 fillSettings(initialInput);
 history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialInput))}`);

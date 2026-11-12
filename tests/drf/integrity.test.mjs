@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
+import { METHOD_PROTOCOL, protocolForFleet } from '../../drf/comparison.mjs';
 const root = new URL('../../', import.meta.url);
 const read = path => fs.readFileSync(new URL(path, root));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -32,7 +32,10 @@ test('public provenance names the current operating points and their development
   assert.equal(comparison.thresholdSource, METHOD_PROTOCOL.guarded.tuning.id);
   assert.equal(comparison.refinement, METHOD_PROTOCOL.guarded.refinement);
   assert.equal(comparison.clustering, METHOD_PROTOCOL.guarded.clustering);
-  assert.match(comparison.thresholdStatus, /not retuned or certified/);
+  for (const vehicles of [3,10]) {
+    const {threshold,parameters}=protocolForFleet(vehicles).guarded;
+    assert.deepEqual(comparison.guardedFleetProfiles[vehicles],{threshold,...parameters});
+  }
 });
 
 test('historical 160-run evidence matches archived numerical sources and unchanged estimator sources', () => {

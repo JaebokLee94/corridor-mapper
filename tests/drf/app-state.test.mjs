@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import { PAPER_SETTINGS } from '../../drf/paper-preset.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput } from '../../drf/scenario.mjs';
 import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
@@ -28,7 +29,7 @@ test('shared URLs preserve the exact seed and snapshot count across reloads; onl
   const initial={...DEFAULT_INPUT,scene:'layered',seed:0xffffffff,vehicles:7,snapshots:80};
   for (const hostname of ['127.0.0.1','localhost','[::1]','jaeboklee94.github.io']) for (const hash of ['',`#v1=${encodeURIComponent(JSON.stringify(initial))}`,'#v1=invalid']) {
     const location={hash,hostname},filled=[],notices=[];let calls=0;
-    const context=vm.createContext({location,DEFAULT_INPUT,normalizeInput,matchMedia:()=>({matches:false}),
+    const context=vm.createContext({location,$:()=>({}),DEFAULT_INPUT,PAPER_SETTINGS,normalizeInput,matchMedia:()=>({matches:false}),
       crypto:{getRandomValues:array=>{calls++;array[0]=1234567;return array;}},
       fillSettings:input=>filled.push({...input}),notice:text=>notices.push(text),
       history:{replaceState:(_,__,url)=>{location.hash=url;}}});
@@ -37,7 +38,7 @@ test('shared URLs preserve the exact seed and snapshot count across reloads; onl
     assert.deepEqual(restored,value);
     assert.equal(calls,hash ? 0 : 1);
     assert.equal(value.seed,hash.includes('invalid') ? DEFAULT_INPUT.seed : hash ? initial.seed : 8);
-    assert.equal(value.snapshots,hash && !hash.includes('invalid') ? 80 : DEFAULT_INPUT.snapshots);
+    assert.equal(value.snapshots,hash && !hash.includes('invalid') ? 80 : PAPER_SETTINGS.snapshots);
     assert.equal(value.vehicles,hash && !hash.includes('invalid') ? 7 : hostname==='jaeboklee94.github.io' ? 10 : 3);
     assert.equal(notices.length,hash.includes('invalid') ? 1 : 0);
     vm.runInNewContext(section('const pageDefaults =','(globalThis.__drfOffline ?'),{...context,location});
@@ -49,7 +50,7 @@ test('bare visits select every bank seed uniformly while explicit seeds and relo
   const startup=section('const pageDefaults =','(globalThis.__drfOffline ?');
   for(const draws of [...Array.from({length:10},(_,i)=>[i]),[4294967289],[4294967295,4294967290,0]]) {
     const location={hash:''},filled=[];let calls=0;
-    const context={location,DEFAULT_INPUT,normalizeInput,matchMedia:()=>({matches:false}),
+    const context={location,$:()=>({}),DEFAULT_INPUT,PAPER_SETTINGS,normalizeInput,matchMedia:()=>({matches:false}),
       crypto:{getRandomValues:array=>{assert.ok(calls<draws.length,'RNG rejection terminates');array[0]=draws[calls++];return array;}},
       fillSettings:input=>filled.push({...input}),notice:message=>assert.fail(message),
       history:{replaceState:(_,__,url)=>{location.hash=url;}},
@@ -64,7 +65,7 @@ test('bare visits select every bank seed uniformly while explicit seeds and relo
   }
   for(const seed of [0,1,10,11,0xffffffff]) {
     const input={...DEFAULT_INPUT,seed},filled=[];
-    vm.runInNewContext(startup,{location:{hash:`#v1=${encodeURIComponent(JSON.stringify(input))}`},DEFAULT_INPUT,normalizeInput,
+    vm.runInNewContext(startup,{location:{hash:`#v1=${encodeURIComponent(JSON.stringify(input))}`},$:()=>({}),DEFAULT_INPUT,PAPER_SETTINGS,normalizeInput,
       matchMedia:()=>({matches:false}),crypto:{getRandomValues:()=>assert.fail('Explicit seeds must not be replaced')},
       fillSettings:value=>filled.push({...value}),notice:message=>assert.fail(message),history:{replaceState(){}}});
     assert.equal(filled.at(-1).seed,seed);
@@ -168,7 +169,7 @@ test('actual preview geometry stays cached when the truth overlay is hidden',()=
   let generated=0;
   const context=vm.createContext({state:{},$:()=>truth,form:{},
     FormData:class { *[Symbol.iterator]() { yield* Object.entries(input); } },
-    previewKey:'',preview:[],previewBounds:undefined,normalizeInput:value=>value,notice:message=>assert.fail(message),
+    previewKey:'',preview:[],previewBounds:undefined,previewDomain:undefined,normalizeInput:value=>value,notice:message=>assert.fail(message),
     createSceneGeometry:()=>{generated++;return {walls,domain};}});
   vm.runInContext(section('function previewWalls()','function renderSelected()'),context);
   const initial=context.previewWalls();
@@ -197,7 +198,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
     runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},pageDefaults:{snapshots:60,vehicles:3},LAYERED_DOMAIN,URL,location:new URL('http://localhost/drf.html?interpolation=extended#old'),
     history:{replaceState(_state,_title,url){context.location=url;}},
     document,createDiagnosticView,interpolationResult,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
-    map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,
+    map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,previewDomain:undefined,
     fmt:v=>Number.isFinite(v) ? String(v) : '—',percentile:values=>values[0]??null,
     requestAnimationFrame:fn=>{const id=++nextFrame;pending.set(id,fn);return id;},cancelAnimationFrame:id=>pending.delete(id),clearTimeout(){},
     drawComparisonHistory:(canvas,data)=>charts.set(canvas.id,data),drawHistogram:(canvas,data)=>charts.set(canvas.id,data),
@@ -268,7 +269,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   $('inspector').textContent='old D/A/Q';$('diagnosticSummary').textContent='old Theorem 2';
   vm.runInContext("$('resetButton').onclick();",context);
   assert.equal($('interpolationKind').value,'checked');
-  assert.equal($('showInterpolation').checked,true);
+  assert.equal($('showInterpolation').checked,false);
   for (const [id,callback] of [...pending]) {pending.delete(id);callback(400);}
   assert.equal(pending.size,0);assert.equal(stoppedWorkers,1);assert.equal(cancelledSweeps,1);
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.scenario,null);assert.equal(state.valid,false);
@@ -611,8 +612,8 @@ test('new and reset defaults coexist with reproducible interpolation share links
   const restore=section('if (location.search) {','fillSettings(initialInput);');
   const controls=window.document.querySelector('.interpolation-controls');
   const markup=controls.innerHTML;
-  for(const [query,expected,on] of [['','checked',true],['extended','extended',true],['off','checked',false],
-    ['unknown','checked',true],['hermite','hermite',true],['centre','centre',true],['linear','linear',true]]){
+  for(const [query,expected,on] of [['','checked',false],['extended','extended',true],['off','checked',false],
+    ['unknown','checked',false],['hermite','hermite',true],['centre','centre',true],['linear','linear',true]]){
     controls.innerHTML=markup;
     const $=id=>window.document.getElementById(id);
     vm.runInNewContext(restore,{location:{search:query?'?interpolation='+query:''},$,URLSearchParams,Option:window.Option});

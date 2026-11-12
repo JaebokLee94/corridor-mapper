@@ -9,8 +9,8 @@
  * At sigmaR=.1 this is the frozen experiment. Other sigmaR values explicitly
  * substitute the declared range SD into the same Gaussian measurement model.
  */
-import { DRF } from './pspt-ridges.mjs';
-import { prepareMeasuredSnapshot } from './pspt.mjs';
+import { DRF } from './pspt-ridges.mjs?v=20261112-upper-wmp';
+import { prepareMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { eigen2 } from './pspt-math.mjs';
 
 export const BASELINE_CONFIG = Object.freeze({ life:20, cooldown:5, dNms:.75,
@@ -69,9 +69,9 @@ export function gaussianEvidence(pieces,snapshot,sigmaR=.1) {
 }
 
 export class Baseline {
-  constructor({sigmaR=.1}={}) {
+  constructor({sigmaR=.1,domain}={}) {
     if (!Number.isFinite(sigmaR) || sigmaR<=0) throw new RangeError('Method B requires sigmaR > 0');
-    this.sigmaR=sigmaR;this.field=new DRF();this.active=[];this.expired=[];this.all=[];this.lastT=0;
+    this.sigmaR=sigmaR;this.field=new DRF({domain});this.active=[];this.expired=[];this.all=[];this.lastT=0;
   }
   step(snapshot, threshold=12) {
     const {wire}=prepareMeasuredSnapshot(snapshot),t=wire.t,c=BASELINE_CONFIG;

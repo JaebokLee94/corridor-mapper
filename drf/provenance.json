@@ -63,14 +63,28 @@
     "release": "compute-20261105",
     "guardedLogThreshold": 6.650397183049193,
     "baselineLogThreshold": 29.108623616301394,
-    "thresholdStatus": "Inherited development operating points; not retuned or certified for current refinement and clustering",
+    "thresholdStatus": "WM-P at 3 and 10 vehicles uses upper-wall raw Map F1 tuning; guardedLogThreshold and thresholdSource refer to other fleet sizes. No certified error bound.",
     "baselineReference": "2026-10-20 Python baseline.py; source hashes and checkpoints in tests/drf/baseline-reference.json",
     "baselineNoise": "Uses declared uniform range SD; previous experimental configuration was 0.1 m",
     "testCommand": "PSPT_FULL_PARITY=1 npm test",
     "evaluation": "Post-hoc 0.4 m centre/patch metrics; different from grouped whole-fragment FP loss in the prior tuning study",
     "thresholdSource": "tuning-200-20261020",
     "refinement": "shared-pose",
-    "clustering": "bounded-span"
+    "clustering": "bounded-span",
+    "guardedFleetProfiles": {
+      "3": {
+        "threshold": 10.754131418601359,
+        "ell": 4,
+        "p_miss": 0.05,
+        "max_range": 45
+      },
+      "10": {
+        "threshold": 4.5,
+        "ell": 1.25,
+        "p_miss": 0.25,
+        "max_range": 45
+      }
+    }
   },
   "computationRevision": {
     "id": "exact-reuse-20261105",

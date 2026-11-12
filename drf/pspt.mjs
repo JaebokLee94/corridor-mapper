@@ -15,12 +15,12 @@
  * Memory: O(G + KCP + JT), plus O(win*G) when windowed births are requested.
  */
 import { makeWire } from "./wire.mjs";
-import { DRF } from "./pspt-ridges.mjs";
+import { DRF } from "./pspt-ridges.mjs?v=20261112-upper-wmp";
 import { Surfel, refine, mirrored, dot, cov3, eigen2, matVec, matMul, transpose, solve } from "./pspt-math.mjs";
 import { curvatureConsistentUpdate } from "./pspt-curvature.mjs";
 import { planRecovery, commitRecovery } from "./pspt-recovery.mjs";
 
-const DEFAULTS = Object.freeze({ nx: 100, ny: 100, ell: 1, K: 12, frac: 0.15, sep: 1.5, dup: 1,
+const DEFAULTS = Object.freeze({ nx: 100, ny: 100, domain: undefined, ell: 1, K: 12, frac: 0.15, sep: 1.5, dup: 1,
   alpha: 0.01, ext: 1.5, p_miss: 0.05, refinement: "independent-pairs", clustering: "single-link",
   R_span: 40, max_range: 25, explain_away: true,
   temper: true, mirror: true, win: null, max_inc_deg: 45, geometry_alpha: 0.001, min_evidence_steps: 2,
@@ -137,7 +137,7 @@ export class PSPT {
     Object.assign(this, o);
     this.pm = o.p_miss;
     this.cos_inc = o.max_inc_deg === null ? null : Math.cos(o.max_inc_deg * Math.PI / 180);
-    this.drf = new DRF({ nx: o.nx, ny: o.ny });
+    this.drf = new DRF({ nx: o.nx, ny: o.ny, domain: o.domain });
     this.hist = []; this.groups = []; this.Dq = [];
     this.ncl = 0; this.ncfg = 0; this.sr2 = .01; this.last_t = null;
     this.geometry_statistic = 0; this.geometry_threshold = Infinity; this.geometry_informative = false;

@@ -1,9 +1,10 @@
-import { normalizeInput } from './scenario.mjs?v=20261104-truthcache1';
-import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-background2';
+import { candidateDomain } from './paper-preset.mjs';
+import { normalizeInput } from './scenario.mjs?v=20261112-upper-wmp';
+import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261112-upper-wmp';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
-import { MethodComparison } from './comparison.mjs?v=20261112-wmf-fleet';
+import { MethodComparison } from './comparison.mjs?v=20261112-upper-wmp';
 
 function summarize(frame, evaluation) {
   const keys = ['precision', 'surfacePrecision', 'recall', 'holdRate', 'firstSupportPrecision',
@@ -29,7 +30,7 @@ export async function runExperiment(raw, progress = () => {}, prepare = generate
   const scenario = await prepare(input), grid = createGrid(input.grid, input.grid, scenario.domain),
     field = createField(grid, { band: input.band, perimeter: input.perimeter }),
     evaluators = Object.fromEntries(['guarded', 'baseline'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
-    estimator = new MethodComparison({ vehicles: input.vehicles, sigmaR: input.sigmaD, includeExtended:true }), timings = [];
+    estimator = new MethodComparison({ domain:candidateDomain(input.scene), vehicles: input.vehicles, sigmaR: input.sigmaD, includeExtended:true }), timings = [];
   let frame, evaluations, fieldMs = 0, evaluationMs = 0;
   const estimatorMs = { guarded: 0, baseline: 0 };
   for (const wire of scenario.wire) {
@@ -102,7 +103,7 @@ export function startSweep(jobs, onProgress, workerCount = Math.min(4, Math.max(
   }
   const count = Math.min(jobs.length, workerCount);
   for (let k = 0; k < count; k++) {
-    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261112-wmf-fleet', import.meta.url), { type: 'module' }); workers.push(worker);
+    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261112-upper-wmp', import.meta.url), { type: 'module' }); workers.push(worker);
     worker.onmessage = ({ data }) => {
       if (cancelled || settled) return;
       if (data.type === 'error') { settled = true; stop(); fail(new Error(data.message)); return; }

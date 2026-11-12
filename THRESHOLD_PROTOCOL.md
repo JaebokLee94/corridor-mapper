@@ -8,9 +8,13 @@ This document distinguishes threshold selection, historical evaluation and the c
 
 | Method | Current fixed log-score threshold | Previous development threshold | Score used for selection |
 |:--|--:|--:|:--|
-| Guarded PSPT | 6.650397183049193 | 6.4615384615384635 | Current marginal log-odds of original/both versus neither/mirror, or the symmetric alternative |
+| WM-P, 3 vehicles | 10.754131418601359 | 6.650397183049193 | Current four-hypothesis marginal log-odds |
+| WM-P, 10 vehicles | 4.5 | 6.650397183049193 | Same score |
+| WM-P, other fleet sizes | 6.650397183049193 | 6.4615384615384635 | Current marginal log-odds of original/both versus neither/mirror, or the symmetric alternative |
 | WM-F, 3 vehicles | 28 | 29.108623616301394 | Same qualified score, with 2 m fragments and two matching snapshots |
 | WM-F, other fleet sizes | 29.108623616301394 | 12 | Maximum qualified Gaussian log-score observed up to the current snapshot |
+
+WM-P selection used 40 screening scenes and 60 separate tuning scenes to maximize mean final raw Map F1 at 0.4 m. Three vehicles use tangent half-length 4 m, missed-return model probability 0.05 and candidate range 45 m. Ten vehicles use 1.25 m, 0.25 and 45 m respectively. The independent test used 100 separate scenes. The selection objective did not constrain off-wall length or test openings and branches.
 
 For three vehicles, WM-F uses a fleet-specific threshold selected on opening and fork scenes using final extended centre spline Map F1, with limits on full opening closures and wrong-branch connections. Selection and confirmation used separate seeds. The full fragment length is 2 m for all vehicle counts.
 
@@ -26,7 +30,7 @@ The live comparison and sweep now account for shared vehicle position error duri
 
 Echo grouping also changes from single-link clustering to a bounded-diameter rule. A chain of individually close returns could previously combine widely separated ranges, including returns from different walls, into one overconfident mean. Each new cluster's maximum-minus-minimum range is limited by the existing noise-based gate. This is a grouping-model revision, not a guarantee that every cluster represents one physical reflector. The shared range simulator, truth-side evaluator and Fixed-fragment B are unchanged.
 
-The frozen `new PSPT()` reference retains `independent-pairs` refinement and `single-link` clustering. `MethodComparison` explicitly selects `shared-pose` and `bounded-span`. **The threshold above is inherited, not retuned or certified for this revision.** No displayed truth enters either estimator or selects its threshold.
+The frozen `new PSPT()` reference retains `independent-pairs` refinement and `single-link` clustering. `MethodComparison` explicitly selects `shared-pose` and `bounded-span`. The November 4 revision inherited the October threshold. The November 12 fleet-specific settings are listed above. No displayed truth enters either estimator or selects its threshold.
 
 The reported seed and three additional diagnostic seeds use identical settings within each before/after pair. [Inputs, wire hashes and scalar results](validation/pspt-repair-20261104.json) are recorded separately.
 
@@ -45,7 +49,7 @@ Centre precision remains 100% in these four cases. Across the three additional s
 |:--|:--|--:|--:|--:|--:|:--|
 | Original 54 cases, seeds 501–506 | Originally evaluation; subsequently reused for development | 3 | 0.1 m | 0.1 m | 120 | Nine wall/scattering configurations per seed; not independent evidence for current selection |
 | Tuning 200, seeds 12000000–12000199 | Exploratory threshold selection | 3 | 0 m | 0.1 m | 120 | Distinct tuning seed block; mixed wall/scattering conditions; no certification |
-| Current unshared defaults | Interactive nominal simulation | 3 on localhost; 10 on shared site | 0.1 m | 0.1 m | 120 | Both walls, mixed returns, roughness 2°; new random seed on unseeded load |
+| Current unshared defaults | Interactive upper-wall straight route | 3 on localhost; 10 on shared site | 0 m | 0.4 m | 100 | Specular only, 0.6 m range resolution; new random seed on unseeded load |
 | README / shared example | One illustrative scene | 10 | 0.1 m | 0.1 m | 120 | Seed 549028359; not an aggregate benchmark |
 | Parameter sweep | Paired conditions chosen by the user | Current setting | Current setting | Swept | Current setting | Same methods, gates and metrics as the main view |
 

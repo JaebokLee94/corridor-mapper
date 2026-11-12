@@ -1,4 +1,4 @@
-import { PSPT } from './pspt.mjs';
+import { PSPT } from './pspt.mjs?v=20261112-upper-wmp';
 
 // This worker receives measured snapshots only. No scenario, wall-side setting,
 // ground truth, evaluation result, or future sequence crosses this boundary.

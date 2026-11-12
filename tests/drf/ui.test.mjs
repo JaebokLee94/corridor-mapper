@@ -21,10 +21,10 @@ test('DRF DOM contract and readable stylesheet', () => {
   const geometryNote=html.match(/<p[^>]*class="note geometry-note"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? '';
   assert.match(geometryNote,/Independent walls · <span data-tex=\"\\Delta y\\ge 6\\,\\mathrm\{m\}\">Δy ≥6 m<\/span>/,'The compact note retains wall independence and the LaTeX minimum gap');
   assert.match(geometryNote,/title="Both walls have independent shapes and a minimum vertical gap of 6 m\."/,'The tooltip defines the vertical gap in full');
-  assert.match(html,/input name="scene" type="hidden" value="layered"/);
+  assert.match(html,/input name="scene" type="hidden" value="paper-upper"/);
   assert.doesNotMatch(html,/<select[^>]*name="scene"/);
-  assert.match(html,/<select name="wallSide"><option value="both">Both walls<\/option><option value="upper">Upper only<\/option><option value="lower">Lower only<\/option>/);
-  assert.match(html,/name="snapshots"[^>]*max="120"[^>]*value="120"/);
+  assert.match(html,/<select id="wallConfiguration"><option value="paper-upper" selected>Upper wall · straight route<\/option><option value="both">Both walls<\/option><option value="upper">Upper only<\/option><option value="lower">Lower only<\/option>/);
+  assert.match(html,/name="snapshots"[^>]*max="120"[^>]*value="100"/);
   for (const path of ['../../drf/style.css','../../surf/style.css']) {
     const css=readFileSync(new URL(path,import.meta.url),'utf8');
     for (const match of css.matchAll(/font-size:\s*(\d+)px/g)) {
@@ -39,7 +39,7 @@ test('DRF DOM contract and readable stylesheet', () => {
     assert.equal(Number(value),defaults[name]);
   }
   assert.match(html,/name="sweepNoise" value="0\.4,0\.7,1\.0"/);
-  assert.match(html,/name="roughness"[\s\S]*?value="2" selected/);
+  assert.match(html,/name="roughness"[\s\S]*?value="0" selected/);
 });
 
 test('axis-fitted camera preserves metre coordinates and the zoom anchor', () => {

@@ -61,7 +61,7 @@ test('development thresholds do not imply calibration; guarded selection stays f
 
 
 test('comparison applies the tuning gate to B without changing its qualified score history',()=>{
-  const comparison=new MethodComparison();
+  const comparison=new MethodComparison({vehicles:2});
   comparison.baseline.all=[{id:0,piece:[0,0,0,1,0,1],birth:0,logit:20,bestLogit:20,matches:2,lastScored:1}];
   comparison.baseline.active=[];
   comparison.guarded.step=()=>[];
@@ -90,7 +90,7 @@ test('comparison explanations follow its log-score threshold, not the reference 
 });
 
 test('live comparison declares shared-pose refinement without retuning thresholds',()=>{
-  const comparison=new MethodComparison();
+  const comparison=new MethodComparison({vehicles:2});
   assert.equal(comparison.guarded.refinement,'shared-pose');
   assert.equal(comparison.guarded.clustering,'bounded-span');
   assert.equal(METHOD_PROTOCOL.guarded.refinement,'shared-pose');
@@ -120,6 +120,6 @@ test('a qualified WM-F score of 28 is supported for three vehicles only',()=>{
     const row=method.step({t:1,configs}).baseline.candidates[0];
     assert.equal(row.status,vehicles===3?'supported':'pending');
     assert.equal(method.protocol.baseline.threshold,vehicles===3?28:29.108623616301394);
-    assert.equal(method.protocol.guarded.threshold,6.650397183049193);
+    assert.equal(method.protocol.guarded.threshold,({3:10.754131418601359,10:4.5})[vehicles] ?? 6.650397183049193);
   }
 });

@@ -1,4 +1,4 @@
-import { METHOD_PROTOCOL, MethodComparison } from '../../drf/comparison.mjs';
+import { METHOD_PROTOCOL, MethodComparison, protocolForFleet } from '../../drf/comparison.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -166,7 +166,7 @@ test('paired sweep matches both main-view estimators on the same wire and reques
   }
   const run=await runExperiment(input,t=>progress.push(t));
   assert.deepEqual(progress,[1,2,3]);assert.deepEqual(run.input,scene.input);
-  assert.deepEqual(run.protocol,METHOD_PROTOCOL);assert.equal(run.method,'paired-comparison');
+  assert.deepEqual(run.protocol,protocolForFleet(scene.input.vehicles));assert.equal(run.method,'paired-comparison');
   for (const method of ['guarded','baseline']) {
     const e = expected[method], linear = e.interpolation, cubic = linear.hermite;
     const metrics = {...e, Q:last.Q, admitted:last.admitted, rejected:last.rejected,

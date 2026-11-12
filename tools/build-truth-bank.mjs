@@ -20,7 +20,7 @@ const zip = promisify(gzip), unzip = promisify(gunzip);
 const REPOSITORY = fileURLToPath(new URL('../', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const defaults = () => ({ seeds: Array.from({ length: 10 }, (_, i) => i + 1), roughness: [0, 2, 5, 10],
-  vehicles: [2, 3, 5, 10], snapshots: 120, output: resolve(REPOSITORY, 'assets/truth-cache') });
+  scene:'layered', vehicles: [2, 3, 5, 10], snapshots: 120, output: resolve(REPOSITORY, 'assets/truth-cache') });
 
 function numbers(value, name) {
   const values = String(value).split(',').map(x => Number(x.trim()));
@@ -29,6 +29,7 @@ function numbers(value, name) {
   return values.sort((a, b) => a - b);
 }
 function validateOptions(options) {
+  if (!['layered','paper-upper'].includes(options.scene)) throw new Error('Unsupported bank scene');
   if (!Array.isArray(options.seeds) || !options.seeds.length || options.seeds.some(x => !Number.isInteger(x) || x < 1 || x > 10))
     throw new Error('Seeds must be integers from 1 to 10');
   if (!Array.isArray(options.vehicles) || !options.vehicles.length || options.vehicles.some(x => !Number.isInteger(x) || x < 2 || x > 10))
@@ -47,10 +48,10 @@ export function parseTruthBankArgs(args) {
   for (let i = 0; i < args.length; i++) {
     const name = args[i];
     if (name === '--help') return { help: true };
-    if (!['--seeds', '--roughness', '--vehicles', '--snapshots', '--output'].includes(name) || args[i + 1] == null)
+    if (!['--seeds', '--roughness', '--vehicles', '--snapshots', '--scene', '--output'].includes(name) || args[i + 1] == null)
       throw new Error(`Unknown or incomplete option: ${name}`);
     const value = args[++i], key = name.slice(2);
-    options[key] = key === 'output' ? resolve(value) : key === 'snapshots' ? Number(value) : numbers(value, key);
+    options[key] = key === 'scene' ? value : key === 'output' ? resolve(value) : key === 'snapshots' ? Number(value) : numbers(value, key);
   }
   return validateOptions(options);
 }
@@ -129,7 +130,7 @@ export async function buildTruthBank(request = {}, { onProgress = () => {} } = {
   const maximumVehicles = Math.max(...options.vehicles);
   await mkdir(output, { recursive: true });
   for (const seed of options.seeds) for (const roughness of options.roughness) {
-    const start = performance.now(), input = normalizeInput({ seed, roughness, vehicles: maximumVehicles, snapshots: options.snapshots });
+    const start = performance.now(), input = normalizeInput({ scene:options.scene, seed, roughness, vehicles: maximumVehicles, snapshots: options.snapshots });
     const remote=process.env.ECHOMAP_BUILD_DGX_URL;
     const {geometry,truth}=remote ? await (await import('./dgx/client.mjs')).remoteScenario(input,remote,()=>{},true) : {geometry:createSceneGeometry(input),truth:[]};
     for (let t = 1; !remote && t <= input.snapshots; t++) {

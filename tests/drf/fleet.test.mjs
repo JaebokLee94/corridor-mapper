@@ -108,3 +108,23 @@ test('eighty snapshots preserve the sixty-snapshot wire and continue through the
   assert.deepEqual(final.wire.configs.filter(c=>c.j<=3),long.wire[79].configs);
   assert.ok(visible(long.spans,[61,15],[60,7]),'There is no artificial closing wall across the open exit');
 });
+
+test('the upper-wall preset gives straight 1 m steps, exact poses, specular returns and the same measured fleet prefix',async()=>{
+  const settings={scene:'paper-upper',seed:6,snapshots:2};
+  const small=await generateScenario({...settings,vehicles:3}), large=await generateScenario({...settings,vehicles:10});
+  assert.deepEqual(large.domain,[0,100,-20,50]);
+  assert.deepEqual([...new Set(large.spans.map(s=>s.wall))],[1]);
+  assert.deepEqual([large.input.sigmaP,large.input.sigmaD,large.input.resolution],[0,.4,.6]);
+  for (let t=0;t<2;t++) {
+    assert.deepEqual(small.wire[t].configs,large.wire[t].configs.filter(c=>c.j<=3));
+    for(const [i,p] of large.truth[t].p.entries()){
+      assert.ok(p[1]<=large.wallGeneration.bounds.ymin-3);
+      if(t) assert.deepEqual(p,[large.truth[0].p[i][0]+1,large.truth[0].p[i][1]]);
+    }
+    for(const c of large.wire[t].configs) {
+      assert.deepEqual(c.pHat_i,large.truth[t].p[c.i-1]);assert.deepEqual(c.Sigma_i,[0,0,0]);
+      assert.ok(c.paths.every(p=>p.sigmaD===.4));
+    }
+    assert.ok(large.truth[t].configs.every(c=>c.diffuse.length===0));
+  }
+});
