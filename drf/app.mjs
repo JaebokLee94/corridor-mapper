@@ -5,11 +5,11 @@ import { createDiagnosticView } from './diagnostic-ui.mjs';
 import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261104-truthcache1';
 import { percentile } from './statistics.mjs';
-import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-checkedcentre';
-import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
+import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-chain-tips';
+import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-chain-tips';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-background2';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-checkedcentre';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261112-chain-tips';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-chain-tips';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -101,7 +101,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261104-background2';
+  const revision = '20261112-chain-tips';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -397,6 +397,9 @@ function renderSelected() {
   $('interpolationKind').disabled = !interpolate && state.method === 'compare';
   const visibleBridges = method => {
     const map = frame?.methods?.[method];
+    if(kind==='checked' && map?.checkedChains?.length) {
+      return [...map.bridges,...map.extendedBridges,...map.checkedChains.map(l=>({from:l.from,to:l.to,checkedCentrePoints:l.points}))];
+    }
     return (kind === 'extended' || kind === 'checked') && map?.extendedBridges?.length ? [...map.bridges, ...map.extendedBridges] : map?.bridges ?? [];
   };
   const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: state.scenario?.domain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls: scenario?.walls ?? previewWalls(),cameraBounds:scenario?.cameraBounds ?? previewBounds,

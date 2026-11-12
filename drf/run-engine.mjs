@@ -1,8 +1,8 @@
 import { normalizeInput } from './scenario.mjs?v=20261104-truthcache1';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-background2';
 import { createGrid, createField } from './field.mjs';
-import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs';
+import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261112-chain-tips';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
  * No page acknowledgement, animation callback or parent timer is required.
@@ -49,9 +49,9 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask } = {}) {
         frame.methods = run.estimator.step(wire);
         frame.candidates = frame.methods.guarded.candidates;
         frame.psptMs = frame.methods.guarded.ms; frame.method = 'guarded-tuned';
-        const guarded = run.guardedEvaluator.step(frame, null, frame.methods.guarded.bridges, frame.methods.guarded.extendedBridges);
+        const guarded = run.guardedEvaluator.step(frame, null, frame.methods.guarded.bridges, frame.methods.guarded.extendedBridges, frame.methods.guarded.checkedChains);
         const baseline = run.baselineEvaluator.step({ ...frame, method: 'baseline-b',
-          candidates: frame.methods.baseline.candidates }, guarded, frame.methods.baseline.bridges, frame.methods.baseline.extendedBridges);
+          candidates: frame.methods.baseline.candidates }, guarded, frame.methods.baseline.bridges, frame.methods.baseline.extendedBridges, frame.methods.baseline.checkedChains);
         const evaluation = { ...guarded, methods: { guarded, baseline } };
         run.next++;
         if (run.steps > 0) run.steps--;

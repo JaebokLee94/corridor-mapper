@@ -1,4 +1,4 @@
-import {confirmedExtensions} from './checked-centre.mjs';
+import {confirmedExtensions} from './checked-centre.mjs?v=20261112-chain-tips';
 import { centreSpline } from './centre-spline.mjs';
 import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261112-checkedcentre';
 import { boundsOf } from "../surf/map.mjs";

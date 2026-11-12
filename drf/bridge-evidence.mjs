@@ -37,8 +37,11 @@ function countSnapshot(link, pairs, band, padding) {
   for (let b=0; b<hits.length; b++) {
     const i = 4*b, total = counts[i], centre = counts[i+1];
     const control = Math.max(counts[i+2], counts[i+3]);
-    if (total >= RANGE_SUPPORT.minPairs && centre >= RANGE_SUPPORT.minMatchFraction * total &&
-        centre - control >= RANGE_SUPPORT.minControlMargin * total) hits[b]++;
+    if (centre < RANGE_SUPPORT.minMatchFraction * total || centre-control < RANGE_SUPPORT.minControlMargin * total) continue;
+    if (link.bestLooks) {
+      if(total<link.bestLooks[2] || total<3)continue;
+      link.bestLooks=[...link.bestLooks,total].sort((a,b)=>b-a).slice(0,3);
+    } else if(total>=RANGE_SUPPORT.minPairs) hits[b]++;
   }
 }
 
@@ -65,17 +68,20 @@ export class GapRangeEvidence {
   }
 
   confirms(points, strictCell=false) {
-    const [[x,y],[bx,by]] = points, key = (strictCell?'cell:':'')+[x,y,bx,by].join(',');
+    const [[x,y],[bx,by]] = points, key = (strictCell==='pooled'?'pooled:':strictCell?'cell:':'')+[x,y,bx,by].join(',');
     let span = this.cache.get(key) ?? this.previous.get(key);
     if (!span) {
       const length = Math.hypot(bx-x, by-y);
       span = {x, y, length, tx:(bx-x)/length, ty:(by-y)/length,
         hits:new Uint8Array(strictCell ? 1 : Math.max(2, Math.ceil(length / RANGE_SUPPORT.binLengthM))), seen:0, confirmed:false};
     }
+    if(strictCell==='pooled')span.bestLooks??=[0,0,0];
     this.cache.set(key, span);
     while (!span.confirmed && span.seen < this.history.length) {
       countSnapshot(span, this.history[span.seen++], this.band, strictCell ? 0 : RANGE_SUPPORT.binPaddingM);
-      span.confirmed = span.hits.every(n => n >= RANGE_SUPPORT.minSnapshots);
+      const best=span.bestLooks;
+      span.confirmed = best ? best[2]>=3 && best[1]>=4 && best[0]+best[1]+best[2]>=12
+        : span.hits.every(n => n >= RANGE_SUPPORT.minSnapshots);
     }
     return span.confirmed;
   }

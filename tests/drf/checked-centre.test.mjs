@@ -31,3 +31,28 @@ test('strict curve cell only credits specular feet inside the cell in three meas
  assert.equal(evidence.confirms([[0,0],[.5,0]],true),true);
  assert.equal(evidence.confirms([[.26,0],[.76,0]],true),false);
 });
+
+test('only the nearer free end of the same connected chain resolves competing tips',async()=>{
+ const {checkedChainTips}=await import('../../drf/checked-centre.mjs');
+ const patch=(id,x)=>({id,center:[x,0],phi:0,ell:1,kappa:0,sg:1,status:'supported'});
+ const a=patch('a',0), b=patch('b',6), c=patch('c',7.2);
+ const choices=[{from:'a',to:'b',points:[[1,0],[5,0]]},{from:'a',to:'c',points:[[1,0],[6.2,0]]}];
+ const evidence={confirms:()=>true};
+ assert.equal(checkedChainTips([a,b,c],{links:[]},choices,evidence).length,0);
+ const base=centreSpline([a,b,c]);
+ assert.deepEqual(checkedChainTips([a,b,c],base,choices,evidence).map(l=>[l.from,l.to]),[['a','b']]);
+ for(const veto of [true,'pooled']) {
+  assert.equal(checkedChainTips([a,b,c],base,choices,{confirms:(_,mode)=>mode!==veto}).length,0);
+ }
+});
+test('narrow bins pool twelve pair-looks across three separate times and keep two four-pair observations',()=>{
+ function confirms(counts) {
+  const evidence=new GapRangeEvidence(.1);
+  for(const count of counts) {
+   const configs=Array.from({length:count},(_,i)=>{const h=.1*(i+1);return {pHat_i:[.25-h,2],pHat_j:[.25+h,2],paths:[{dHat:Math.hypot(2*h,4)}]};});
+   evidence.add({configs});
+  }
+  return evidence.confirms([[0,0],[.5,0]],'pooled');
+ }
+ assert(confirms([5,4,3]));assert(!confirms([4,4,3]));assert(!confirms([6,3,3]));assert(!confirms([8,4]));
+});

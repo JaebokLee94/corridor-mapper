@@ -1,4 +1,4 @@
-import { wallBridges } from './wall-bridges.mjs';
+import { wallBridges } from './wall-bridges.mjs?v=20261112-chain-tips';
 
 /** Preserve the same unique endpoint pairs for both display modes. Only their
  * geometry changes. Hermite is cubic across the chord and linear along it, so
@@ -6,8 +6,8 @@ import { wallBridges } from './wall-bridges.mjs';
  * Input: this method's candidates in metres/radians; output: two polylines per
  * gap. Extra work/memory O(candidates + total displayed vertices).
  */
-export function completeWallGaps(candidates, extendedBridges = null, evidence = null) {
-  const bridges = wallBridges(candidates, extendedBridges, evidence);
+export function completeWallGaps(candidates, extendedBridges = null, evidence = null, ambiguous = null) {
+  const bridges = wallBridges(candidates, extendedBridges, evidence, ambiguous);
   if (!bridges.length) return bridges;
   const byId = new Map(candidates.map(c => [c.id,c]));
   for (const bridge of bridges) {

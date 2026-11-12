@@ -2,11 +2,11 @@
  * Fixed exploratory tuning thresholds; never selected using the displayed scene.
  * Provenance and selection losses: THRESHOLD_PROTOCOL.md. No error certificate.
  */
-import { completeWallGaps } from './bridge-curves.mjs';
-import { GapRangeEvidence } from './bridge-evidence.mjs';
-import { markCentreExtensions, CHECKED_CENTRE_RULE } from './checked-centre.mjs';
-import { CENTRE_RULE } from './centre-spline.mjs';
-import { BRIDGE_RULE } from './wall-bridges.mjs';
+import { completeWallGaps } from './bridge-curves.mjs?v=20261112-chain-tips';
+import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
+import { markCentreExtensions, checkedChainTips, confirmedExtensions, CHECKED_CENTRE_RULE } from './checked-centre.mjs?v=20261112-chain-tips';
+import { centreSpline, CENTRE_RULE } from './centre-spline.mjs';
+import { BRIDGE_RULE } from './wall-bridges.mjs?v=20261112-chain-tips';
 import { PSPT } from './pspt.mjs';
 import { Baseline } from './baseline.mjs?v=20261022-audit1';
 const tuning = Object.freeze({
@@ -51,17 +51,26 @@ export class MethodComparison {
     this.baseline = new Baseline(options);
     this.gapEvidence = new GapRangeEvidence(this.baseline.sigmaR);
   }
+  mapFrame(candidates,start) {
+    const extendedBridges=this.includeExtended?[]:undefined, ambiguous=this.includeExtended?[]:undefined;
+    const bridges=completeWallGaps(candidates,extendedBridges,this.gapEvidence,ambiguous);
+    let checkedChains;
+    if(extendedBridges) {
+      markCentreExtensions(candidates,bridges,extendedBridges,this.gapEvidence);
+      if(ambiguous.length) {
+        const current=centreSpline(candidates,bridges,confirmedExtensions(bridges,extendedBridges));
+        checkedChains=checkedChainTips(candidates,current,ambiguous,this.gapEvidence);
+      }
+    }
+    return {candidates,bridges,extendedBridges,...(checkedChains?.length?{checkedChains}:{}),ms:performance.now()-start};
+  }
   step(wire) {
-    const guardedExtras = this.includeExtended ? [] : undefined, baselineExtras = this.includeExtended ? [] : undefined;
-    let start = performance.now();
-    const guarded = selectGuarded(this.guarded, this.guarded.step(wire));
+    let start=performance.now();
+    const candidates=selectGuarded(this.guarded,this.guarded.step(wire));
     this.gapEvidence.add(wire);
-    const guardedBridges = completeWallGaps(guarded, guardedExtras, this.gapEvidence);
-    if(guardedExtras)markCentreExtensions(guarded,guardedBridges,guardedExtras,this.gapEvidence);
-    const guardedMs=performance.now()-start;
-    start=performance.now();const baseline=this.baseline.step(wire,METHOD_PROTOCOL.baseline.threshold),baselineBridges=completeWallGaps(baseline, baselineExtras, this.gapEvidence);
-    if(baselineExtras)markCentreExtensions(baseline,baselineBridges,baselineExtras,this.gapEvidence);
-    const baselineMs=performance.now()-start;
-    return {guarded:{candidates:guarded,bridges:guardedBridges,extendedBridges:guardedExtras,ms:guardedMs},baseline:{candidates:baseline,bridges:baselineBridges,extendedBridges:baselineExtras,ms:baselineMs}};
+    const guarded=this.mapFrame(candidates,start);
+    start=performance.now();
+    const baseline=this.mapFrame(this.baseline.step(wire,METHOD_PROTOCOL.baseline.threshold),start);
+    return {guarded,baseline};
   }
 }

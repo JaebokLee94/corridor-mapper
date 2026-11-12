@@ -1,4 +1,4 @@
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-checkedcentre';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 import { diffuseProfile } from './diffuse.mjs';
 import { createSweepProfileSource } from './diagnostic-profile.mjs';
 let evaluator, baselineEvaluator, scenario;

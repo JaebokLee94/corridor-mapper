@@ -2,7 +2,7 @@
  * Geometry is labelled at its current position, tolerance 0.4 m. Surface
  * coverage is restricted to wall samples within 1 m of past generated echoes.
  */
-import { confirmedExtensions } from './checked-centre.mjs';
+import { confirmedExtensions } from './checked-centre.mjs?v=20261112-chain-tips';
 import { centreSpline, patchPoints } from './centre-spline.mjs';
 import { percentile } from './statistics.mjs';
 import { createReflectionDiagnostics } from './reflection-diagnostics.mjs';
@@ -141,7 +141,7 @@ export function createPSPTEvaluator(scenario, grid) {
     gt = wallSamples(scenario),
     mask = metrics.createObservedMask(gt), onWall = neighborhood(gt), firstSupport = new Map();
   let cursor = 0;
-  return { step(frame, sharedDiagnostics = null, bridges = [], extendedBridges) {
+  return { step(frame, sharedDiagnostics = null, bridges = [], extendedBridges, checkedChains=[]) {
     if (!Array.isArray(frame.candidates)) throw new Error('PSPT evaluation requires estimator candidates');
     if (!Number.isInteger(frame.t) || frame.t < cursor || frame.t > scenario.truth.length) throw new Error('Evaluation requires a causal snapshot');
     while (cursor < frame.t) {
@@ -174,7 +174,7 @@ export function createPSPTEvaluator(scenario, grid) {
     const rawMap={mapF1:mapF1(rawLengthM,rawOffWallM,full.hits,full.total),count:0,lengthM:rawLengthM,offWallM:rawOffWallM,falseBridges:0,missing:uncovered.length,recall};
     interpolation.centre=assessCentres(supported,onWall,observed,rawMap,gt,mask,bridges);
     if(extendedBridges) {
-      const links=confirmedExtensions(bridges,extendedBridges);
+      const links=confirmedExtensions(bridges,extendedBridges).concat(checkedChains);
       interpolation.checked=links.length?assessCentres(supported,onWall,observed,rawMap,gt,mask,bridges,links):interpolation.centre;
     }
     interpolation.rawMap=rawMap;

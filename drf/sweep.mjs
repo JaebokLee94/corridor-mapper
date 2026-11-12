@@ -2,8 +2,8 @@ import { normalizeInput } from './scenario.mjs?v=20261104-truthcache1';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-background2';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-checkedcentre';
-import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
+import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261112-chain-tips';
 
 function summarize(frame, evaluation) {
   const keys = ['precision', 'surfacePrecision', 'recall', 'holdRate', 'firstSupportPrecision',
@@ -38,8 +38,8 @@ export async function runExperiment(raw, progress = () => {}) {
     for (const key of Object.keys(methods)) estimatorMs[key] += methods[key].ms;
     timings.push(frame.ms + methods.guarded.ms + methods.baseline.ms);
     const start = performance.now();
-    const guarded = evaluators.guarded.step({ ...frame, method: 'guarded-tuned', candidates: methods.guarded.candidates }, null, methods.guarded.bridges, methods.guarded.extendedBridges);
-    const baseline = evaluators.baseline.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges, methods.baseline.extendedBridges);
+    const guarded = evaluators.guarded.step({ ...frame, method: 'guarded-tuned', candidates: methods.guarded.candidates }, null, methods.guarded.bridges, methods.guarded.extendedBridges, methods.guarded.checkedChains);
+    const baseline = evaluators.baseline.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges, methods.baseline.extendedBridges, methods.baseline.checkedChains);
     evaluations = { guarded, baseline }; evaluationMs += performance.now() - start;
     progress(frame.t, input.snapshots);
   }
@@ -102,7 +102,7 @@ export function startSweep(jobs, onProgress, workerCount = Math.min(4, Math.max(
   }
   const count = Math.min(jobs.length, workerCount);
   for (let k = 0; k < count; k++) {
-    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261104-background2', import.meta.url), { type: 'module' }); workers.push(worker);
+    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261112-chain-tips', import.meta.url), { type: 'module' }); workers.push(worker);
     worker.onmessage = ({ data }) => {
       if (cancelled || settled) return;
       if (data.type === 'error') { settled = true; stop(); fail(new Error(data.message)); return; }

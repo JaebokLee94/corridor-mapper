@@ -1,4 +1,4 @@
-import { MethodComparison } from './comparison.mjs?v=20261022-audit1';
+import { MethodComparison } from './comparison.mjs?v=20261112-chain-tips';
 // Only declared range noise and measured snapshots cross the inference boundary.
 let estimator;
 globalThis.onmessage=({data})=>{
