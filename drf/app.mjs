@@ -6,9 +6,9 @@ import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261104-truthcache1';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-chain-tips';
-import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-chain-tips';
+import { METHOD_PROTOCOL, protocolForFleet } from './comparison.mjs?v=20261112-wmf-fleet';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261112-chain-tips';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261112-wmf-fleet';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-chain-tips';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -22,14 +22,14 @@ let runWorker, evalWorker, hoverWorker, diagnosticWorker, hoverTimer, hoverGener
 const runPreloader = createRunPreloader({ createWorker: () => createLocalWorker('run') });
 function renderThresholdProtocol(protocol = METHOD_PROTOCOL) {
   const { guarded, baseline } = protocol;
-  $('thresholdSummary').textContent = `Tuning ${guarded.tuning.scenes} · WM-P ${guarded.threshold.toFixed(4)} · WM-F ${baseline.threshold.toFixed(4)}`;
+  $('thresholdSummary').textContent = `WM-P ${guarded.threshold.toFixed(4)} · WM-F ${baseline.threshold.toFixed(4)}`;
   const refinement = guarded.refinement === 'shared-pose'
     ? 'Candidate refinement accounts for shared vehicle position error.'
     : guarded.refinement === 'independent-pairs' ? 'Candidate refinement treats pair errors independently.' : 'Candidate refinement is not specified in this run metadata.';
   const clustering = guarded.clustering === 'bounded-span'
     ? 'Each echo cluster is limited to the existing distance gate.'
     : guarded.clustering === 'single-link' ? 'Echo clusters use single-link distance grouping.' : 'Echo clustering is not specified in this run metadata.';
-  $('thresholdDetails').textContent = `Fixed tuning log-score thresholds: WM-P ${guarded.threshold}; WM-F ${baseline.threshold}. ${refinement} ${clustering} ${guarded.thresholdStatus ?? 'These development thresholds are not certified.'}`;
+  $('thresholdDetails').textContent = `Fixed log-score thresholds: WM-P ${guarded.threshold}; WM-F ${baseline.threshold}. ${baseline.thresholdStatus ? baseline.thresholdStatus+' ' : ''}${refinement} ${clustering} ${guarded.thresholdStatus ?? 'These development thresholds are not certified.'}`;
 }
 renderThresholdProtocol();
 const fmt = (v, places = 3) => typeof v !== 'number' ? '—' : Number.isFinite(v) ? v.toFixed(places) : v === Infinity ? 'Failed (∞)' : v === -Infinity ? 'Failed (−∞)' : 'Failed (NaN)';
@@ -93,6 +93,7 @@ function fillSettings(input) {
     const field = form.elements.namedItem(key);
     if (field) field.type === 'checkbox' ? field.checked = value : field.value = String(value);
   }
+  if (!state.protocol) renderThresholdProtocol(protocolForFleet(input.vehicles));
 }
 function settings() {
   if (Number(form.elements.namedItem('sigmaD').value) === 0) throw new Error('Both methods require a range standard deviation greater than zero. Zero range noise can make the joint pose update singular.');
@@ -101,7 +102,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261112-chain-tips';
+  const revision = '20261112-wmf-fleet';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -219,7 +220,6 @@ function cancel(clear = false) {
   if (clear) {
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
     state.measurementLabel=''; state.generatedSnapshots = 0; state.measurementTotal = 0;
-    renderThresholdProtocol();
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
     for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
@@ -515,7 +515,7 @@ $('resetButton').onclick = () => {
   history.replaceState(null, '', url); renderSelected(); renderSweep();
   $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.');
 };
-form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { location.hash = `v1=${encodeURIComponent(JSON.stringify(settings()))}`; } catch (e) { notice(e.message); } });
+form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { const input = settings(); renderThresholdProtocol(protocolForFleet(input.vehicles)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
 form.addEventListener('change', () => warmSelectedInput());
 $('resetButton').addEventListener('click', () => warmSelectedInput());
 $('timeSlider').oninput = () => {

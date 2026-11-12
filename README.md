@@ -49,7 +49,7 @@ A single range defines an ellipse. Multiple measurements accumulate a **Direct R
 | Evidence | Four hypotheses: neither, original, mirror, both | Gaussian range evidence with competition between fragments |
 | Geometry | Updated after predictive scoring | Fixed after proposal |
 | Decision score | Current marginal log-odds, with geometry/evidence guards | Highest qualified Gaussian log-score reached so far |
-| Fixed tuning threshold | **6.650397183049193** | **29.108623616301394** |
+| Fixed tuning threshold | **6.650397183049193** | **28** for 3 vehicles, **29.108623616301394** otherwise |
 | Decisions | Supported / held / rejected | Supported / unselected |
 
 WM means *wall mapping*. WM-P tracks mirror pairs. WM-F scores fixed straight segments. Both are in-house estimators. The two score scales are different and are not calibrated probabilities. The methods share measurements and a 100 × 100 candidate grid, but their models, state sizes and computational costs differ. Changing the display-field grid does not change their candidate grids.
@@ -60,7 +60,7 @@ The inference wire contains snapshot indices, measured 2D positions, reported po
 
 ## Know which experiment a number belongs to
 
-The current operating points come from **exploratory tuning on 200 synthetic scenes**, not an independent test. They maximise observed-wall recall subject to empirical mean grouped-fragment FP ≤ 1% in that tuning set.
+For three vehicles, WM-F uses a threshold of 28 selected on 120 opening and branch scenes and tested on 120 separate scenes. The original operating points in the following table come from **exploratory tuning on 200 synthetic scenes**, not an independent test. They maximise observed-wall recall subject to empirical mean grouped-fragment FP ≤ 1% in that tuning set.
 
 | Tuning-only result | WM-P | WM-F |
 |:--|--:|--:|

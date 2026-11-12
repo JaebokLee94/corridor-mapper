@@ -1,5 +1,5 @@
 import { preparePublicScenario } from './public-measure.mjs';
-import { runExperiment } from './sweep.mjs?v=20261112-chain-tips';
+import { runExperiment } from './sweep.mjs?v=20261112-wmf-fleet';
 self.onmessage = async ({ data }) => {
   if (data.type !== 'run') return;
   try {

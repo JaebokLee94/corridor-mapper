@@ -3,7 +3,7 @@ import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
-import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261112-chain-tips';
+import { MethodComparison } from './comparison.mjs?v=20261112-wmf-fleet';
 
 function summarize(frame, evaluation) {
   const keys = ['precision', 'surfacePrecision', 'recall', 'holdRate', 'firstSupportPrecision',
@@ -29,7 +29,7 @@ export async function runExperiment(raw, progress = () => {}, prepare = generate
   const scenario = await prepare(input), grid = createGrid(input.grid, input.grid, scenario.domain),
     field = createField(grid, { band: input.band, perimeter: input.perimeter }),
     evaluators = Object.fromEntries(['guarded', 'baseline'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
-    estimator = new MethodComparison({ sigmaR: input.sigmaD, includeExtended:true }), timings = [];
+    estimator = new MethodComparison({ vehicles: input.vehicles, sigmaR: input.sigmaD, includeExtended:true }), timings = [];
   let frame, evaluations, fieldMs = 0, evaluationMs = 0;
   const estimatorMs = { guarded: 0, baseline: 0 };
   for (const wire of scenario.wire) {
@@ -43,7 +43,7 @@ export async function runExperiment(raw, progress = () => {}, prepare = generate
     evaluations = { guarded, baseline }; evaluationMs += performance.now() - start;
     progress(frame.t, input.snapshots);
   }
-  return { input, wallGeneration: scenario.wallGeneration, method: 'paired-comparison', protocol: METHOD_PROTOCOL,
+  return { input, wallGeneration: scenario.wallGeneration, method: 'paired-comparison', protocol: estimator.protocol,
     methods: Object.fromEntries(Object.entries(evaluations).map(([key, evaluation]) => [key, { summary: summarize(frame, evaluation) }])),
     diagnostics: evaluations.guarded.diagnostics,
     timing: { ...(scenario.measurementBackend ? { measurementBackend:scenario.measurementBackend } : {}), simulatorMs: scenario.simulatorMs, fieldMs, estimatorMs, evaluationMs,
@@ -102,7 +102,7 @@ export function startSweep(jobs, onProgress, workerCount = Math.min(4, Math.max(
   }
   const count = Math.min(jobs.length, workerCount);
   for (let k = 0; k < count; k++) {
-    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261112-chain-tips', import.meta.url), { type: 'module' }); workers.push(worker);
+    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261112-wmf-fleet', import.meta.url), { type: 'module' }); workers.push(worker);
     worker.onmessage = ({ data }) => {
       if (cancelled || settled) return;
       if (data.type === 'error') { settled = true; stop(); fail(new Error(data.message)); return; }

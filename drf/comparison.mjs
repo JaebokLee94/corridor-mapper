@@ -23,6 +23,18 @@ export const METHOD_PROTOCOL = Object.freeze({
   baseline: Object.freeze({ name:'WM-F', interpolation:BRIDGE_RULE, centreSpline:CENTRE_RULE, checkedCentre:CHECKED_CENTRE_RULE, threshold:29.108623616301394, previousDevThreshold:12,
     score:'maximum qualified Gaussian log-score through the current snapshot', grid:Object.freeze([100,100]), calibrated:false, tuning }),
 });
+const threeVehicleProtocol = Object.freeze({
+  guarded: METHOD_PROTOCOL.guarded,
+  baseline: Object.freeze({...METHOD_PROTOCOL.baseline, threshold:28, previousDevThreshold:METHOD_PROTOCOL.baseline.threshold,
+    thresholdStatus:'WM-F uses the operating point selected on 120 three-vehicle opening and fork scenes.',
+    tuning:Object.freeze({id:'wmf-topology-3v-20261112', role:'development', vehicles:3,
+      scenes:120, snapshots:120, sigmaP:.1, sigmaD:.1, certified:false,
+      selection:'Highest mean final Map F1 with no increase in closed openings or wrong branch connections.',
+      source:'THRESHOLD_PROTOCOL.md'}),
+  }),
+});
+export const protocolForFleet = vehicles => vehicles === 3 ? threeVehicleProtocol : METHOD_PROTOCOL;
+
 const logadd = (a,b) => Math.max(a,b)+Math.log1p(Math.exp(-Math.abs(a-b)));
 export function selectGuarded(estimator,rows=estimator.report()) {
   const groups=new Map(estimator.groups.map(g=>[g.gid,g]));
@@ -46,6 +58,7 @@ export function selectGuarded(estimator,rows=estimator.report()) {
 }
 export class MethodComparison {
   constructor(options={}) {
+    this.protocol = options.vehicles == null ? null : protocolForFleet(options.vehicles);
     this.includeExtended = options.includeExtended ?? false;
     this.guarded = new PSPT({refinement:METHOD_PROTOCOL.guarded.refinement,clustering:METHOD_PROTOCOL.guarded.clustering});
     this.baseline = new Baseline(options);
@@ -70,7 +83,9 @@ export class MethodComparison {
     this.gapEvidence.add(wire);
     const guarded=this.mapFrame(candidates,start);
     start=performance.now();
-    const baseline=this.mapFrame(this.baseline.step(wire,METHOD_PROTOCOL.baseline.threshold),start);
+    // Older worker clients supply the fleet only through measured pair IDs.
+    this.protocol ??= protocolForFleet(new Set(wire.configs.flatMap(l=>[l.i,l.j])).size);
+    const baseline=this.mapFrame(this.baseline.step(wire,this.protocol.baseline.threshold),start);
     return {guarded,baseline};
   }
 }

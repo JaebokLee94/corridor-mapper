@@ -111,3 +111,15 @@ test('published tuning provenance matches the exact runtime thresholds and datas
     assert.equal(protocol.tuning.certified,false);
   }
 });
+
+test('a qualified WM-F score of 28 is supported for three vehicles only',()=>{
+  for(const vehicles of [2,3,4,10]) {
+    const method=new MethodComparison({vehicles});
+    method.baseline.all=[{id:0,piece:[0,0,0,1,0,1],birth:0,logit:28,bestLogit:28,matches:2,lastScored:1}];
+    const configs=Array.from({length:vehicles-1},(_,i)=>({i:0,j:i+1,pHat_i:[0,2],pHat_j:[i+1,2],Sigma_i:[0,0,0],Sigma_j:[0,0,0],paths:[]}));
+    const row=method.step({t:1,configs}).baseline.candidates[0];
+    assert.equal(row.status,vehicles===3?'supported':'pending');
+    assert.equal(method.protocol.baseline.threshold,vehicles===3?28:29.108623616301394);
+    assert.equal(method.protocol.guarded.threshold,6.650397183049193);
+  }
+});

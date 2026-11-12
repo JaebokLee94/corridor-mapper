@@ -7,7 +7,7 @@ import { normalizeInput, generateScenario } from '../../drf/scenario.mjs';
 import { buildTruthBundle, createScenarioPreparer } from '../../drf/prepare-scenario.mjs';
 import { createTruthCache, getTruthCacheStats } from '../../drf/truth-cache.mjs';
 import { createGrid, createField } from '../../drf/field.mjs';
-import { MethodComparison, METHOD_PROTOCOL } from '../../drf/comparison.mjs';
+import { MethodComparison, protocolForFleet } from '../../drf/comparison.mjs';
 import { createPSPTEvaluator } from '../../drf/pspt-evaluate.mjs';
 import { createRunEngine } from '../../drf/run-engine.mjs';
 import { runExperiment } from '../../drf/sweep.mjs';
@@ -210,7 +210,7 @@ test('real run engine and sweep preserve all numerical prefixes, final metrics a
   const prepared = messages.find(m => m.type === 'prepared');
   assert.ok(prepared);
   assertScenario(prepared.scenario, expectedScene);
-  assert.deepEqual(prepared.protocol, METHOD_PROTOCOL);
+  assert.deepEqual(prepared.protocol, protocolForFleet(input.vehicles));
   const frames = messages.filter(m => m.type === 'frame');
   assert.equal(frames.length, expected.length);
   for (let t = 0; t < expected.length; t++) {
@@ -222,7 +222,7 @@ test('real run engine and sweep preserve all numerical prefixes, final metrics a
   assert.equal(afterEngine.generated, before.generated + 1, 'the real engine is wired to physical caching');
   const sweep = await runExperiment(input), final = expected.at(-1);
   assert.equal(getTruthCacheStats().memory, afterEngine.memory + 1, 'sweep reuses the engine physical cache');
-  assert.deepEqual(sweep.protocol, METHOD_PROTOCOL);
+  assert.deepEqual(sweep.protocol, protocolForFleet(input.vehicles));
   assert.deepEqual(sweep.wallGeneration, expectedScene.wallGeneration);
   assert.deepEqual(numerical(sweep.diagnostics), numerical(final.evaluation.diagnostics));
   for (const key of Object.keys(sweep.final)) assert.deepEqual(sweep.final[key], final.frame[key], `sweep final ${key}`);

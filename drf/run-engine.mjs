@@ -1,7 +1,7 @@
 import { normalizeInput } from './scenario.mjs?v=20261104-truthcache1';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-background2';
 import { createGrid, createField } from './field.mjs';
-import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261112-chain-tips';
+import { MethodComparison } from './comparison.mjs?v=20261112-wmf-fleet';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
@@ -84,10 +84,10 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask, prepare = g
       run.scenario = scenario;
       run.grid = createGrid(input.grid, input.grid, scenario.domain);
       run.field = createField(run.grid, { band: input.band, perimeter: input.perimeter });
-      run.estimator = new MethodComparison({includeExtended:true,  sigmaR: input.sigmaD });
+      run.estimator = new MethodComparison({includeExtended:true, vehicles: input.vehicles, sigmaR: input.sigmaD });
       run.guardedEvaluator = createPSPTEvaluator(scenario, run.grid);
       run.baselineEvaluator = createPSPTEvaluator(scenario, run.grid);
-      send(run, 'prepared', { scenario, grid: run.grid, protocol: METHOD_PROTOCOL });
+      send(run, 'prepared', { scenario, grid: run.grid, protocol: run.estimator.protocol });
       await pump(run);
     } catch (error) { failed(run, error); }
   }

@@ -1,6 +1,6 @@
 # Comparison protocol and evidence provenance
 
-**Threshold source: `tuning-200-20261020`. Current PSPT revision: `guarded45-shared-pose-bounded-clusters-20261104`.**
+**Original threshold source: `tuning-200-20261020`. Current PSPT revision: `guarded45-shared-pose-bounded-clusters-20261104`.**
 
 This document distinguishes threshold selection, historical evaluation and the current interactive experiment. The executable source of truth is [`drf/comparison.mjs`](drf/comparison.mjs). The [machine-readable tuning record](validation/threshold-tuning-20261020.json) contains the selected source aggregates, generator settings, condition counts and SHA-256 hashes of the original analysis/plan files. The full external raw tuning archive is not included.
 
@@ -9,9 +9,12 @@ This document distinguishes threshold selection, historical evaluation and the c
 | Method | Current fixed log-score threshold | Previous development threshold | Score used for selection |
 |:--|--:|--:|:--|
 | Guarded PSPT | 6.650397183049193 | 6.4615384615384635 | Current marginal log-odds of original/both versus neither/mirror, or the symmetric alternative |
-| Fixed-fragment B | 29.108623616301394 | 12 | Maximum qualified Gaussian log-score observed up to the current snapshot |
+| WM-F, 3 vehicles | 28 | 29.108623616301394 | Same qualified score, with 2 m fragments and two matching snapshots |
+| WM-F, other fleet sizes | 29.108623616301394 | 12 | Maximum qualified Gaussian log-score observed up to the current snapshot |
 
-The previous B value was the upper endpoint of a 40-point grid over [−12, 12]. The newer tuning explored all finite eligible score breakpoints. A fragment or patch is supported when its qualified score is **at least** its method's threshold. There is no scene-specific adjustment and no evaluator feedback into the estimator.
+For three vehicles, WM-F uses a fleet-specific threshold selected on opening and fork scenes using final extended centre spline Map F1, with limits on full opening closures and wrong-branch connections. Selection and confirmation used separate seeds. The full fragment length is 2 m for all vehicle counts.
+
+The previous B value of 12 was the upper endpoint of a 40-point grid over [−12, 12]. The original 200-scene tuning explored all finite eligible score breakpoints. A fragment or patch is supported when its qualified score is **at least** its method's threshold. There is no scene-specific adjustment and no evaluator feedback into the estimator.
 
 PSPT also requires its geometry and own-patch evidence guards. B's score is eligible after at least two matched snapshots; a fragment is scored over 20 subsequent snapshots, and regeneration uses a 5-snapshot cooldown. B retains a past qualified crossing even after expiry, while PSPT uses its current hypothesis weights. Their numerical scores and computational budgets are not interchangeable.
 
