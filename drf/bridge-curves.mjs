@@ -11,7 +11,11 @@ export function completeWallGaps(candidates, extendedBridges = null, evidence = 
   if (!bridges.length) return bridges;
   const byId = new Map(candidates.map(c => [c.id,c]));
   for (const bridge of bridges) {
-    if (bridge.measuredLinear) continue; // Range confirmation applies to the straight chord only.
+    // Long-gap evidence verifies reflections on the chord, so retain that geometry.
+    if (bridge.measuredLinear) {
+      bridge.curve = bridge.points;
+      continue;
+    }
     const [a,b] = bridge.points, length = Math.hypot(b[0]-a[0], b[1]-a[1]);
     const tx = (b[0]-a[0])/length, ty = (b[1]-a[1])/length;
     const slope = (point,c) => {
@@ -21,6 +25,13 @@ export function completeWallGaps(candidates, extendedBridges = null, evidence = 
       return (-ty*x+tx*y)/(tx*x+ty*y);
     };
     const m0 = slope(a,byId.get(bridge.from)), m1 = slope(b,byId.get(bridge.to));
+    // Hermite curvature changes sign inside the gap if its second derivatives
+    // at the two ends have opposite signs. Two endpoint tangents alone cannot
+    // distinguish an actual inflection from a lateral offset between fragments.
+    if ((2*m0+m1)*(m0+2*m1) > 0) {
+      bridge.curve = bridge.points;
+      continue;
+    }
     const n = Math.max(4,Math.ceil(length/0.05)), curve = [a];
     for (let i=1;i<n;i++) {
       const s=i/n, normal=length*s*(1-s)*((1-s)*m0-s*m1);

@@ -5,7 +5,7 @@ import { RANGE_SUPPORT } from './bridge-evidence.mjs';
  * have exactly one partner. Inferred segments never become candidate endpoints.
  * With N patches, sorting costs O(N log N); pair checks are O(N²) worst case.
  */
-export const BRIDGE_RULE = Object.freeze({ maxGap: "shorter full fragment", maxAngleDeg: 15, overlapDistanceM: 0.10, extendedLengthFactor: 4, extendedMaxAngleDeg: 45, rangeSupport:RANGE_SUPPORT });
+export const BRIDGE_RULE = Object.freeze({ curve: "endpoint-hermite-single-bend-v1", maxGap: "shorter full fragment", maxAngleDeg: 15, overlapDistanceM: 0.10, extendedLengthFactor: 4, extendedMaxAngleDeg: 45, rangeSupport:RANGE_SUPPORT });
 const cosine = Math.cos(BRIDGE_RULE.maxAngleDeg * Math.PI / 180);
 
 export function wallBridges(candidates, extendedBridges = null, evidence = null) {

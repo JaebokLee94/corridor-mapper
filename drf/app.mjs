@@ -500,7 +500,7 @@ $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
 $('resetButton').onclick = () => {
   state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(DEFAULT_INPUT);
-  $('showInterpolation').checked = true; $('interpolationKind').value = 'linear';
+  $('showInterpolation').checked = true; $('interpolationKind').value = 'hermite';
   const url = new URL(location.href); url.hash = ''; url.searchParams.delete('interpolation');
   history.replaceState(null, '', url); renderSelected(); renderSweep();
   $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.');
@@ -722,8 +722,7 @@ $('shareButton').onclick=async()=>{
     const input=state.scenario?.input ?? settings();location.hash=`v1=${encodeURIComponent(JSON.stringify(input))}`;
     const shared = new URL(location.href);
     const interpolation = $('showInterpolation').checked ? $('interpolationKind').value : 'off';
-    if (interpolation === 'linear') shared.searchParams.delete('interpolation');
-    else shared.searchParams.set('interpolation', interpolation);
+    shared.searchParams.set('interpolation', interpolation);
     $('shareLink').value=shared.href;$('shareDialog').showModal();
     if(location.protocol==='file:') {$('shareStatus').textContent='This is a local file URL. Share the hosted page or downloaded JSON with collaborators.';return;}
     try {await navigator.clipboard.writeText(shared.href);$('shareStatus').textContent='Link copied. The seed and parameters are preserved.';}

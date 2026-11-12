@@ -33,6 +33,14 @@ test('cubic follows both estimated endpoint tangents and stays between the endpo
     assert.ok(x>=0 && x<=1);
   }
 });
+test('a forced inflection retains the accepted chord even if the fragment orientation is reversed',()=>{
+  const phi=Math.PI/18, c=Math.cos(phi), s=Math.sin(phi);
+  for (const angle of [phi, phi+Math.PI]) {
+    const [link]=completeWallGaps([patch('a',-c,-s,phi),patch('b',1+c,s,angle)]);
+    assert.ok(link);
+    assert.deepEqual(link.curve,link.points);
+  }
+});
 test('observed missing samples and added off-wall length measure different outcomes on identical bridges',()=>{
   const candidates=[patch('a',0),patch('b',3)], bridges=completeWallGaps(candidates);
   const evaluate = walls => {
@@ -97,11 +105,12 @@ test('a wider linear link requires repeated, local range support throughout the 
   const joined=run({});
   assert.deepEqual(joined[0].points,[[1,0],[5,0]]);
   assert.equal(joined[0].measuredLinear,true);
-  assert.equal(joined[0].curve,undefined);
+  assert.deepEqual(joined[0].curve, joined[0].points);
   assert.equal(run({opening:true}).length,0);
   assert.equal(run({clutter:true}).length,0);
   const scene={walls:[[[-1,0],[7,0]]],truth:[{configs:[{specular:[{s:[3,0]}],diffuse:[]}]}]};
   const score=createPSPTEvaluator(scene).step({t:1,candidates:pieces},{diagnostics:{}},joined,[]).interpolation;
-  assert.ok(score.recall>score.hermite.recall);
+  assert.equal(score.count,score.hermite.count);
+  assert.equal(score.recall,score.hermite.recall);
   assert.equal(score.extended.count,1);
 });

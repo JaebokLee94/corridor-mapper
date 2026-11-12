@@ -267,6 +267,8 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   state.generatedSnapshots=3;state.measurementTotal=3;
   $('inspector').textContent='old D/A/Q';$('diagnosticSummary').textContent='old Theorem 2';
   vm.runInContext("$('resetButton').onclick();",context);
+  assert.equal($('interpolationKind').value,'hermite');
+  assert.equal($('showInterpolation').checked,true);
   for (const [id,callback] of [...pending]) {pending.delete(id);callback(400);}
   assert.equal(pending.size,0);assert.equal(stoppedWorkers,1);assert.equal(cancelledSweeps,1);
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.scenario,null);assert.equal(state.valid,false);
