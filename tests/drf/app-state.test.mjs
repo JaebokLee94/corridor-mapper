@@ -267,7 +267,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   state.generatedSnapshots=3;state.measurementTotal=3;
   $('inspector').textContent='old D/A/Q';$('diagnosticSummary').textContent='old Theorem 2';
   vm.runInContext("$('resetButton').onclick();",context);
-  assert.equal($('interpolationKind').value,'hermite');
+  assert.equal($('interpolationKind').value,'checked');
   assert.equal($('showInterpolation').checked,true);
   for (const [id,callback] of [...pending]) {pending.delete(id);callback(400);}
   assert.equal(pending.size,0);assert.equal(stoppedWorkers,1);assert.equal(cancelledSweeps,1);
@@ -602,4 +602,24 @@ test('out-of-order results fail explicitly rather than mislabelling the measured
   await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:2},evaluation:{},next:2},1);
   assert.equal(errors.length,1);assert.match(errors[0].message,/Out-of-order/);
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.next,0);
+});
+
+test('new and reset defaults coexist with reproducible interpolation share links', async()=>{
+  const {JSDOM}=await import('jsdom');
+  const html=readFileSync(new URL('../../drf.html',import.meta.url),'utf8');
+  const {window}=new JSDOM(html);
+  const restore=section('if (location.search) {','fillSettings(initialInput);');
+  const controls=window.document.querySelector('.interpolation-controls');
+  const markup=controls.innerHTML;
+  for(const [query,expected,on] of [['','checked',true],['extended','extended',true],['off','checked',false],
+    ['unknown','checked',true],['hermite','hermite',true],['centre','centre',true],['linear','linear',true]]){
+    controls.innerHTML=markup;
+    const $=id=>window.document.getElementById(id);
+    vm.runInNewContext(restore,{location:{search:query?'?interpolation='+query:''},$,URLSearchParams,Option:window.Option});
+    const select=$('interpolationKind');
+    assert.deepEqual([...select.options].filter(o=>!o.hidden).map(o=>o.value),['checked','extended']);
+    assert.equal(select.value,expected);
+    assert.equal($('showInterpolation').checked,on);
+  }
+  window.close();
 });

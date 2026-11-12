@@ -506,7 +506,7 @@ $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
 $('resetButton').onclick = () => {
   state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(DEFAULT_INPUT);
-  $('showInterpolation').checked = true; $('interpolationKind').value = 'hermite';
+  $('showInterpolation').checked = true; $('interpolationKind').value = 'checked';
   const url = new URL(location.href); url.hash = ''; url.searchParams.delete('interpolation');
   history.replaceState(null, '', url); renderSelected(); renderSweep();
   $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.');
@@ -692,7 +692,15 @@ try {
 } catch (error) { notice(`Could not restore URL settings: ${error.message}`); }
 if (location.search) {
   const sharedInterpolation = new URLSearchParams(location.search).get('interpolation');
-  if (['linear','hermite','centre','extended','checked'].includes(sharedInterpolation)) $('interpolationKind').value = sharedInterpolation;
+  const selector = $('interpolationKind');
+  // An explicit older link must reproduce the original map and score.
+  const legacyLabel = new Map([['hermite','Gap Hermite'],['linear','Linear'],['centre','Centre spline']]).get(sharedInterpolation);
+  if (legacyLabel) {
+    const option = new Option(legacyLabel, sharedInterpolation);
+    option.hidden = true;
+    selector.add(option);
+  }
+  if (Array.from(selector.options).some(option => option.value === sharedInterpolation)) selector.value = sharedInterpolation;
   $('showInterpolation').checked = sharedInterpolation !== 'off';
 }
 fillSettings(initialInput);
