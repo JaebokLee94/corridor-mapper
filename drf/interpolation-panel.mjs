@@ -8,7 +8,7 @@ export function interpolationResult(e, kind) {
 export function interpolationPair(frame, method, kind) {
   const e = frame?.methods?.[method] ?? (method === 'guarded' ? frame : null);
   if (!e) return [null, null];
-  if(kind==='centre')return [e.interpolation?.centre ?? null,e.interpolation?.rawMap ?? null];
+  if(['centre','checked'].includes(kind))return [e.interpolation?.[kind] ?? null,e.interpolation?.rawMap ?? null];
   const raw = {mapF1:e.interpolation?.rawMap?.mapF1, recall:e.recall, missing:e.missing, count:0, lengthM:0, offWallM:0, falseBridges:0};
   return [interpolationResult(e, kind) ?? null, raw];
 }
@@ -21,21 +21,21 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
   get('bridgeTableNote').hidden = !single;
   get('historyMetric').hidden = single;
   get('interpolationChartMetric').hidden = !single;
-  const centre=kind==='centre';
-  const interpolation = centre ? 'Centre spline' : kind === 'extended' ? 'Extended linear' : kind === 'hermite' ? 'Gap Hermite' : 'Linear';
+  const centre=['centre','checked'].includes(kind);
+  const interpolation = kind==='checked' ? 'Extended centre spline' : centre ? 'Centre spline' : kind === 'extended' ? 'Extended linear' : kind === 'hermite' ? 'Gap Hermite' : 'Linear';
   get('resultsTitle').textContent = single ? name + ' interpolation' : 'Method comparison';
   get('evaluationNote').textContent = single
     ? interpolation + ' · 0.4 m tolerance'
     : '0.4 m tolerance · same measured prefix';
   if (kind === 'extended' && (single || get('showInterpolation').checked))
     get('evaluationNote').textContent = 'Extended linear · may cross openings';
-  const completedLabel = interpolation;
+  const completedLabel = kind==='checked' ? 'Ext. centre spline' : interpolation;
   get('interpolatedMapHeading').textContent = completedLabel;
   get('historyFirst').textContent = single ? completedLabel : 'WM-P';
   get('historySecond').textContent = single ? get('rawMapHeading').textContent : 'WM-F';
   const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');
   if(single){
-    get('bridgeTableNote').textContent=centre
+    get('bridgeTableNote').textContent=kind==='checked' ? 'Extended curves require repeated range support in every tested section. Map lengths include retained fragments.' : centre
       ? 'Curves replace the linked halves of fragments. Map lengths include unlinked ends. Aligned openings may be crossed.'
       : 'Interpolation adds inferred connections to the supported wall fragments.';
     for(const row of get('interpolationMetrics').tBodies[0].rows){

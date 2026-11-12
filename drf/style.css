@@ -165,6 +165,7 @@ body[data-state="paused"] .run-state::before { background:var(--color-baseline);
 .interpolation-controls { display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
 .interpolation-controls label.toggle { gap:4px; }
 #interpolationKind { flex:1; width:auto; min-width:0; max-width:125px; padding-inline:3px; font-size:.9em; }
+#interpolationKind:has(option[value="checked"]:checked) { flex-basis:146px; min-width:min(100%,146px); max-width:100%; }
 body:has(#showInterpolation:not(:checked)) .legend li:has(.swatch-interpolated) { display:none; }
 .swatch-interpolated { height:0; border-top:3.5px dotted var(--color-interpolated); }
 .legend #centreLegend[hidden] { display:none; }

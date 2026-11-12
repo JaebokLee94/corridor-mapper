@@ -1,5 +1,6 @@
+import {confirmedExtensions} from './checked-centre.mjs';
 import { centreSpline } from './centre-spline.mjs';
-import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261112-mapf1';
+import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261112-checkedcentre';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
@@ -234,10 +235,12 @@ export class DrfMap {
     const {layers={},wire,truth,walls=[],proxy=[],candidates=[],observed=[],history=[]}=this.state;
     // Truth and other overlays stay behind the supported patches. Each patch is
     // a separate path: do not join candidates or snap their geometry to truth.
-    const useCentres=layers.showProxy && this.state.interpolation==='centre';
-    if(useCentres && (this.centreCandidates!==candidates || this.centreEvidence!==this.state.bridges)) {
+    const useCentres=layers.showProxy && ['centre','checked'].includes(this.state.interpolation);
+    if(useCentres && (this.centreCandidates!==candidates || this.centreEvidence!==this.state.bridges || this.centreKind!==this.state.interpolation)) {
       this.centreCandidates=candidates; this.centreEvidence=this.state.bridges;
-      this.centreGeometry=centreSpline(candidates,this.centreEvidence);
+      this.centreKind=this.state.interpolation;
+      const extensions=this.centreKind==='checked'?confirmedExtensions(this.centreEvidence??[],[]):[];
+      this.centreGeometry=centreSpline(candidates,this.centreEvidence,extensions);
     }
     const supportedPatches=useCentres?this.centreGeometry.ends:[];
     // Drawing budget only: the estimator still receives every measured path.
@@ -571,7 +574,7 @@ export function drawComparisonHistory(canvas,evaluations,selection='mapF1',snaps
   if (xmax<20) xTicks.push(xmax);
   const metricLabels={mapF1:['Map $F_1$ [%]','Map $F_1$ [%]'],missing:['Missed wall samples','Missed samples'],count:['Gaps joined','Gaps joined'],lengthM:['Added length [m]','Added [m]'],offWallM:['Off-wall added [m]','Off-wall [m]'],falseBridges:['Off-wall joins','Off-wall joins'],mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
   const labelKey = single && selection === 'recall' ? 'mapRecall' : selection;
-  const yLabel=((single && kind==='centre' && centreMetricNames[selection] ? centreMetricNames[selection] : metricLabels[labelKey])?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
+  const yLabel=((single && ['centre','checked'].includes(kind) && centreMetricNames[selection] ? centreMetricNames[selection] : metricLabels[labelKey])?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
   const tight=single && surface.width<=560;
   const axes=chartAxes(surface,{xLabel:tight ? 'Snapshot' : '',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks,hideXZero:true,showYLabel:true,tight,topInset:tight ? 9 : 16,bottomInset:tight ? 30 : 26});
   // Keep the interpolated trace visible when both histories coincide.

@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261112-mapf1" />
+  <link rel="stylesheet" href="drf/style.css?v=20261112-checkedcentre" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -79,7 +79,7 @@
           <label class="toggle"><input id="showEllipses" type="checkbox" checked /><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipses</label>
           <label class="toggle"><input id="showVehicles" type="checkbox" checked /><span class="swatch swatch-track" aria-hidden="true"></span>Vehicles &amp; trajectories</label>
           <label class="toggle"><input id="showProxy" type="checkbox" checked /><span class="swatch swatch-supported" aria-hidden="true"></span>Candidate decisions</label>
-          <div class="interpolation-controls"><label class="toggle"><input id="showInterpolation" type="checkbox" checked><span class="swatch swatch-interpolated" aria-hidden="true"></span>Interpolation</label><select id="interpolationKind" aria-label="Interpolation method"><option value="hermite" selected>Gap Hermite</option><option value="linear">Linear</option><option value="centre" title="Cubic curve through mutually matched fragment centres and tangent to their directions">Centre spline</option><option value="extended" title="Joins wider gaps and can cross real openings">Extended linear</option></select></div>
+          <div class="interpolation-controls"><label class="toggle"><input id="showInterpolation" type="checkbox" checked><span class="swatch swatch-interpolated" aria-hidden="true"></span>Interpolation</label><select id="interpolationKind" aria-label="Interpolation method"><option value="hermite" selected>Gap Hermite</option><option value="linear">Linear</option><option value="centre" title="Cubic curve through mutually matched fragment centres and tangent to their directions">Centre spline</option><option value="checked" title="Extended centre spline with measured range confirmation">Extended centre spline</option><option value="extended" title="Joins wider gaps and can cross real openings">Extended linear</option></select></div>
         </fieldset>
         <fieldset class="toggle-list evaluation"><legend>Ground truth · evaluation only</legend>
           <label class="toggle"><input id="showTruth" type="checkbox" checked /><span class="swatch swatch-truth" aria-hidden="true"></span>True walls</label>
@@ -172,8 +172,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261112-mapf1';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261112-mapf1';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261112-checkedcentre';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261112-checkedcentre';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

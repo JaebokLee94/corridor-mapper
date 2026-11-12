@@ -1,15 +1,15 @@
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261112-mapf1';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261112-checkedcentre';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs';
 import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261104-truthcache1';
 import { percentile } from './statistics.mjs';
-import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-mapf1';
+import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-checkedcentre';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261104-pspt-repair1';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261104-background2';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-mapf1';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-checkedcentre';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -393,11 +393,11 @@ function renderSelected() {
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
   const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse'].map(id => [id, $(id).checked]));
   const interpolate = $('showInterpolation').checked, kind = $('interpolationKind').value;
-  $('centreLegend').hidden=!interpolate || kind!=='centre' || !layers.showProxy;
+  $('centreLegend').hidden=!interpolate || !['centre','checked'].includes(kind) || !layers.showProxy;
   $('interpolationKind').disabled = !interpolate && state.method === 'compare';
   const visibleBridges = method => {
     const map = frame?.methods?.[method];
-    return kind === 'extended' && map?.extendedBridges?.length ? [...map.bridges, ...map.extendedBridges] : map?.bridges ?? [];
+    return (kind === 'extended' || kind === 'checked') && map?.extendedBridges?.length ? [...map.bridges, ...map.extendedBridges] : map?.bridges ?? [];
   };
   const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: state.scenario?.domain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls: scenario?.walls ?? previewWalls(),cameraBounds:scenario?.cameraBounds ?? previewBounds,
     bridges: visibleBridges(state.method === 'baseline' ? 'baseline' : 'guarded'),
@@ -427,7 +427,7 @@ function renderSelected() {
     node('mapF1Value').textContent=mapScore==null ? '—' : fmt(100*mapScore,1);
     const mapRecall = node('mapRecallValue'), coverage = interpolate ? completed?.recall : e?.recall;
     mapRecall.textContent = coverage == null ? '—' : fmt(100 * coverage, 1);
-    mapRecall.title = !interpolate ? 'Supported fragments only' : completed && kind==='centre' ? `${completed.count} centre links · ${fmt(completed.lengthM,2)} m of mapped wall · ${fmt(completed.offWallM,2)} m outside tolerance` : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
+    mapRecall.title = !interpolate ? 'Supported fragments only' : completed && ['centre','checked'].includes(kind) ? `${completed.count} centre links · ${fmt(completed.lengthM,2)} m of mapped wall · ${fmt(completed.offWallM,2)} m outside tolerance` : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
     node('firstPrecisionValue').title=e ? `First-support errors: ${e.firstSupportErrors} / ${e.firstSupportCount}` : '';
   }
   for (const button of document.querySelectorAll('[data-method]')) button.setAttribute('aria-pressed',String(button.dataset.method===state.method));
@@ -689,7 +689,7 @@ try {
 } catch (error) { notice(`Could not restore URL settings: ${error.message}`); }
 if (location.search) {
   const sharedInterpolation = new URLSearchParams(location.search).get('interpolation');
-  if (['linear','hermite','centre','extended'].includes(sharedInterpolation)) $('interpolationKind').value = sharedInterpolation;
+  if (['linear','hermite','centre','extended','checked'].includes(sharedInterpolation)) $('interpolationKind').value = sharedInterpolation;
   $('showInterpolation').checked = sharedInterpolation !== 'off';
 }
 fillSettings(initialInput);

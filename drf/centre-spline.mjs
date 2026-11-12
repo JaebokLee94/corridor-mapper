@@ -11,9 +11,21 @@ export function patchPoints(c, start=-c.ell, end=c.ell) {
   });
 }
 
+// Input endpoints in metres, oriented unit tangents; endpoint derivatives have chord length.
+export function hermitePoints(p,q,d,ta,tb) {
+  const dx=q[0]-p[0],dy=q[1]-p[1],ax=d*ta[0],ay=d*ta[1],bx=d*tb[0],by=d*tb[1];
+  const steps=Math.max(1,Math.ceil(Math.max(d,Math.hypot(3*dx-ax-bx,3*dy-ay-by))/step));
+  return Array.from({length:steps+1},(_,k)=>{
+    if(k===0)return p;
+    if(k===steps)return q;
+    const u=k/steps,v=1-u,w=u*u*(3-2*u);
+    return [p[0]+w*dx+u*v*(v*ax-u*bx),p[1]+w*dy+u*v*(v*ay-u*by)];
+  });
+}
+
 // N current supported fragments -> links and retained ends, O(N² + vertices) time,
 // O(N + vertices) space. Each side accepts only a unique, mutual nearest centre.
-export function centreSpline(candidates, bridges=[]) {
+export function centreSpline(candidates, bridges=[], extensions=[]) {
   // A long pair can compete only when its gap was confirmed from past measured ranges.
   const key=(a,b)=>a<b?a+':'+b:b+':'+a;
   const confirmed=new Set(bridges.filter(b=>b.measuredLinear).map(b=>key(b.from,b.to)));
@@ -36,17 +48,20 @@ export function centreSpline(candidates, bridges=[]) {
     const b=nodes[j], t=b.sides.findIndex(r=>r.partner===i && r.second-r.first>1e-9);
     if(t<0)continue;
     side.used=b.sides[t].used=true;
-    const p=a.c.center,q=b.c.center,d=side.first, dx=q[0]-p[0],dy=q[1]-p[1];
-    const m=d*(2*s-1), n=d*(1-2*t), ax=m*a.x,ay=m*a.y,bx=n*b.x,by=n*b.y;
-    // Endpoint derivatives have chord length and the two estimated tangent directions.
-    const steps=Math.max(1,Math.ceil(Math.max(d,Math.hypot(3*dx-ax-bx,3*dy-ay-by))/step));
-    const points=Array.from({length:steps+1},(_,k)=>{
-      if(k===0)return p;
-      if(k===steps)return q;
-      const u=k/steps,v=1-u,w=u*u*(3-2*u);
-      return [p[0]+w*dx+u*v*(v*ax-u*bx),p[1]+w*dy+u*v*(v*ay-u*by)];
-    });
+    const p=a.c.center,q=b.c.center, d=side.first;
+    const points=hermitePoints(p,q,d,[(2*s-1)*a.x,(2*s-1)*a.y],[(1-2*t)*b.x,(1-2*t)*b.y]);
     links.push({from:a.c.id,to:b.c.id,points});
+  }
+  if(extensions.length) {
+    const byId=new Map(nodes.map(n=>[n.c.id,n]));
+    for(const {from,to,points} of extensions) {
+      const a=byId.get(from),b=byId.get(to);
+      if(!a || !b || !points?.length)continue;
+      const dx=b.c.center[0]-a.c.center[0],dy=b.c.center[1]-a.c.center[1];
+      const as=a.sides[Number(dx*a.x+dy*a.y>0)],bs=b.sides[Number(dx*b.x+dy*b.y<0)];
+      if(as.used || bs.used)continue;
+      as.used=bs.used=true;links.push({from,to,points});
+    }
   }
   for(const {c,sides:[left,right]} of nodes) {
     if(!left.used || !right.used)ends.push(patchPoints(c,left.used?0:-c.ell,right.used?0:c.ell));

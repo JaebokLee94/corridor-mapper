@@ -2,7 +2,7 @@ import { normalizeInput } from './scenario.mjs?v=20261104-truthcache1';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261104-background2';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-mapf1';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-checkedcentre';
 import { MethodComparison, METHOD_PROTOCOL } from './comparison.mjs?v=20261103-defaults1';
 
 function summarize(frame, evaluation) {
@@ -10,6 +10,7 @@ function summarize(frame, evaluation) {
     'medianError', 'p95', 'offwall', 'f1', 'observedFraction', 'missing',
     'supportedCount', 'pendingCount', 'rejectedCount'];
   return { ...Object.fromEntries(keys.map(key => [key, evaluation[key]])),
+    checkedCentreMapF1:evaluation.interpolation.checked.mapF1,
     rawMapF1:evaluation.interpolation.rawMap.mapF1, linearMapF1:evaluation.interpolation.mapF1,
     hermiteMapF1:evaluation.interpolation.hermite.mapF1, centreMapF1:evaluation.interpolation.centre.mapF1,
     mapRecall: evaluation.interpolation.recall, interpolatedLengthM: evaluation.interpolation.lengthM,
@@ -28,7 +29,7 @@ export async function runExperiment(raw, progress = () => {}) {
   const scenario = await generateScenario(input), grid = createGrid(input.grid, input.grid, scenario.domain),
     field = createField(grid, { band: input.band, perimeter: input.perimeter }),
     evaluators = Object.fromEntries(['guarded', 'baseline'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
-    estimator = new MethodComparison({ sigmaR: input.sigmaD }), timings = [];
+    estimator = new MethodComparison({ sigmaR: input.sigmaD, includeExtended:true }), timings = [];
   let frame, evaluations, fieldMs = 0, evaluationMs = 0;
   const estimatorMs = { guarded: 0, baseline: 0 };
   for (const wire of scenario.wire) {
@@ -37,8 +38,8 @@ export async function runExperiment(raw, progress = () => {}) {
     for (const key of Object.keys(methods)) estimatorMs[key] += methods[key].ms;
     timings.push(frame.ms + methods.guarded.ms + methods.baseline.ms);
     const start = performance.now();
-    const guarded = evaluators.guarded.step({ ...frame, method: 'guarded-tuned', candidates: methods.guarded.candidates }, null, methods.guarded.bridges);
-    const baseline = evaluators.baseline.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges);
+    const guarded = evaluators.guarded.step({ ...frame, method: 'guarded-tuned', candidates: methods.guarded.candidates }, null, methods.guarded.bridges, methods.guarded.extendedBridges);
+    const baseline = evaluators.baseline.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges, methods.baseline.extendedBridges);
     evaluations = { guarded, baseline }; evaluationMs += performance.now() - start;
     progress(frame.t, input.snapshots);
   }

@@ -14,7 +14,7 @@ function hasRange(ranges, target, band) {
   return lo < ranges.length && ranges[lo] <= target + band;
 }
 
-function countSnapshot(link, pairs, band) {
+function countSnapshot(link, pairs, band, padding) {
   const {x, y, tx, ty, length, hits} = link, width = length / hits.length;
   const counts = new Uint16Array(4 * hits.length);
   for (const {ix, iy, jx, jy, ranges} of pairs) {
@@ -23,13 +23,13 @@ function countSnapshot(link, pairs, band) {
     if (di * dj <= 0) continue;
     // Mirroring one vehicle in the line gives the reflection coordinate and path length.
     const s = (ui*dj + uj*di) / (di + dj);
-    if (s < -RANGE_SUPPORT.binPaddingM || s > length + RANGE_SUPPORT.binPaddingM) continue;
+    if (s < -padding || s > length + padding) continue;
     const range = Math.hypot(ui - uj, di + dj);
     if (Math.abs(di + dj) < RANGE_SUPPORT.minIncidenceCos * range) continue;
     const centre = hasRange(ranges, range, band);
     const lower = hasRange(ranges, range - RANGE_SUPPORT.controlBands * band, band), upper = hasRange(ranges, range + RANGE_SUPPORT.controlBands * band, band);
     for (let bin=0; bin<hits.length; bin++) {
-      if (hits[bin] >= RANGE_SUPPORT.minSnapshots || Math.abs((bin+0.5)*width - s) > 0.5*width + RANGE_SUPPORT.binPaddingM) continue;
+      if (hits[bin] >= RANGE_SUPPORT.minSnapshots || Math.abs((bin+0.5)*width - s) > 0.5*width + padding) continue;
       const k = 4*bin;
       counts[k]++; counts[k+1] += centre; counts[k+2] += lower; counts[k+3] += upper;
     }
@@ -64,17 +64,17 @@ export class GapRangeEvidence {
     })));
   }
 
-  confirms(points) {
-    const [[x,y],[bx,by]] = points, key = [x,y,bx,by].join(',');
+  confirms(points, strictCell=false) {
+    const [[x,y],[bx,by]] = points, key = (strictCell?'cell:':'')+[x,y,bx,by].join(',');
     let span = this.cache.get(key) ?? this.previous.get(key);
     if (!span) {
       const length = Math.hypot(bx-x, by-y);
       span = {x, y, length, tx:(bx-x)/length, ty:(by-y)/length,
-        hits:new Uint8Array(Math.max(2, Math.ceil(length / RANGE_SUPPORT.binLengthM))), seen:0, confirmed:false};
+        hits:new Uint8Array(strictCell ? 1 : Math.max(2, Math.ceil(length / RANGE_SUPPORT.binLengthM))), seen:0, confirmed:false};
     }
     this.cache.set(key, span);
     while (!span.confirmed && span.seen < this.history.length) {
-      countSnapshot(span, this.history[span.seen++], this.band);
+      countSnapshot(span, this.history[span.seen++], this.band, strictCell ? 0 : RANGE_SUPPORT.binPaddingM);
       span.confirmed = span.hits.every(n => n >= RANGE_SUPPORT.minSnapshots);
     }
     return span.confirmed;

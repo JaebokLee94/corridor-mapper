@@ -156,13 +156,13 @@ test('sweep aggregation retains failed seeds separately from genuinely unobserve
 
 test('paired sweep matches both main-view estimators on the same wire and requested duration', async () => {
   const scene=await scenario(), grid=createGrid(scene.input.grid,scene.input.grid,scene.domain), field=createField(grid),
-    comparison=new MethodComparison({sigmaR:scene.input.sigmaD}),
+    comparison=new MethodComparison({sigmaR:scene.input.sigmaD,includeExtended:true}),
     evaluators={guarded:createPSPTEvaluator(scene,grid),baseline:createPSPTEvaluator(scene,grid)}, progress=[];
   let last,expected;
   for (const wire of scene.wire) {
     last=field.step(wire);const methods=comparison.step(wire);
-    const guarded=evaluators.guarded.step({...last,candidates:methods.guarded.candidates},null,methods.guarded.bridges);
-    expected={guarded,baseline:evaluators.baseline.step({...last,candidates:methods.baseline.candidates},guarded,methods.baseline.bridges)};
+    const guarded=evaluators.guarded.step({...last,candidates:methods.guarded.candidates},null,methods.guarded.bridges,methods.guarded.extendedBridges);
+    expected={guarded,baseline:evaluators.baseline.step({...last,candidates:methods.baseline.candidates},guarded,methods.baseline.bridges,methods.baseline.extendedBridges)};
   }
   const run=await runExperiment(input,t=>progress.push(t));
   assert.deepEqual(progress,[1,2,3]);assert.deepEqual(run.input,scene.input);
@@ -171,7 +171,7 @@ test('paired sweep matches both main-view estimators on the same wire and reques
     const e = expected[method], linear = e.interpolation, cubic = linear.hermite;
     const metrics = {...e, Q:last.Q, admitted:last.admitted, rejected:last.rejected,
       mapRecall:linear.recall, interpolatedLengthM:linear.lengthM, interpolatedOffWallM:linear.offWallM,
-      hermiteMapRecall:cubic.recall, hermiteLengthM:cubic.lengthM, hermiteOffWallM:cubic.offWallM, rawMapF1:e.interpolation.rawMap.mapF1,linearMapF1:e.interpolation.mapF1,hermiteMapF1:e.interpolation.hermite.mapF1,centreMapF1:e.interpolation.centre.mapF1, centreMapRecall:e.interpolation.centre.recall, centreMapLengthM:e.interpolation.centre.lengthM, centreMapOffWallM:e.interpolation.centre.offWallM};
+      hermiteMapRecall:cubic.recall, hermiteLengthM:cubic.lengthM, hermiteOffWallM:cubic.offWallM, checkedCentreMapF1:e.interpolation.checked.mapF1,rawMapF1:e.interpolation.rawMap.mapF1,linearMapF1:e.interpolation.mapF1,hermiteMapF1:e.interpolation.hermite.mapF1,centreMapF1:e.interpolation.centre.mapF1, centreMapRecall:e.interpolation.centre.recall, centreMapLengthM:e.interpolation.centre.lengthM, centreMapOffWallM:e.interpolation.centre.offWallM};
     for (const [key,value] of Object.entries(run.methods[method].summary))
       assert.deepEqual(value, metrics[key], `${method}/${key}`);
   }
@@ -242,7 +242,7 @@ test('actual CSV download exports distinct per-method rows and leaves missing pr
   button.onclick();
   assert.equal(downloads[0].name,'echomap-method-comparison.csv');
   const rows=(await downloads[0].blob.text()).trim().split('\r\n').map(line=>line.split(','));
-  assert.equal(rows.length,5);assert.equal(rows[0].length,47);assert.equal(rows[0][0],'method');assert.ok(rows[0].includes('raw_map_f1') && rows[0].includes('centre_map_f1') && rows[0].includes('linear_map_recall') && rows[0].includes('hermite_map_recall') && rows[0].includes('extended_map_recall'));assert.equal(rows[0].at(-1),'implementation_revision');
+  assert.equal(rows.length,5);assert.equal(rows[0].length,53);assert.equal(rows[0][0],'method');assert.ok(rows[0].includes('raw_map_f1') && rows[0].includes('centre_map_f1') && rows[0].includes('linear_map_recall') && rows[0].includes('hermite_map_recall') && rows[0].includes('extended_map_recall'));assert.equal(rows[0].at(-1),'implementation_revision');
   assert.deepEqual(rows.slice(1).map(row=>row[0]),['guarded','guarded','baseline','baseline']);
   assert.equal(rows[3][10],'','Undefined precision must not become zero');
   assert.equal(Number(rows[1][1]),METHOD_PROTOCOL.guarded.threshold);assert.equal(rows[3][2],METHOD_PROTOCOL.baseline.tuning.id);

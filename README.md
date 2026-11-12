@@ -88,6 +88,9 @@ D̄ is the mean residual density in m⁻². β̂ is a dimensionless field-contra
 
 **Centre spline** reconstructs a wall through the estimated centres and tangents of supported fragments in the current snapshot. On either side it keeps only reciprocal, uniquely nearest centres when both tangents and their connecting direction agree within 15°. Centres beyond 4 m qualify only if the same pair already has a unique exposed endpoint gap confirmed against past measured ranges. The exception changes association, not the interpolating cubic. Each cubic replaces the two inward halves; the free ends and isolated fragments keep their original geometry. No true walls, future observations or known branch labels enter the reconstruction. Collinear openings can be crossed, so this is an optional comparison, not the default. Centre spline reports total map length and total off-wall length; the gap modes report only added lengths. All modes use the same observed-wall mask and 0.4 m tolerance for map recall.
 
+**Extended centre spline** starts from Centre spline. For a unique pair of unused tips, it checks the centre-to-tip, gap and tip-to-centre sections of the cubic against past measured vehicle poses and ranges. Each section is divided into cells no longer than 0.5 m. Four or more distinct vehicle pairs in a snapshot must meet the existing 75% hit and 50 percentage-point control-margin criteria; every cell needs three successful snapshots, with no cell padding. If the entire cubic is unsupported, only a separately checked tip-to-tip cubic can be added, keeping both existing half-fragments. Unsupported gaps remain open. The table and history compare total reconstructed geometry with raw fragments at the same time.
+
+
 ## Run and share an experiment
 
 1. [Open EchoMap](https://jaeboklee94.github.io/corridor-mapper/drf.html), choose settings, and select **Run comparison**.

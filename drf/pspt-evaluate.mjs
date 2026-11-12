@@ -2,6 +2,7 @@
  * Geometry is labelled at its current position, tolerance 0.4 m. Surface
  * coverage is restricted to wall samples within 1 m of past generated echoes.
  */
+import { confirmedExtensions } from './checked-centre.mjs';
 import { centreSpline, patchPoints } from './centre-spline.mjs';
 import { percentile } from './statistics.mjs';
 import { createReflectionDiagnostics } from './reflection-diagnostics.mjs';
@@ -116,8 +117,8 @@ function pathLength(points, onWall) {
   return {lengthM,offWallM};
 }
 
-function assessCentres(supported,onWall,observed,raw,gt,mask,bridges) {
-  const {links,ends}=centreSpline(supported,bridges);
+function assessCentres(supported,onWall,observed,raw,gt,mask,bridges,extensions) {
+  const {links,ends}=centreSpline(supported,bridges,extensions);
   if(!links.length)return {...raw};
   const samples=[];
   let lengthM=0,offWallM=0,falseBridges=0;
@@ -172,6 +173,10 @@ export function createPSPTEvaluator(scenario, grid) {
     interpolation.hermite = assessBridges(bridges, 'curve', onWall, uncovered, observed.length, full);
     const rawMap={mapF1:mapF1(rawLengthM,rawOffWallM,full.hits,full.total),count:0,lengthM:rawLengthM,offWallM:rawOffWallM,falseBridges:0,missing:uncovered.length,recall};
     interpolation.centre=assessCentres(supported,onWall,observed,rawMap,gt,mask,bridges);
+    if(extendedBridges) {
+      const links=confirmedExtensions(bridges,extendedBridges);
+      interpolation.checked=links.length?assessCentres(supported,onWall,observed,rawMap,gt,mask,bridges,links):interpolation.centre;
+    }
     interpolation.rawMap=rawMap;
     const diagnostics = sharedDiagnostics?.diagnostics ?? diagnostic.step(frame.t);
     return { t: frame.t, diagnostics, method: frame.method ?? 'guarded45', proxy: centers.map(p => [p.x, p.y]), observed: observed.map(p => [p.x, p.y]),
@@ -195,7 +200,7 @@ export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = fal
   if (includeInterpolation) keys.push('interpolated_gaps', 'linear_map_recall', 'linear_added_m', 'linear_added_offwall_m',
     'hermite_map_recall', 'hermite_added_m', 'hermite_added_offwall_m',
     'extended_gaps','extended_map_recall','extended_added_m','extended_added_offwall_m','extended_false_bridges',
-    'centre_links','centre_map_recall','centre_map_missed_samples','centre_map_length_m','centre_map_offwall_m','centre_offwall_links','raw_map_length_m','raw_map_offwall_m','raw_map_f1','linear_map_f1','hermite_map_f1','centre_map_f1','extended_map_f1');
+    'centre_links','centre_map_recall','centre_map_missed_samples','centre_map_length_m','centre_map_offwall_m','centre_offwall_links','raw_map_length_m','raw_map_offwall_m','raw_map_f1','linear_map_f1','hermite_map_f1','centre_map_f1','extended_map_f1','checked_centre_links','checked_centre_map_recall','checked_centre_map_missed_samples','checked_centre_map_length_m','checked_centre_map_offwall_m','checked_centre_map_f1');
   const rows = frames.map((f, k) => {
     const e = evaluations[k] ?? {};
     const row = [f.t, f.Q, f.admitted, f.rejected, e.supportedCount, e.pendingCount, e.rejectedCount,
@@ -205,7 +210,7 @@ export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = fal
       const b = e.interpolation, h = b?.hermite;
       row.push(b?.count, b?.recall, b?.lengthM, b?.offWallM, h?.recall, h?.lengthM, h?.offWallM,
         b?.extended?.count, b?.extended?.recall, b?.extended?.lengthM, b?.extended?.offWallM, b?.extended?.falseBridges,
-        b?.centre?.count,b?.centre?.recall,b?.centre?.missing,b?.centre?.lengthM,b?.centre?.offWallM,b?.centre?.falseBridges,b?.rawMap?.lengthM,b?.rawMap?.offWallM,b?.rawMap?.mapF1,b?.mapF1,h?.mapF1,b?.centre?.mapF1,b?.extended?.mapF1);
+        b?.centre?.count,b?.centre?.recall,b?.centre?.missing,b?.centre?.lengthM,b?.centre?.offWallM,b?.centre?.falseBridges,b?.rawMap?.lengthM,b?.rawMap?.offWallM,b?.rawMap?.mapF1,b?.mapF1,h?.mapF1,b?.centre?.mapF1,b?.extended?.mapF1,b?.checked?.count,b?.checked?.recall,b?.checked?.missing,b?.checked?.lengthM,b?.checked?.offWallM,b?.checked?.mapF1);
     }
     return row;
   });
