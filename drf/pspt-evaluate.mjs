@@ -2,6 +2,7 @@
  * Geometry is labelled at its current position, tolerance 0.4 m. Surface
  * coverage is restricted to wall samples within 1 m of past generated echoes.
  */
+import { centreSpline, patchPoints } from './centre-spline.mjs';
 import { percentile } from './statistics.mjs';
 import { createReflectionDiagnostics } from './reflection-diagnostics.mjs';
 import '../wall_metrics.js';
@@ -49,15 +50,7 @@ function wallSamples(scenario) {
 }
 
 function surfelSamples(candidate) {
-  const { center, ell, kappa, phi, sg } = candidate,
-    count = Math.max(2, Math.ceil(2 * ell * Math.hypot(1, kappa * ell) / sampleStep) + 1),
-    tx = Math.cos(phi), ty = Math.sin(phi), nx = -sg * ty, ny = sg * tx, points = [];
-  for (let k = 0; k < count; k++) {
-    const u = k === count - 1 ? ell : -ell + k * (2 * ell / (count - 1));
-    points.push([center[0] + u * tx + 0.5 * kappa * u * u * nx,
-      center[1] + u * ty + 0.5 * kappa * u * u * ny]);
-  }
-  return resamplePolyline(points).map(([x, y]) => ({ x, y }));
+  return resamplePolyline(patchPoints(candidate)).map(([x, y]) => ({ x, y }));
 }
 
 function neighborhood(points) {
@@ -99,6 +92,35 @@ function assessBridges(bridges, shape, onWall, uncovered, observed) {
     missing: uncovered.length - recovered, recall: fraction(observed - uncovered.length + recovered, observed) };
 }
 
+// Length-weight the actual map geometry. Centre links replace inward half-patches,
+// so coverage must be recomputed over all observed samples, including previous hits.
+function pathLength(points, onWall) {
+  let lengthM=0, offWallM=0;
+  for(let i=1;i<points.length;i++) {
+    const a=points[i-1],b=points[i],ds=Math.hypot(b.x-a.x,b.y-a.y);
+    lengthM+=ds;
+    if(!onWall({x:(a.x+b.x)/2,y:(a.y+b.y)/2}))offWallM+=ds;
+  }
+  return {lengthM,offWallM};
+}
+
+function assessCentres(supported,onWall,observed,raw) {
+  const {links,ends}=centreSpline(supported);
+  if(!links.length)return {...raw};
+  const samples=[];
+  let lengthM=0,offWallM=0,falseBridges=0;
+  const add=(path,link)=>{
+    const points=path.map(([x,y])=>({x,y})), stat=pathLength(points,onWall);
+    lengthM+=stat.lengthM; offWallM+=stat.offWallM;
+    if(link && stat.offWallM>0)falseBridges++;
+    samples.push(...points);
+  };
+  for(const end of ends)add(end,false);
+  for(const link of links)add(link.points,true);
+  const hits=observed.filter(neighborhood(samples)).length;
+  return {count:links.length,lengthM,offWallM,falseBridges,missing:observed.length-hits,recall:fraction(hits,observed.length)};
+}
+
 export function createPSPTEvaluator(scenario, grid) {
   const diagnostic = createReflectionDiagnostics(scenario),
     gt = wallSamples(scenario),
@@ -114,9 +136,11 @@ export function createPSPTEvaluator(scenario, grid) {
     const supported = frame.candidates.filter(c => c.status === 'supported'),
       centers = supported.map(c => ({ x: c.center[0], y: c.center[1] })),
       distances = centers.map(p => metrics.nearestDistance(p, gt)), patches = [];
+    let rawLengthM=0,rawOffWallM=0;
     for (const c of supported) {
       if (!firstSupport.has(c.id)) firstSupport.set(c.id, onWall({ x: c.center[0], y: c.center[1] }));
-      patches.push(...surfelSamples(c));
+      const points=surfelSamples(c), stat=pathLength(points,onWall);
+      rawLengthM+=stat.lengthM; rawOffWallM+=stat.offWallM; patches.push(...points);
     }
     const observed = gt.filter((_, k) => mask[k]), nearPatch = neighborhood(patches),
       precision = fraction(distances.filter(d => d <= tolerance).length, centers.length),
@@ -130,6 +154,9 @@ export function createPSPTEvaluator(scenario, grid) {
       ? assessBridges([...bridges, ...extendedBridges], 'points', onWall, uncovered, observed.length)
       : {...interpolation};
     interpolation.hermite = assessBridges(bridges, 'curve', onWall, uncovered, observed.length);
+    const rawMap={count:0,lengthM:rawLengthM,offWallM:rawOffWallM,falseBridges:0,missing:uncovered.length,recall};
+    interpolation.centre=assessCentres(supported,onWall,observed,rawMap);
+    interpolation.rawMap=rawMap;
     const diagnostics = sharedDiagnostics?.diagnostics ?? diagnostic.step(frame.t);
     return { t: frame.t, diagnostics, method: frame.method ?? 'guarded45', proxy: centers.map(p => [p.x, p.y]), observed: observed.map(p => [p.x, p.y]),
       medianError: percentile(distances, .5), p95: percentile(distances, .95), offwall: precision == null ? null : 1 - precision,
@@ -151,7 +178,8 @@ export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = fal
     'first_support_count', 'surface_f1', 'p95_m', 'offwall_fraction', 'hold_fraction', 'field_ms', 'pspt_ms'];
   if (includeInterpolation) keys.push('interpolated_gaps', 'linear_map_recall', 'linear_added_m', 'linear_added_offwall_m',
     'hermite_map_recall', 'hermite_added_m', 'hermite_added_offwall_m',
-    'extended_gaps','extended_map_recall','extended_added_m','extended_added_offwall_m','extended_false_bridges');
+    'extended_gaps','extended_map_recall','extended_added_m','extended_added_offwall_m','extended_false_bridges',
+    'centre_links','centre_map_recall','centre_map_missed_samples','centre_map_length_m','centre_map_offwall_m','centre_offwall_links','raw_map_length_m','raw_map_offwall_m');
   const rows = frames.map((f, k) => {
     const e = evaluations[k] ?? {};
     const row = [f.t, f.Q, f.admitted, f.rejected, e.supportedCount, e.pendingCount, e.rejectedCount,
@@ -160,7 +188,8 @@ export function psptSnapshotCsv(frames, evaluations, {includeInterpolation = fal
     if (includeInterpolation) {
       const b = e.interpolation, h = b?.hermite;
       row.push(b?.count, b?.recall, b?.lengthM, b?.offWallM, h?.recall, h?.lengthM, h?.offWallM,
-        b?.extended?.count, b?.extended?.recall, b?.extended?.lengthM, b?.extended?.offWallM, b?.extended?.falseBridges);
+        b?.extended?.count, b?.extended?.recall, b?.extended?.lengthM, b?.extended?.offWallM, b?.extended?.falseBridges,
+        b?.centre?.count,b?.centre?.recall,b?.centre?.missing,b?.centre?.lengthM,b?.centre?.offWallM,b?.centre?.falseBridges,b?.rawMap?.lengthM,b?.rawMap?.offWallM);
     }
     return row;
   });

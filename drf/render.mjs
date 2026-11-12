@@ -1,4 +1,5 @@
-import { interpolationPair } from './interpolation-panel.mjs?v=20261109-interp-first';
+import { centreSpline } from './centre-spline.mjs';
+import { centreMetricNames, interpolationPair } from './interpolation-panel.mjs?v=20261112-centre';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
@@ -233,7 +234,11 @@ export class DrfMap {
     const {layers={},wire,truth,walls=[],proxy=[],candidates=[],observed=[],history=[]}=this.state;
     // Truth and other overlays stay behind the supported patches. Each patch is
     // a separate path: do not join candidates or snap their geometry to truth.
-    const supportedPatches=[];
+    const useCentres=layers.showProxy && this.state.interpolation==='centre';
+    if(useCentres && this.centreCandidates!==candidates) {
+      this.centreCandidates=candidates; this.centreGeometry=centreSpline(candidates);
+    }
+    const supportedPatches=useCentres?this.centreGeometry.ends:[];
     // Drawing budget only: the estimator still receives every measured path.
     const ellipseTotal=(wire?.configs ?? []).reduce((sum,config)=>sum+(config.paths?.length ?? 0),0),ellipseStride=Math.max(1,Math.ceil(ellipseTotal/600));
     let ellipseIndex=0,ellipseShown=0;
@@ -269,6 +274,7 @@ export class DrfMap {
       for (const c of candidates) {
         const supported=c.status==='supported',pending=c.status==='pending',color=supported?'#009e73':pending?'#777777':'#c54b28';
         if (supported) {
+          if(useCentres)continue;
           const points=[],tx=Math.cos(c.phi),ty=Math.sin(c.phi);
           for (let k=0;k<=20;k++) { const u=-c.ell+2*c.ell*k/20,b=.5*c.kappa*u*u*c.sg;
             points.push([c.center[0]+u*tx-b*ty,c.center[1]+u*ty+b*tx]); }
@@ -321,7 +327,7 @@ export class DrfMap {
     // Paint every casing first so overlapping patch casings cannot erase green
     // support. Flat caps preserve endpoint gaps instead of extending each line.
     const interpolatedColor = token('interpolated', '#38a67d');
-    if (layers.showProxy && this.state.interpolation !== 'off') for (const bridge of this.state.bridges ?? []) {
+    if (layers.showProxy && this.state.interpolation !== 'off') for (const bridge of (useCentres ? this.centreGeometry.links : this.state.bridges) ?? []) {
       const points = this.state.interpolation === 'hermite' ? bridge.curve : bridge.points;
       if (!points?.length) continue;
       path(points, background, 5.5, [], 1, 'butt');
@@ -329,6 +335,10 @@ export class DrfMap {
     }
     for (const points of supportedPatches) path(points,background,8,[],1,'butt');
     for (const points of supportedPatches) path(points,'#009e73',5,[],1,'butt');
+    if(useCentres) {
+      const knots=new Set(this.centreGeometry.links.flatMap(link=>[link.points[0],link.points.at(-1)]));
+      for(const p of knots)marker(p,{r:2.8,fill:'#009e73',ring:1,ringColor:background});
+    }
     ctx.restore();
     ctx.font=uiFont(14);ctx.fillStyle=muted;ctx.strokeStyle=line;ctx.lineWidth=1;
     ctx.strokeRect(box.x,box.y,box.w,box.h);
@@ -560,7 +570,7 @@ export function drawComparisonHistory(canvas,evaluations,selection='recall',snap
   if (xmax<20) xTicks.push(xmax);
   const metricLabels={missing:['Missed wall samples','Missed samples'],count:['Gaps joined','Gaps joined'],lengthM:['Added length [m]','Added [m]'],offWallM:['Off-wall added [m]','Off-wall [m]'],falseBridges:['Off-wall joins','Off-wall joins'],mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
   const labelKey = single && selection === 'recall' ? 'mapRecall' : selection;
-  const yLabel=(metricLabels[labelKey]?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
+  const yLabel=((single && kind==='centre' && centreMetricNames[selection] ? centreMetricNames[selection] : metricLabels[labelKey])?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
   const tight=single && surface.width<=560;
   const axes=chartAxes(surface,{xLabel:tight ? 'Snapshot' : '',yLabel,xmin:0,xmax,ymin,ymax,compact:true,xTicks,yTicks,hideXZero:true,showYLabel:true,tight,topInset:tight ? 9 : 16,bottomInset:tight ? 30 : 26});
   // Keep the interpolated trace visible when both histories coincide.

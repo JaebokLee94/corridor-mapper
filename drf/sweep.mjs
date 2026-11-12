@@ -13,6 +13,7 @@ function summarize(frame, evaluation) {
     mapRecall: evaluation.interpolation.recall, interpolatedLengthM: evaluation.interpolation.lengthM,
     interpolatedOffWallM: evaluation.interpolation.offWallM, hermiteMapRecall: evaluation.interpolation.hermite.recall,
     hermiteLengthM: evaluation.interpolation.hermite.lengthM, hermiteOffWallM: evaluation.interpolation.hermite.offWallM,
+    centreMapRecall:evaluation.interpolation.centre.recall, centreMapLengthM:evaluation.interpolation.centre.lengthM, centreMapOffWallM:evaluation.interpolation.centre.offWallM,
     Q: frame.Q, admitted: frame.admitted, rejected: frame.rejected };
 }
 /** Paired sweep uses the same causal estimators and thresholds as the main view.

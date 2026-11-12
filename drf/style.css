@@ -167,6 +167,8 @@ body[data-state="paused"] .run-state::before { background:var(--color-baseline);
 #interpolationKind { flex:1; width:auto; min-width:0; max-width:125px; padding-inline:3px; font-size:.9em; }
 body:has(#showInterpolation:not(:checked)) .legend li:has(.swatch-interpolated) { display:none; }
 .swatch-interpolated { height:0; border-top:3.5px dotted var(--color-interpolated); }
+.legend #centreLegend[hidden] { display:none; }
+.swatch-centre { width:7px; height:7px; border-radius:50%; background:#009e73; }
 .swatch-supported { background:#009e73; height:4px; }
 .swatch-truth { height:0; border-top:2px dashed var(--color-truth); }
 .swatch-ellipse { height:10px; border:1.5px solid var(--color-ellipse); border-radius:50%; }
@@ -196,6 +198,7 @@ table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums;
 .comparison-table .major-metric td { font-weight:700; }
 .comparison-table .major-metric th { color:var(--color-ink); }
 .comparison-table .count-row>* { border-top:1px solid var(--color-line); padding-top:13px; }
+#interpolationMetrics thead th:nth-child(2) { padding-right:6px; }
 #interpolationMetrics thead th:first-child { width:40%; }
 #interpolationMetrics thead th { vertical-align:bottom; white-space:normal; line-height:1.2; }
 .comparison-table th[data-method-col="guarded"], #interpolatedMapHeading { color:var(--color-accent); }

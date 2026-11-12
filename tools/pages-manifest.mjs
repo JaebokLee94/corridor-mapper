@@ -13,7 +13,7 @@ export const runtimeFiles = [
   'favicon.ico', 'assets/echomap-icon.svg', 'assets/echomap-icon-32.png', 'assets/echomap-touch-icon.png',
   ...[
     'app.mjs', 'server-client.mjs', 'simulation-codec.mjs', 'run.worker.mjs', 'run-engine.mjs', 'baseline.mjs', 'comparison.mjs', 'legacy-run-protocol.mjs', 'compare.worker.mjs', 'diffuse.mjs', 'eval.worker.mjs', 'statistics.mjs', 'reflection-diagnostics.mjs', 'field.mjs',
-    'field.worker.mjs', 'pspt.worker.mjs', 'pspt.mjs', 'pspt-math.mjs', 'wall-bridges.mjs', 'bridge-evidence.mjs', 'bridge-curves.mjs', 'interpolation-panel.mjs', 'pspt-ridges.mjs', 'pspt-evaluate.mjs', 'offline.bundle.js', 'poly.mjs', 'provenance.json',
+    'field.worker.mjs', 'pspt.worker.mjs', 'pspt.mjs', 'pspt-math.mjs', 'wall-bridges.mjs', 'bridge-evidence.mjs', 'bridge-curves.mjs', 'centre-spline.mjs', 'interpolation-panel.mjs', 'pspt-ridges.mjs', 'pspt-evaluate.mjs', 'offline.bundle.js', 'poly.mjs', 'provenance.json',
     'reference/octave/fixtures.json', 'render.mjs', 'rng.mjs', 'scenario.mjs',
     'scenario.worker.mjs', 'specular.mjs', 'style.css', 'sweep.mjs',
     'sweep.worker.mjs', 'wall.mjs', 'wire.mjs',

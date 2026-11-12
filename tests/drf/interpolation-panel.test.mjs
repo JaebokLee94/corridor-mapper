@@ -16,8 +16,14 @@ test('interpolation panel follows method and geometry without changing raw recal
   assert.deepEqual(Array.from(selector.options,o=>o.value),Array.from($('interpolationMetrics').tBodies[0].rows,r=>r.dataset.metric));
   selector.value='count';
   render('guarded','hermite');assert.deepEqual(recalls(),['80.0','50.0']);
-  assert.equal($('historyFirst').textContent,'Cubic Hermite interpolation');
+  assert.equal($('historyFirst').textContent,'Gap Hermite interpolation');
   render('baseline');assert.equal($('historyFirst').textContent,'Linear interpolation');assert.deepEqual(recalls(),['60.0','40.0']);
+  const e=frame.methods.guarded.interpolation;
+  e.centre={recall:.3,missing:7,count:1,lengthM:4}; e.rawMap={recall:.5,missing:5,count:0,lengthM:6};
+  render('guarded','centre');assert.deepEqual(recalls(),['30.0','50.0']);assert.equal(selector.selectedOptions[0].textContent,'Centre links');
+  assert.equal($('interpolationMetrics').rows[4].cells[0].textContent,'Map length m');
+  render('guarded','linear');assert.equal(selector.selectedOptions[0].textContent,'Gaps joined');
+  assert.equal($('interpolationMetrics').rows[4].cells[0].querySelector('small').textContent,'m');
   render('baseline','hermite');assert.deepEqual(recalls(),['—','40.0']);
   render('guarded','linear',null);assert.deepEqual(recalls(),['—','—']);
   render('compare');assert.equal($('interpolationMetrics').hidden,true);assert.equal($('methodMetrics').hidden,false);assert.equal($('historySecond').textContent,'WM-F');assert.equal($('historyMetric').hidden,false);

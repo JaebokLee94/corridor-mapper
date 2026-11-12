@@ -4,6 +4,7 @@
  */
 import { completeWallGaps } from './bridge-curves.mjs';
 import { GapRangeEvidence } from './bridge-evidence.mjs';
+import { CENTRE_RULE } from './centre-spline.mjs';
 import { BRIDGE_RULE } from './wall-bridges.mjs';
 import { PSPT } from './pspt.mjs';
 import { Baseline } from './baseline.mjs?v=20261022-audit1';
@@ -14,11 +15,11 @@ const tuning = Object.freeze({
   certified:false, jointFpRecallTargetMet:false, source:'validation/threshold-tuning-20261020.json',
 });
 export const METHOD_PROTOCOL = Object.freeze({
-  guarded: Object.freeze({ name:'WM-P', interpolation:BRIDGE_RULE, threshold:6.650397183049193, previousDevThreshold:6.4615384615384635,
+  guarded: Object.freeze({ name:'WM-P', interpolation:BRIDGE_RULE, centreSpline:CENTRE_RULE, threshold:6.650397183049193, previousDevThreshold:6.4615384615384635,
     score:'current four-hypothesis marginal log-odds', grid:Object.freeze([100,100]), calibrated:false, tuning,
     revision:'guarded45-shared-pose-bounded-clusters-20261104', refinement:'shared-pose', clustering:'bounded-span',
     thresholdStatus:'Inherited development threshold; not retuned or certified for this refinement and clustering revision.' }),
-  baseline: Object.freeze({ name:'WM-F', interpolation:BRIDGE_RULE, threshold:29.108623616301394, previousDevThreshold:12,
+  baseline: Object.freeze({ name:'WM-F', interpolation:BRIDGE_RULE, centreSpline:CENTRE_RULE, threshold:29.108623616301394, previousDevThreshold:12,
     score:'maximum qualified Gaussian log-score through the current snapshot', grid:Object.freeze([100,100]), calibrated:false, tuning }),
 });
 const logadd = (a,b) => Math.max(a,b)+Math.log1p(Math.exp(-Math.abs(a-b)));
