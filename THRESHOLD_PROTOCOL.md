@@ -42,7 +42,7 @@ Centre precision remains 100% in these four cases. Across the three additional s
 |:--|:--|--:|--:|--:|--:|:--|
 | Original 54 cases, seeds 501–506 | Originally evaluation; subsequently reused for development | 3 | 0.1 m | 0.1 m | 120 | Nine wall/scattering configurations per seed; not independent evidence for current selection |
 | Tuning 200, seeds 12000000–12000199 | Exploratory threshold selection | 3 | 0 m | 0.1 m | 120 | Distinct tuning seed block; mixed wall/scattering conditions; no certification |
-| Current unshared defaults | Interactive nominal simulation | 10 | 0.1 m | 0.1 m | 120 | Both walls, mixed returns, roughness 2°; new random seed on unseeded load |
+| Current unshared defaults | Interactive nominal simulation | 3 on localhost; 10 on shared site | 0.1 m | 0.1 m | 120 | Both walls, mixed returns, roughness 2°; new random seed on unseeded load |
 | README / shared example | One illustrative scene | 10 | 0.1 m | 0.1 m | 120 | Seed 549028359; not an aggregate benchmark |
 | Parameter sweep | Paired conditions chosen by the user | Current setting | Current setting | Swept | Current setting | Same methods, gates and metrics as the main view |
 

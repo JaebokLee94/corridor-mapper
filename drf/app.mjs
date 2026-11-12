@@ -505,7 +505,7 @@ $('stepButton').onclick = () => { state.mode === 'paused' ? commandRun('step') :
 $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
 $('resetButton').onclick = () => {
-  state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(DEFAULT_INPUT);
+  state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(pageDefaults);
   $('showInterpolation').checked = true; $('interpolationKind').value = 'checked';
   const url = new URL(location.href); url.hash = ''; url.searchParams.delete('interpolation');
   history.replaceState(null, '', url); renderSelected(); renderSweep();
@@ -678,9 +678,11 @@ window.addEventListener('beforeunload', () => {
   for (const worker of state.workers) worker.detach ? worker.detach() : worker.stop();
   if (state.sweep?.detach) state.sweep.detach(); else state.sweep?.cancel();
 });
-let initialInput = DEFAULT_INPUT;
+const pageDefaults = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)
+  ? {...DEFAULT_INPUT, vehicles: 3} : DEFAULT_INPUT;
+let initialInput = pageDefaults;
 try {
-  const hasSharedInput=location.hash.startsWith('#v1='),raw=hasSharedInput ? JSON.parse(decodeURIComponent(location.hash.slice(4))) : DEFAULT_INPUT;
+  const hasSharedInput=location.hash.startsWith('#v1='),raw=hasSharedInput ? JSON.parse(decodeURIComponent(location.hash.slice(4))) : pageDefaults;
   initialInput=normalizeInput({...raw,scene:'layered'});
   // Keep shared experiments reproducible. Bare visits use the precomputed bank.
   if (!hasSharedInput) {

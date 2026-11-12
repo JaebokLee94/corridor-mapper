@@ -26,27 +26,27 @@ function attachProtocolView(context) {
 
 test('shared URLs preserve the exact seed and snapshot count across reloads; only unseeded visits randomise',()=>{
   const initial={...DEFAULT_INPUT,scene:'layered',seed:0xffffffff,vehicles:7,snapshots:80};
-  for (const hash of ['',`#v1=${encodeURIComponent(JSON.stringify(initial))}`,'#v1=invalid']) {
-    const location={hash},filled=[],notices=[];let calls=0;
+  for (const hostname of ['127.0.0.1','localhost','[::1]','jaeboklee94.github.io']) for (const hash of ['',`#v1=${encodeURIComponent(JSON.stringify(initial))}`,'#v1=invalid']) {
+    const location={hash,hostname},filled=[],notices=[];let calls=0;
     const context=vm.createContext({location,DEFAULT_INPUT,normalizeInput,matchMedia:()=>({matches:false}),
       crypto:{getRandomValues:array=>{calls++;array[0]=1234567;return array;}},
       fillSettings:input=>filled.push({...input}),notice:text=>notices.push(text),
       history:{replaceState:(_,__,url)=>{location.hash=url;}}});
-    vm.runInContext(section('let initialInput = DEFAULT_INPUT;','(globalThis.__drfOffline ?'),context);
+    vm.runInContext(section('const pageDefaults =','(globalThis.__drfOffline ?'),context);
     const value=filled.at(-1),restored=JSON.parse(decodeURIComponent(location.hash.slice(4)));
     assert.deepEqual(restored,value);
     assert.equal(calls,hash ? 0 : 1);
     assert.equal(value.seed,hash.includes('invalid') ? DEFAULT_INPUT.seed : hash ? initial.seed : 8);
     assert.equal(value.snapshots,hash && !hash.includes('invalid') ? 80 : DEFAULT_INPUT.snapshots);
-    assert.equal(value.vehicles,hash && !hash.includes('invalid') ? 7 : DEFAULT_INPUT.vehicles);
+    assert.equal(value.vehicles,hash && !hash.includes('invalid') ? 7 : hostname==='jaeboklee94.github.io' ? 10 : 3);
     assert.equal(notices.length,hash.includes('invalid') ? 1 : 0);
-    vm.runInNewContext(section('let initialInput = DEFAULT_INPUT;','(globalThis.__drfOffline ?'),{...context,location});
+    vm.runInNewContext(section('const pageDefaults =','(globalThis.__drfOffline ?'),{...context,location});
     assert.deepEqual(filled.at(-1),value,'Reloading the resulting URL preserves all settings');
   }
 });
 
 test('bare visits select every bank seed uniformly while explicit seeds and reloads remain stable',()=>{
-  const startup=section('let initialInput = DEFAULT_INPUT;','(globalThis.__drfOffline ?');
+  const startup=section('const pageDefaults =','(globalThis.__drfOffline ?');
   for(const draws of [...Array.from({length:10},(_,i)=>[i]),[4294967289],[4294967295,4294967290,0]]) {
     const location={hash:''},filled=[];let calls=0;
     const context={location,DEFAULT_INPUT,normalizeInput,matchMedia:()=>({matches:false}),
@@ -194,7 +194,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
     scenario:{input:{snapshots:3},truth:[{configs:[]},{configs:[]},{configs:[]}],wire:[],walls:[]},
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
   const context=vm.createContext({state,$,form,hoverGeneration:0,hoverTimer:0,replayFrame:0,
-    runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},LAYERED_DOMAIN,URL,location:new URL('http://localhost/drf.html?interpolation=extended#old'),
+    runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},pageDefaults:{snapshots:60,vehicles:3},LAYERED_DOMAIN,URL,location:new URL('http://localhost/drf.html?interpolation=extended#old'),
     history:{replaceState(_state,_title,url){context.location=url;}},
     document,createDiagnosticView,interpolationResult,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
     map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,
