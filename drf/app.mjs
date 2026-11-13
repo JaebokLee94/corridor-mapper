@@ -754,7 +754,6 @@ if (location.search) {
 }
 fillSettings(initialInput);
 history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialInput))}`);
-if (matchMedia('(max-width: 760px)').matches) $('settingsDetails').open=false;
 (globalThis.__drfOffline ? Promise.resolve(globalThis.__drfOffline.metadata) : Promise.all([fetch(new URL('./provenance.json', import.meta.url)).then(r => r.json()), fetch(new URL('./reference/octave/fixtures.json', import.meta.url)).then(r => r.json())]))
   .then(([p, f]) => { provenance = p; reference = f.statistics; $('provenanceCommit').textContent = `${p.baseCommit.slice(0, 8)}`;
     $('provenanceCore').textContent = `${p.coreHash.slice(0, 12)}`; renderSweep(); })
@@ -824,16 +823,3 @@ $('closeAnalysis').onclick=()=>$('analysisDialog').close();
   dialog.addEventListener('close', () => { startedOutside = false; });
 }
 installSidebarControls();
-// Preserve the open layers legend. Collapse Scene only if the initial desktop sidebar overflows.
-const sidebar=document.getElementById('experimentSidebar'), sceneSettings=document.querySelector('.scene-settings');
-let autoScene=true,frameForSidebar;
-sceneSettings.querySelector('summary').addEventListener('click',()=>{autoScene=false;});
-function fitSidebar(){
-  if(!autoScene || matchMedia('(max-width:760px)').matches || sidebar.clientHeight===0)return;
-  sceneSettings.open=true;
-  if(sidebar.scrollHeight>sidebar.clientHeight+1)sceneSettings.open=false;
-}
-function scheduleSidebarFit(){cancelAnimationFrame(frameForSidebar);frameForSidebar=requestAnimationFrame(fitSidebar);}
-window.addEventListener('resize',scheduleSidebarFit);
-document.querySelectorAll('.sidebar-section:not(.scene-settings)').forEach(section=>section.addEventListener('toggle',scheduleSidebarFit));
-document.fonts?.ready.then(scheduleSidebarFit);scheduleSidebarFit();

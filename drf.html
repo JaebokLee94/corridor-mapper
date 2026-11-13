@@ -78,7 +78,7 @@
           <label class="field span-2"><span>Ellipse perimeter</span><select name="perimeter"><option value="exact">Exact integration</option><option value="ramanujan">Ramanujan approximation</option></select></label>
         </div></details>
       </form>
-      <details class="sidebar-section display-settings" open><summary>Map layers</summary>
+      <details class="sidebar-section display-settings"><summary>Map layers</summary>
         <fieldset class="toggle-list"><legend>Measured / estimated</legend>
           <label class="toggle"><input id="showEllipses" type="checkbox" checked /><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipses</label>
           <label class="toggle"><input id="showVehicles" type="checkbox" checked /><span class="swatch swatch-track" aria-hidden="true"></span>Vehicles &amp; trajectories</label>
@@ -176,8 +176,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261113-echospline';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261113-echospline';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261113-scene';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261113-scene';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>
