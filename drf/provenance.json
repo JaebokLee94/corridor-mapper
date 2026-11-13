@@ -1,9 +1,9 @@
 {
   "schema": "echomap-drf-provenance/1",
   "baseCommit": "751f34e3d8d7ee1317554672152d6a2563ce2e0c",
-  "coreHash": "f9552125180c59de61e33602f6b3d5d8f4786547331c09895b97422440c1714d",
+  "coreHash": "af414ac32d2530c92f774483634fa95515f050576600e191e8538014559cf317",
   "coreFiles": {
-    "drf/field.mjs": "f31f1b47c88689e9fadac93512fcd81191242a62dea97e676693b46ca4541cd4",
+    "drf/field.mjs": "5fc544ee655681869152a8d45e53150bd64bfcd872fbd1d7fd240e4930bf9626",
     "drf/field-reuse.mjs": "ddba899877d93e6139efc14672b8080238d215ec585f662e9bd8139c8a81d9cf",
     "drf/wire.mjs": "9b6636fc6c9f14577d43eaab2c98af610c8d80650389cd4a75310e0a12f73e72"
   },
@@ -87,10 +87,9 @@
     }
   },
   "computationRevision": {
-    "id": "exact-reuse-20261105",
-    "sourceBaseCommit": "9c4dea1ccd1915e39af4f1dd7ef717b2aa2fb640",
-    "status": "Exact computation reuse; no algorithm or threshold change",
-    "evidence": "experiments/pspt-compute-20261105/benchmark.json"
+    "id": "exact-tracker-reuse-20261113",
+    "sourceBaseCommit": "dafe46c622c18ae6dc63072dec12c70c1aa83ca6",
+    "status": "Reuse focal grid geometry and surface sampling storage; stop identical refinement iterations. Same estimates and thresholds."
   },
   "wallProtocolStatus": "Historical 2026-10-22 protocol below; current generated wall-model details are carried by run.wallGeneration and input."
 }

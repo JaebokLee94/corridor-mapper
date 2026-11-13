@@ -74,8 +74,10 @@ function predictionCache(surface, ext, nuGrid) {
       && Object.is(cache.c0[0], surface.c0[0]) && Object.is(cache.c0[1], surface.c0[1])
       && Object.is(cache.nu0[0], surface.nu0[0]) && Object.is(cache.nu0[1], surface.nu0[1])
       && Object.is(cache.x[0], surface.x[0]) && Object.is(cache.x[1], surface.x[1]) && Object.is(cache.x[2], surface.x[2])) return cache;
+  // A state update invalidates the sample values, but not their float64 storage.
+  const storage = cache?.nuGrid === nuGrid ? cache : null;
   const frame = surface.frame(), [center, tangent, normal, curvature] = frame,
-    lo = -ext * surface.ell, spacing = 2 * ext * surface.ell / (nuGrid - 1), samples = new Float64Array(5 * nuGrid);
+    lo = -ext * surface.ell, spacing = 2 * ext * surface.ell / (nuGrid - 1), samples = storage?.samples ?? new Float64Array(5 * nuGrid);
   for (let i = 0; i < nuGrid; i++) {
     const at = lo + i * spacing, bend = 0.5 * curvature * at * at, slope = curvature * at, j = 5 * i;
     samples[j] = at;
@@ -85,22 +87,28 @@ function predictionCache(surface, ext, nuGrid) {
     samples[j + 4] = tangent[1] + slope * normal[1];
   }
   cache = { ext, nuGrid, sg: surface.sg, ell: surface.ell, c0: surface.c0.slice(), nu0: surface.nu0.slice(),
-    x: surface.x.slice(), frame, samples, positions: [] };
+    x: surface.x.slice(), frame, samples, positions: storage?.positions ?? [], positionsUsed: 0, nextPosition: 0 };
   predictionCaches.set(surface, cache);
   return cache;
 }
 
-function sampledPosition(cache, point) {
-  for (const entry of cache.positions)
+function sampledPosition(cache, point, inUse) {
+  for (let k = 0; k < cache.positionsUsed; k++) {
+    const entry = cache.positions[k];
     if (Object.is(entry.x, point[0]) && Object.is(entry.y, point[1])) return entry.values;
-  const values = new Float64Array(3 * cache.nuGrid);
+  }
+  const k = cache.nextPosition, entry = cache.positions[k] ??= { values: new Float64Array(3 * cache.nuGrid) };
+  // A cache hit for the first focus can be the slot evicted by the second focus.
+  if (entry.values === inUse) entry.values = new Float64Array(3 * cache.nuGrid);
+  const values = entry.values;
   for (let i = 0; i < cache.nuGrid; i++) {
     const dx = cache.samples[5 * i + 1] + -1 * point[0], dy = cache.samples[5 * i + 2] + -1 * point[1],
       range = Math.hypot(dx, dy), j = 3 * i;
     values[j] = range; values[j + 1] = dx / range; values[j + 2] = dy / range;
   }
-  if (cache.positions.length === MAX_CACHED_POSITIONS) cache.positions.shift();
-  cache.positions.push({ x: point[0], y: point[1], values });
+  entry.x = point[0]; entry.y = point[1];
+  cache.positionsUsed = Math.min(cache.positionsUsed + 1, MAX_CACHED_POSITIONS);
+  cache.nextPosition = (k + 1) % MAX_CACHED_POSITIONS;
   return values;
 }
 
@@ -137,7 +145,7 @@ export class Surfel {
         || ext <= 0 || !Number.isInteger(nuGrid) || nuGrid < 2) throw new RangeError("invalid surface prediction input");
     const cache = predictionCache(this, ext, nuGrid),
       [center, tangent, normal, curvature] = cache ? cache.frame : this.frame(),
-      positionsI = cache ? sampledPosition(cache, pi) : null, positionsJ = cache ? sampledPosition(cache, pj) : null;
+      positionsI = cache ? sampledPosition(cache, pi) : null, positionsJ = cache ? sampledPosition(cache, pj, positionsI) : null;
     const lo = -ext * this.ell, spacing = 2 * ext * this.ell / (nuGrid - 1);
     let us = null, previousU, previousResidual;
     for (let i = 0; i < nuGrid; i++) {
@@ -271,6 +279,7 @@ export function refine(surface, snapshots, { iters = 6, ext = 1, refinement = "i
     const b = matVec(priorInverse, add(surface.x, surface.x0, -1)).map((value) => -value);
     rows = 0;
     for (const snapshot of snapshots) for (const config of snapshot) {
+      if (!config.cl.length) continue;
       const prediction = surface.predict(config.pi, config.pj, { ext });
       if (prediction === null) continue;
       const [rho, , derivative, ei, ej] = prediction;
@@ -286,8 +295,13 @@ export function refine(surface, snapshots, { iters = 6, ext = 1, refinement = "i
       rows++;
     }
     const change = solve(H, b).map((value, i) => Math.max(-limits[i], Math.min(limits[i], value)));
-    surface.x = add(surface.x, change);
-    surface.P = inverse(H);
+    const xNext = add(surface.x, change), pNext = inverse(H);
+    // The next iteration reads only x and P. Stop only at a bit-identical fixed point.
+    const fixed = xNext.every((v,i) => Object.is(v,surface.x[i]))
+      && pNext.every((row,i) => row.every((v,j) => Object.is(v,surface.P[i][j])));
+    surface.x = xNext;
+    surface.P = pNext;
+    if (fixed) break;
   }
   return rows;
 }
@@ -304,6 +318,7 @@ function refineSharedPose(surface, snapshots, { iters, ext }) {
     for (const snapshot of snapshots) {
       const matches = [];
       for (const config of snapshot) {
+        if (!config.cl.length) continue;
         const prediction = surface.predict(config.pi, config.pj, { ext });
         if (prediction === null) continue;
         const [rho, , derivative, ei, ej] = prediction;
@@ -323,8 +338,13 @@ function refineSharedPose(surface, snapshots, { iters, ext }) {
       rows += matches.length;
     }
     const change = solve(H, b).map((value, i) => Math.max(-limits[i], Math.min(limits[i], value)));
-    surface.x = add(surface.x, change);
-    surface.P = inverse(H);
+    const xNext = add(surface.x, change), pNext = inverse(H);
+    // The next iteration reads only x and P. Stop only at a bit-identical fixed point.
+    const fixed = xNext.every((v,i) => Object.is(v,surface.x[i]))
+      && pNext.every((row,i) => row.every((v,j) => Object.is(v,surface.P[i][j])));
+    surface.x = xNext;
+    surface.P = pNext;
+    if (fixed) break;
   }
   return rows;
 }

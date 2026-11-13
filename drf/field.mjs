@@ -79,6 +79,50 @@ export function createGrid(nx = 150, ny = 150, domain = [0, 60, 0, 30]) {
     y: Float64Array.from({ length: ny }, (_, iy) => ymin + (iy + 0.5) * dy) };
 }
 
+// A vehicle appears in multiple measured pairs. Reuse only the grid distances
+// and unit directions; covariance, range noise and accumulation stay pair specific.
+function focalGrid(id, pose, slots, maxSlots, x, y) {
+  let slot = slots.get(id);
+  if (slot && Object.is(slot.px, pose[0]) && Object.is(slot.py, pose[1])) return slot.data;
+  if (!slot) {
+    if (slots.size >= maxSlots) return null;
+    slot = {data: new Float64Array(3 * x.length * y.length)};
+    slots.set(id, slot);
+  }
+  slot.px = pose[0]; slot.py = pose[1];
+  let j = 0;
+  for (let iy = 0; iy < y.length; iy++) {
+    const dy = y[iy] - pose[1];
+    for (let ix = 0; ix < x.length; ix++) {
+      const dx = x[ix] - pose[0], radius = Math.hypot(dx, dy), denom = Math.max(radius, FOCAL_EPS);
+      slot.data[j++] = radius; slot.data[j++] = dx / denom; slot.data[j++] = dy / denom;
+    }
+  }
+  return slot.data;
+}
+
+// For zero position covariance, sigmaR is constant at all grid points.
+function accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA) {
+  const variance = sigmaD * sigmaD;
+  if (!(variance > 0) || !Number.isFinite(variance))
+    throw new RangeError("residual variance must be positive; all-noise-zero kernels are undefined");
+  const sd = Math.sqrt(variance), denom = SQRT_2PI * sd,
+    radius = band === "full" ? Infinity : band * sd;
+  for (let g = 0, j = 0; g < deltaA.length; g++, j += 3) {
+    const rho = fi[j] + fj[j], factor = Math.hypot(fi[j + 1] + fj[j + 1], fi[j + 2] + fj[j + 2]) / denom;
+    if (!Number.isFinite(rho) || !Number.isFinite(factor)) throw new RangeError("geometry exceeds finite numerical range");
+    deltaA[g] += factor * inversePSum;
+    const lo = rho - radius, hi = rho + radius;
+    if (hi < paths[0].dHat || lo > paths[paths.length - 1].dHat) continue;
+    let sum = 0;
+    for (let q = lowerBound(paths, lo); q < paths.length && paths[q].dHat <= hi; q++) {
+      const z = (rho - paths[q].dHat) / sd;
+      sum += paths[q].inverseP * Math.exp(-0.5 * z * z);
+    }
+    deltaD[g] += factor * sum;
+  }
+}
+
 function lowerBound(paths, value) {
   let lo = 0, hi = paths.length;
   while (lo < hi) {
@@ -90,7 +134,7 @@ function lowerBound(paths, value) {
 }
 
 /** C configurations, G grid cells, P paths/config, B band candidate visits:
- * O(C[P log P+G log P]+B) time, O(G+P) scratch; D/A accumulate float64.
+ * O(C[P log P+G log P]+B) time, O(G+P) scratch plus up to 16 MiB for focal grids; D/A accumulate float64.
  * F41 A=f(x)Σ(1/P_q); sigmaD must be equal within each configuration.
  */
 export function createField(grid, { band = 4, perimeter = "exact", updateCache = null } = {}) {
@@ -139,6 +183,8 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
         deltaD.set(reused.deltaD); deltaA.set(reused.deltaA);
         nAdmitted = reused.admitted; nRejected = reused.rejected;
       }
+      // Grid coordinates may be edited by the caller between steps.
+      const slots = new Map(), maxSlots = Math.floor((16 * 1024 * 1024) / (3 * 8 * count));
       for (const config of reused ? [] : wire.configs) {
         if (!config.paths.length) continue;
         const sigmaD = config.paths[0].sigmaD;
@@ -150,6 +196,15 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
         nRejected += config.paths.length - paths.length;
         if (!paths.length) continue;
         const inversePSum = paths.reduce((sum, p) => sum + p.inverseP, 0);
+        if (wire.configs.length >= 3 && maxSlots >= 2 &&
+            config.Sigma_i.every(value => value === 0) && config.Sigma_j.every(value => value === 0)) {
+          const fi = focalGrid(config.i, config.pHat_i, slots, maxSlots, x, y),
+            fj = focalGrid(config.j, config.pHat_j, slots, maxSlots, x, y);
+          if (fi && fj) {
+            accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA);
+            continue;
+          }
+        }
         for (let iy = 0; iy < ny; iy++) for (let ix = 0; ix < nx; ix++) {
           const g = iy * nx + ix, geo = geometry(x[ix], y[iy], config, sigmaD);
           deltaA[g] += geo.factor * inversePSum;

@@ -189,3 +189,27 @@ test("historical scalar prefix inspection is bit-identical and uses the original
     assert.equal(messages.at(-1).type, "error");
   } finally { globalThis.onmessage = oldMessage; globalThis.postMessage = oldPost; }
 });
+
+test('known-pose grid reuse preserves the sum of scalar pair fields as measured poses change', () => {
+  for (const band of [3, 4, 5, 'full']) {
+    const grid = createGrid(21, 13, [-0.5, 20.5, -0.5, 12.5]);
+    const poses = [[3, 3], [7, 3], [8, 5]];
+    const configs = [[0,1], [0,2], [1,2]].map(([i,j]) => ({
+      i, j, pHat_i: poses[i], pHat_j: poses[j], Sigma_i: [0,0,0], Sigma_j: [0,0,0],
+      paths: [1, 12, 17].map(dHat => ({dHat, sigmaD: 0.4})),
+    }));
+    // Repeated IDs may have different measured coordinates in the standalone field API.
+    configs[2].pHat_i = [9, 4];
+    const combined = createField(grid, {band});
+    combined.step({t: 1, configs});
+    const expectedD = new Float64Array(combined.D.length), expectedA = new Float64Array(combined.A.length);
+    for (const config of configs) {
+      const single = createField(grid, {band});
+      single.step({t: 1, configs: [config]});
+      for (let i = 0; i < single.D.length; i++) {
+        expectedA[i] += single.A[i]; expectedD[i] += single.D[i];
+      }
+    }
+    assert.deepEqual(combined.A, expectedA); assert.deepEqual(combined.D, expectedD);
+  }
+});

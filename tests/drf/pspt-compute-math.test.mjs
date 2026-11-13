@@ -96,3 +96,12 @@ test('repeated MAP iterations preserve rows, state and covariance in both modes'
     compare(actual, expected);
   }
 });
+
+test('cache eviction of a hit for the first vehicle cannot overwrite its in-flight ray', () => {
+  const [cached, scalar] = surfaces();
+  const poses = Array.from({ length: 25 }, (_, i) => [-.6 + i * .05, 3 + i * .02]);
+  for (let i = 0; i < 24; i += 2) cached.predict(poses[i], poses[i+1]);
+  const expected = scalar.predict(poses[0], poses[24]);
+  assert.ok(expected);
+  assert.deepStrictEqual(cached.predict(poses[0], poses[24]), expected);
+});
