@@ -1,13 +1,15 @@
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs';
 import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261112-checkedcentre';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs?v=20261112-upper-wmp';
 import { sweepCsv } from './sweep-export.mjs';
-import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput, createSceneGeometry } from './scenario.mjs?v=20261112-upper-wmp';
+import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261112-upper-wmp';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-chain-tips';
-import { METHOD_PROTOCOL, protocolForFleet } from './comparison.mjs?v=20261112-upper-wmp';
+import { echoProtocol } from './echo-comparison.mjs';
+import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261112-upper-wmp';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-chain-tips';
@@ -21,7 +23,13 @@ const state = { mode: 'idle', protocol: null, scenario: null, grid: null, frames
   busy: false, replay: false, replayAt: 0, generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
 let runWorker, evalWorker, hoverWorker, diagnosticWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
 const runPreloader = createRunPreloader({ createWorker: () => createLocalWorker('run') });
-function renderThresholdProtocol(protocol = METHOD_PROTOCOL) {
+function renderThresholdProtocol(protocol = echoProtocol()) {
+  if(protocol.echoSpline){
+    const wmp=protocol.guarded, p=protocol.echoSpline.parameters;
+    $('thresholdSummary').textContent=`WM-P selection threshold: ${wmp.threshold.toFixed(4)}`;
+    $('thresholdDetails').textContent=`EchoSpline uses ${p.knotSpacingM} m knots and ${p.supportDistanceM} m support reach. WM-P uses the fixed selection threshold ${wmp.threshold.toFixed(4)}.`;
+    return;
+  }
   const { guarded, baseline } = protocol;
   $('thresholdSummary').textContent = `WM-P ${guarded.threshold.toFixed(4)} · WM-F ${baseline.threshold.toFixed(4)}`;
   const refinement = guarded.refinement === 'shared-pose'
@@ -92,13 +100,13 @@ function installSidebarControls() {
   }, true);
 }
 function fillSettings(input) {
-  for (const [key, value] of Object.entries(input)) {
+  for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,...input})) {
     const field = form.elements.namedItem(key);
     if (field) field.type === 'checkbox' ? field.checked = value : field.value = String(value);
   }
   $('wallConfiguration').value = input.scene === PAPER_SETTINGS.scene ? input.scene : input.wallSide;
   $('wallGapNote').hidden = input.wallSide !== 'both';
-  if (!state.protocol) renderThresholdProtocol(protocolForFleet(input.vehicles));
+  if (!state.protocol) renderThresholdProtocol(echoProtocol(input));
 }
 function settings() {
   if (Number(form.elements.namedItem('sigmaD').value) === 0) throw new Error('Both methods require a range standard deviation greater than zero. Zero range noise can make the joint pose update singular.');
@@ -400,10 +408,19 @@ function renderSelected() {
   hoverGeneration++;
   $('inspector').textContent = '';
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
+  const legacy=!!state.protocol && !state.protocol.echoSpline;
+  const first=legacy?'guarded':'echoSpline', second=legacy?'baseline':'guarded';
+  const names=legacy?['WM-P','WM-F']:['EchoSpline','WM-P'];
+  const buttons=[$('methodGuarded'),$('methodBaseline')];
+  [first,second].forEach((key,k)=>{buttons[k].dataset.method=key;buttons[k].textContent=names[k];buttons[k].title=names[k];});
+  if(!['compare',first,second].includes(state.method))state.method='compare';
+  const selected=state.method==='compare'?first:state.method;
+  const echoOnly=state.method==='echoSpline';
+  $('showInterpolation').disabled=echoOnly;
   const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse'].map(id => [id, $(id).checked]));
   const interpolate = $('showInterpolation').checked, kind = $('interpolationKind').value;
-  $('centreLegend').hidden=!interpolate || !['centre','checked'].includes(kind) || !layers.showProxy;
-  $('interpolationKind').disabled = !interpolate && state.method === 'compare';
+  $('centreLegend').hidden=echoOnly || !interpolate || !['centre','checked'].includes(kind) || !layers.showProxy;
+  $('interpolationKind').disabled = echoOnly || !interpolate && state.method === 'compare';
   const visibleBridges = method => {
     const map = frame?.methods?.[method];
     if(kind==='checked' && map?.checkedChains?.length) {
@@ -413,20 +430,28 @@ function renderSelected() {
   };
   const walls = scenario?.walls ?? previewWalls();
   const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: scenario?.domain ?? previewDomain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls,cameraBounds:scenario?.cameraBounds ?? previewBounds,
-    bridges: visibleBridges(state.method === 'baseline' ? 'baseline' : 'guarded'),
-    candidates: frame?.methods?.[state.method]?.candidates ?? frame?.candidates ?? [], observed: evaluation?.observed, layers, heatField: $('heatField').value, scaleMode: $('scaleMode').value,
+    bridges: visibleBridges(selected),
+    candidates: frame?.methods?.[selected]?.candidates ?? frame?.candidates ?? [], observed: evaluation?.observed, layers, heatField: $('heatField').value, scaleMode: $('scaleMode').value,
     history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
   $('mapPair').dataset.mode=state.method;
   $('baselinePane').hidden=state.method!=='compare';
-  $('primaryMapName').textContent=state.method==='baseline'?'WM-F (Wall Mapping with Fixed Segments)':'WM-P (Wall Mapping with Pair Tracking)';
-  map.set({...display,mode:'geometry',xRange:[-10,display.domain[1]+10]});
-  baselineMap.set({...display,bridges:visibleBridges('baseline'),candidates:frame?.methods?.baseline?.candidates ?? [],mode:'geometry',xRange:[-10,display.domain[1]+10]});
+  const longName=k=>({echoSpline:'EchoSpline',guarded:'WM-P (Wall Mapping with Pair Tracking)',baseline:'WM-F (Wall Mapping with Fixed Segments)'})[k];
+  $('primaryMapName').textContent=longName(selected);
+  $('primaryMapName').classList.toggle('baseline-name',selected===second);
+  $('secondaryMapName').textContent=longName(second);
+  document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{th.textContent=names[i];th.dataset.methodCol=i?'second':'first';});
+  $('methodMetrics').classList.toggle('echo-only',echoOnly);
+  $('historySecond').parentElement.hidden=echoOnly;
+  for(const opt of $('historyMetric').options)opt.disabled=echoOnly&&!['mapF1','recall','surfacePrecision'].includes(opt.value);
+  if($('historyMetric').selectedOptions[0]?.disabled)$('historyMetric').value='mapF1';
+  map.set({...display,curves:frame?.methods?.[selected]?.curves,mode:'geometry',xRange:[-10,display.domain[1]+10]});
+  baselineMap.set({...display,bridges:visibleBridges(second),curves:frame?.methods?.[second]?.curves,candidates:frame?.methods?.[second]?.candidates ?? [],mode:'geometry',xRange:[-10,display.domain[1]+10]});
   const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
   densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
   contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
   $('snapshotLabel').textContent = `${frame?.t ?? 0} / ${scenario?.input.snapshots ?? form.elements.namedItem('snapshots').value}`;
-  renderInterpolationPanel($, state.method, kind, evaluation, fmt);
-  for (const [method,prefix] of [['guarded',''],['baseline','b']]) {
+  renderInterpolationPanel($, state.method, kind, evaluation, fmt, legacy);
+  for (const [method,prefix] of [[first,''],[second,'b']]) {
     const e=evaluation?.methods?.[method] ?? (method==='guarded' ? evaluation : null);
     const node=(name)=>$(prefix ? prefix+name[0].toUpperCase()+name.slice(1) : name);
     for (const [id,key] of [['precisionValue','precision'],['recallValue','recall'],['firstPrecisionValue','firstSupportPrecision'],['offwallValue','offwall']])
@@ -434,28 +459,25 @@ function renderSelected() {
     for (const [id,key] of [['p95Value','p95'],['f1Value','f1']]) node(id).textContent=fmt(e?.[key]);
     const candidates=frame?.methods?.[method]?.candidates ?? [];
     for (const [id,status] of [['supportedValue','supported'],['pendingValue','pending'],['contradictedValue','contradicted']])
-      node(id).textContent=method==='baseline' && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
+      node(id).textContent=method==='echoSpline' || method==='baseline' && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
     const completed = interpolationResult(e, kind);
     const mapScore=interpolationResult(e,interpolate ? kind : 'off')?.mapF1;
     node('mapF1Value').textContent=mapScore==null ? '—' : fmt(100*mapScore,1);
     const mapRecall = node('mapRecallValue'), coverage = interpolate ? completed?.recall : e?.recall;
     mapRecall.textContent = coverage == null ? '—' : fmt(100 * coverage, 1);
-    mapRecall.title = !interpolate ? 'Supported fragments only' : completed && ['centre','checked'].includes(kind) ? `${completed.count} centre links · ${fmt(completed.lengthM,2)} m of mapped wall · ${fmt(completed.offWallM,2)} m outside tolerance` : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
-    node('firstPrecisionValue').title=e ? `First-support errors: ${e.firstSupportErrors} / ${e.firstSupportCount}` : '';
+    mapRecall.title = method==='echoSpline' ? 'Observed-wall coverage of the fitted curve' : !interpolate ? 'Supported fragments only' : completed && ['centre','checked'].includes(kind) ? `${completed.count} centre links · ${fmt(completed.lengthM,2)} m of mapped wall · ${fmt(completed.offWallM,2)} m outside tolerance` : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
+    node('firstPrecisionValue').title=e?.firstSupportCount!=null ? `First-support errors: ${e.firstSupportErrors} / ${e.firstSupportCount}` : '';
   }
   for (const button of document.querySelectorAll('[data-method]')) button.setAttribute('aria-pressed',String(button.dataset.method===state.method));
-  if ($('methodNote')) $('methodNote').textContent=state.method==='compare' ? 'Shared snapshot and axes · zoom and pan are linked. WM-F retains past threshold crossings.' : state.method==='guarded'
-    ? 'WM-P updates curved patches and holds geometrically ambiguous alternatives.'
-    : 'WM-F retains fixed fragments that crossed its threshold in a past qualified snapshot; unselected fragments are held.';
   $('qValue').textContent = frame?.Q ?? 0; $('acceptedValue').textContent = frame?.admitted ?? 0; $('rejectedValue').textContent = frame?.rejected ?? 0;
   const diag = evaluation?.diagnostics;
   $('pathValue').textContent = diag ? `Spec. ${diag.specularCount} / diff. ${diag.diffuseCount}` : '—';
   $('pathValue').title = diag ? `Specular paths: ${diag.specularCount}; diffuse paths: ${diag.diffuseCount}` : 'Specular / diffuse paths';
-  const times = state.frames.slice(0,state.selected).map(f=>f.ms+(f.methods?.guarded.ms ?? 0)+(f.methods?.baseline.ms ?? 0));
+  const times = state.frames.slice(0,state.selected).map(f=>f.ms+(f.methods?.guarded.ms ?? 0)+(f.methods?.[legacy?'baseline':'echoSpline']?.ms ?? 0));
   $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
-  const historyMetric = $(state.method === 'compare' ? 'historyMetric' : 'interpolationChartMetric').value;
-  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind);
+  const historyMetric = $(state.method === 'compare' || echoOnly ? 'historyMetric' : 'interpolationChartMetric').value;
+  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind,legacy);
   renderDiagnostics();
 }
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
@@ -534,7 +556,7 @@ $('resetButton').onclick = () => {
   history.replaceState(null, '', url); renderSelected(); renderSweep();
   $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.');
 };
-form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { const input = settings(); renderThresholdProtocol(protocolForFleet(input.vehicles)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
+form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
 form.addEventListener('change', () => warmSelectedInput());
 $('resetButton').addEventListener('click', () => warmSelectedInput());
 $('timeSlider').oninput = () => {
@@ -580,8 +602,8 @@ function renderSweep() {
   renderDiagnostics();
   if (document.hidden || $('sweepPanel').hidden) return;
   const aggregates = aggregateRuns(state.sweepRuns);
-  for (const [method, canvas] of [['guarded', 'sweepChart'], ['baseline', 'sweepBaselineChart']])
-    drawSweep($(canvas), aggregates.filter(row => row.method === method), [], 'recall');
+  for (const [method, canvas] of [[aggregates.some(row=>row.method==='baseline')?'guarded':'echoSpline','sweepChart'],[aggregates.some(row=>row.method==='baseline')?'baseline':'guarded','sweepBaselineChart']])
+    { const title=({echoSpline:'EchoSpline',guarded:'WM-P',baseline:'WM-F'})[method];$(canvas).previousElementSibling.textContent=title;$(canvas).setAttribute('aria-label',title+' observed recall');drawSweep($(canvas), aggregates.filter(row => row.method === method), [], 'recall'); }
   const body = $('sweepTable').querySelector('tbody'); body.replaceChildren();
   const statistic = (metric, total, scale = 1, places = 3) => {
     const counts = `valid ${metric.n}/${total}, failed ${metric.failed}, missing ${metric.missing}`;
@@ -589,7 +611,7 @@ function renderSweep() {
   };
   for (const row of aggregates) {
     const tr = document.createElement('tr');
-    for (const value of [METHOD_PROTOCOL[row.method].name, row.roughness, row.sigmaD, row.n, statistic(row.precision, row.n, 100, 1), statistic(row.recall, row.n, 100, 1), statistic(row.p95, row.n), statistic(row.offwall, row.n, 100, 1)]) {
+    for (const value of [row.protocol?.name ?? ({echoSpline:"EchoSpline",guarded:"WM-P",baseline:"WM-F"})[row.method] ?? row.method, row.roughness, row.sigmaD, row.n, statistic(row.precision, row.n, 100, 1), statistic(row.recall, row.n, 100, 1), statistic(row.p95, row.n), statistic(row.offwall, row.n, 100, 1)]) {
       const cell = document.createElement('td');
       const terms = String(value).split(' ± ');
       if (terms.length === 2) setMathText(cell, [terms[0] + ' ', { tex: String.raw`\pm` }, ' ' + terms[1]]);
@@ -658,7 +680,7 @@ $('loadSavedSweep').onclick = () => {
 };
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
 $('exportJson').onclick = () => {
-  const data = { schema: 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, displayInterpolation: $('showInterpolation')?.checked ? $('interpolationKind').value : 'off', toleranceM: 0.4, measurementBackend:state.scenario?.measurementBackend, measurementPreparationMs:state.scenario?.simulatorMs, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
+  const data = { schema: state.protocol?.echoSpline || state.sweepRuns.some(r=>r.protocol?.echoSpline) ? 'echomap-drf/6' : 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, displayInterpolation: $('showInterpolation')?.checked ? $('interpolationKind').value : 'off', toleranceM: 0.4, measurementBackend:state.scenario?.measurementBackend, measurementPreparationMs:state.scenario?.simulatorMs, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
     grid: state.grid ? { ...state.grid, arrayOrder: 'iy*nx+ix; ascending y; cell centers' } : null,
     input: state.scenario?.input ?? state.sweepRuns[0]?.input, measurement: state.scenario?.wire.slice(0, state.frames.length) ?? [], result: state.frames,
     evaluation: state.evaluations, truth: { role: 'evaluation only', wallModel: state.scenario?.wallModel, wallGeneration: state.scenario?.wallGeneration, walls: state.scenario?.walls ?? [], snapshots: state.scenario?.truth.slice(0, state.frames.length) ?? [] },
@@ -674,12 +696,12 @@ $('exportCsv').onclick = () => {
   const protocol = state.protocol;
   const csvValue = value => /[\",\r\n]/.test(String(value)) ? '"'+String(value).replaceAll('"','""')+'"' : String(value);
   const rows=[];let header;
-  for (const method of ['guarded','baseline']) {
+  for (const method of Object.keys(protocol)) {
     const frames=state.frames.map(f=>({...f,candidates:f.methods[method].candidates,psptMs:f.methods[method].ms}));
     const lines=psptSnapshotCsv(frames,state.evaluations.map(e=>e.methods[method]),{includeInterpolation:true}).replace(/^\ufeff/,'').trim().split('\r\n');
     header=lines[0].replace('pspt_ms','estimator_ms');
     const loaded = protocol[method], revision = loaded.revision ?? 'legacy-unversioned';
-    rows.push(...lines.slice(1).map(line=>[method,loaded.threshold,csvValue(loaded.tuning.id),line,csvValue(revision)].join(',')));
+    rows.push(...lines.slice(1).map(line=>[method,loaded.threshold,csvValue(loaded.tuning?.id),line,csvValue(revision)].join(',')));
   }
   download(new Blob(['\ufeffmethod,selection_threshold,threshold_source,'+header+',implementation_revision\r\n'+rows.join('\r\n')+'\r\n'],{type:'text/csv;charset=utf-8'}),'echomap-method-comparison.csv');
 };
@@ -802,3 +824,16 @@ $('closeAnalysis').onclick=()=>$('analysisDialog').close();
   dialog.addEventListener('close', () => { startedOutside = false; });
 }
 installSidebarControls();
+// Preserve the open layers legend. Collapse Scene only if the initial desktop sidebar overflows.
+const sidebar=document.getElementById('experimentSidebar'), sceneSettings=document.querySelector('.scene-settings');
+let autoScene=true,frameForSidebar;
+sceneSettings.querySelector('summary').addEventListener('click',()=>{autoScene=false;});
+function fitSidebar(){
+  if(!autoScene || matchMedia('(max-width:760px)').matches || sidebar.clientHeight===0)return;
+  sceneSettings.open=true;
+  if(sidebar.scrollHeight>sidebar.clientHeight+1)sceneSettings.open=false;
+}
+function scheduleSidebarFit(){cancelAnimationFrame(frameForSidebar);frameForSidebar=requestAnimationFrame(fitSidebar);}
+window.addEventListener('resize',scheduleSidebarFit);
+document.querySelectorAll('.sidebar-section:not(.scene-settings)').forEach(section=>section.addEventListener('toggle',scheduleSidebarFit));
+document.fonts?.ready.then(scheduleSidebarFit);scheduleSidebarFit();

@@ -1,3 +1,4 @@
+import { echoProtocol } from '../../drf/echo-comparison.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,8 +12,8 @@ const slice = (source,start,end) => {
   return source.slice(a,b);
 };
 function attachReceiver(source,state,elements={thresholdSummary:{},thresholdDetails:{}}) {
-  const renderThresholdProtocol=new Function('$','METHOD_PROTOCOL',
-    `${slice(source,'function renderThresholdProtocol','const fmt =')}return renderThresholdProtocol;`)(id=>elements[id],METHOD_PROTOCOL);
+  const renderThresholdProtocol=new Function('$','METHOD_PROTOCOL','echoProtocol',
+    `${slice(source,'function renderThresholdProtocol','const fmt =')}return renderThresholdProtocol;`)(id=>elements[id],METHOD_PROTOCOL,echoProtocol);
   return new Function('state','LEGACY_RUN_PROTOCOL','makeWorker','controls','fillSettings','location','fail','notice','renderSelected','renderThresholdProtocol',
     `let hoverWorker,evalWorker;${slice(source,'async function receiveRunMessage','function commandRun')}return receiveRunMessage;`)(
     state,LEGACY_RUN_PROTOCOL,()=>({request:async()=>{}}),()=>{},()=>{},{hash:''},error=>{throw error;},()=>{},()=>{},renderThresholdProtocol);

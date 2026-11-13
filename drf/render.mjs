@@ -242,7 +242,7 @@ export class DrfMap {
       const extensions=this.centreKind==='checked'?confirmedExtensions(this.centreEvidence??[],[]):[];
       this.centreGeometry=centreSpline(candidates,this.centreEvidence,extensions);
     }
-    const supportedPatches=useCentres?this.centreGeometry.ends:[];
+    const supportedPatches=layers.showProxy && this.state.curves ? [...this.state.curves] : useCentres?[...this.centreGeometry.ends]:[];
     // Drawing budget only: the estimator still receives every measured path.
     const ellipseTotal=(wire?.configs ?? []).reduce((sum,config)=>sum+(config.paths?.length ?? 0),0),ellipseStride=Math.max(1,Math.ceil(ellipseTotal/600));
     let ellipseIndex=0,ellipseShown=0;
@@ -482,7 +482,7 @@ export function drawSweep(canvas,aggregates,reference=[],metric='medianError',re
  */
 export async function sweepPng(aggregates) {
   if (!Array.isArray(aggregates)) throw new TypeError('Sweep aggregates must be an array.');
-  const methods=[['guarded','WM-P'],['baseline','WM-F']];
+  const methods=aggregates.some(r=>r.method==='baseline')?[['guarded','WM-P'],['baseline','WM-F']]:[['echoSpline','EchoSpline'],['guarded','WM-P']];
   const rows=aggregates.filter(row=>methods.some(([method])=>row.method===method));
   if (!rows.length) throw new Error('Run a parameter sweep before exporting its charts.');
   if (rows.some(row=>!Number.isFinite(row.sigmaD) || !Number.isFinite(row.roughness) || !row.recall))
@@ -548,14 +548,14 @@ export function drawCounts(canvas,counts,predicted) {
 /** Shared-axis comparison; one solid and one dashed curve distinguish methods.
  * Missing precision stays a gap. No smoothing, interpolation of missing data or CI.
  */
-export function drawComparisonHistory(canvas,evaluations,selection='mapF1',snapshots=120,mode='compare',kind='linear') {
+export function drawComparisonHistory(canvas,evaluations,selection='mapF1',snapshots=120,mode='compare',kind='linear',legacy=false) {
   const surface=chartSurface(canvas);if(!surface)return;
-  const single = mode !== 'compare';
+  const single = mode !== 'compare' && mode !== 'echoSpline';
   const percent = single ? ['recall','mapF1'].includes(selection) : selection !== 'p95';
   const count = single && ['missing','count','falseBridges'].includes(selection);
   const series = [[], []];
   for (const e of evaluations) {
-    const pair = single ? interpolationPair(e, mode, kind) : [e.methods?.guarded, e.methods?.baseline];
+    const pair = single ? interpolationPair(e, mode, kind) : mode==='echoSpline'?[e.methods?.echoSpline,null]:legacy||e.methods?.baseline?[e.methods?.guarded,e.methods?.baseline]:[e.methods?.echoSpline,e.methods?.guarded];
     pair.forEach((record, i) => {
       const value = !single && selection==='mapF1' ? interpolationResult(record,kind)?.mapF1 : record?.[selection];
       series[i].push({x:e.t, y:value==null ? NaN : value*(percent ? 100 : 1)});
@@ -572,7 +572,7 @@ export function drawComparisonHistory(canvas,evaluations,selection='mapF1',snaps
   const xmax=Math.max(1,snapshots),xTicks=Array.from({length:Math.floor(xmax/20)+1},(_,i)=>20*i);
   // Short runs still show their endpoint; longer runs retain the fixed 20-snapshot scale.
   if (xmax<20) xTicks.push(xmax);
-  const metricLabels={mapF1:['Map $F_1$ [%]','Map $F_1$ [%]'],missing:['Missed wall samples','Missed samples'],count:['Gaps joined','Gaps joined'],lengthM:['Added length [m]','Added [m]'],offWallM:['Off-wall added [m]','Off-wall [m]'],falseBridges:['Off-wall joins','Off-wall joins'],mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
+  const metricLabels={surfacePrecision:['Surface precision [%]','Precision [%]'],mapF1:['Map $F_1$ [%]','Map $F_1$ [%]'],missing:['Missed wall samples','Missed samples'],count:['Gaps joined','Gaps joined'],lengthM:['Added length [m]','Added [m]'],offWallM:['Off-wall added [m]','Off-wall [m]'],falseBridges:['Off-wall joins','Off-wall joins'],mapRecall:['Map recall [%]','Map recall [%]'],precision:['Centre precision [%]','Precision [%]'],recall:['Observed recall [%]','Recall [%]'],firstSupportPrecision:['First support [%]','First support [%]'],holdRate:['Held / unselected [%]','Held [%]'],p95:['P95 distance [m]','P95 [m]'],offwall:['Off-wall centres [%]','Off-wall [%]']};
   const labelKey = single && selection === 'recall' ? 'mapRecall' : selection;
   const yLabel=((single && ['centre','checked'].includes(kind) && centreMetricNames[selection] ? centreMetricNames[selection] : metricLabels[labelKey])?.[surface.height<170?1:0] ?? (percent?'[%]':'[m]')).replace('[%]',String.raw`$[\%]$`).replace('[m]',String.raw`$[\mathrm{m}]$`);
   const tight=single && surface.width<=560;

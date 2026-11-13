@@ -29,7 +29,7 @@ export function sweepCsv(runs) {
   const records = runs.flatMap((run, index) => {
     const methods = run.methods ?? (run.summary ? { historical: { summary: run.summary } } : {});
     const names = Object.keys(methods).sort((a, b) => {
-      const rank = name => name === 'guarded' ? 0 : name === 'baseline' ? 1 : 2;
+      const rank = name => name === 'echoSpline' ? -1 : name === 'guarded' ? 0 : name === 'baseline' ? 1 : 2;
       return rank(a) - rank(b) || a.localeCompare(b);
     });
     return names.map(method => ({ experiment: index + 1, method, input: run.input ?? {},

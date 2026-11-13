@@ -1,7 +1,7 @@
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 import { diffuseProfile } from './diffuse.mjs';
 import { createSweepProfileSource } from './diagnostic-profile.mjs?v=20261112-upper-wmp';
-let evaluator, baselineEvaluator, scenario;
+let evaluator, secondEvaluator, scenario;
 let sweepSource, sweepKey;
 self.onmessage = ({ data }) => {
   try {
@@ -12,10 +12,14 @@ self.onmessage = ({ data }) => {
       self.postMessage({ type: 'sweep-diagnostic', requestId: data.requestId, domain, t, configs,
         ...(data.type === 'sweep-profile' ? { profile: sweepSource.profile(data.configIndex) } : {}) });
     }
-    if (data.type === 'init') { scenario = data.scenario; evaluator = createPSPTEvaluator(scenario, data.grid); baselineEvaluator = createPSPTEvaluator(scenario, data.grid); self.postMessage({ type: 'initialized', requestId: data.requestId }); }
+    if (data.type === 'init') { scenario = data.scenario; evaluator = createPSPTEvaluator(scenario, data.grid); secondEvaluator = createPSPTEvaluator(scenario, data.grid); self.postMessage({ type: 'initialized', requestId: data.requestId }); }
     if (data.type === 'evaluate') {
       const guarded=evaluator.step(data.frame, null, data.frame.methods?.guarded?.bridges, data.frame.methods?.guarded?.extendedBridges);
-      const baseline=data.frame.methods ? baselineEvaluator.step({...data.frame,method:'baseline-b',candidates:data.frame.methods.baseline.candidates},guarded,data.frame.methods.baseline.bridges, data.frame.methods.baseline.extendedBridges) : null;
+      if(data.frame.methods?.echoSpline) {
+        const echoSpline=secondEvaluator.step({...data.frame,...data.frame.methods.echoSpline},guarded);
+        self.postMessage({type:'evaluation',requestId:data.requestId,evaluation:{...guarded,methods:{echoSpline,guarded}}});return;
+      }
+      const baseline=data.frame.methods ? secondEvaluator.step({...data.frame,method:'baseline-b',candidates:data.frame.methods.baseline.candidates},guarded,data.frame.methods.baseline.bridges, data.frame.methods.baseline.extendedBridges) : null;
       self.postMessage({type:'evaluation',requestId:data.requestId,evaluation:baseline ? {...guarded,methods:{guarded,baseline}} : guarded});
     }
     if (data.type === 'profile') {

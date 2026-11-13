@@ -1,3 +1,4 @@
+import { EchoComparison,echoProtocol } from '../../drf/echo-comparison.mjs';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -48,15 +49,14 @@ function assertScenario(actual, expected, message) {
 function calculate(scene) {
   const grid = createGrid(scene.input.grid, scene.input.grid, scene.domain);
   const field = createField(grid, { band: scene.input.band, perimeter: scene.input.perimeter });
-  const estimator = new MethodComparison({ sigmaR: scene.input.sigmaD, includeExtended:true });
+  const estimator = new EchoComparison(scene.input,scene.domain);
   const guardedEvaluator = createPSPTEvaluator(scene, grid), baselineEvaluator = createPSPTEvaluator(scene, grid);
   return scene.wire.map(wire => {
     const frame = field.step(wire), methods = estimator.step(wire);
     Object.assign(frame, { methods, candidates: methods.guarded.candidates,
       psptMs: methods.guarded.ms, method: 'guarded-tuned' });
-    const guarded = guardedEvaluator.step(frame,null,methods.guarded.bridges,methods.guarded.extendedBridges), baseline = baselineEvaluator.step({ ...frame,
-      method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges, methods.baseline.extendedBridges);
-    return { frame, evaluation: { ...guarded, methods: { guarded, baseline } } };
+    const guarded = guardedEvaluator.step(frame,null,methods.guarded.bridges,methods.guarded.extendedBridges), echoSpline = baselineEvaluator.step({...frame,...methods.echoSpline},guarded);
+    return { frame, evaluation: { ...guarded, methods: { echoSpline, guarded } } };
   });
 }
 
@@ -186,7 +186,7 @@ test('cached wire keeps truth and future measurements outside both inference ker
     Object.defineProperty(changed, key, { get() { throw new Error(`forbidden oracle access: ${key}`); } });
   Object.defineProperty(changed.wire, 2, { get() { throw new Error('future measured snapshot read'); } });
   const grid = createGrid(100, 100, scene.domain), fields = [createField(grid), createField(grid)];
-  const estimators = [new MethodComparison({ sigmaR: scene.input.sigmaD, includeExtended:true }), new MethodComparison({ sigmaR: scene.input.sigmaD, includeExtended:true })];
+  const estimators = [new EchoComparison(scene.input,scene.domain), new EchoComparison(scene.input,scene.domain)];
   for (let t = 0; t < 2; t++) {
     assert.deepEqual(numerical(fields[0].step(scene.wire[t])), numerical(fields[1].step(changed.wire[t])));
     assert.deepEqual(numerical(estimators[0].step(scene.wire[t])), numerical(estimators[1].step(changed.wire[t])));
@@ -210,7 +210,7 @@ test('real run engine and sweep preserve all numerical prefixes, final metrics a
   const prepared = messages.find(m => m.type === 'prepared');
   assert.ok(prepared);
   assertScenario(prepared.scenario, expectedScene);
-  assert.deepEqual(prepared.protocol, protocolForFleet(input.vehicles));
+  assert.deepEqual(prepared.protocol, echoProtocol(input));
   const frames = messages.filter(m => m.type === 'frame');
   assert.equal(frames.length, expected.length);
   for (let t = 0; t < expected.length; t++) {
@@ -222,14 +222,14 @@ test('real run engine and sweep preserve all numerical prefixes, final metrics a
   assert.equal(afterEngine.generated, before.generated + 1, 'the real engine is wired to physical caching');
   const sweep = await runExperiment(input), final = expected.at(-1);
   assert.equal(getTruthCacheStats().memory, afterEngine.memory + 1, 'sweep reuses the engine physical cache');
-  assert.deepEqual(sweep.protocol, protocolForFleet(input.vehicles));
+  assert.deepEqual(sweep.protocol, echoProtocol(input));
   assert.deepEqual(sweep.wallGeneration, expectedScene.wallGeneration);
   assert.deepEqual(numerical(sweep.diagnostics), numerical(final.evaluation.diagnostics));
   for (const key of Object.keys(sweep.final)) assert.deepEqual(sweep.final[key], final.frame[key], `sweep final ${key}`);
-  for (const method of ['guarded','baseline']) {
+  for (const method of ['guarded','echoSpline']) {
     const evaluation = final.evaluation.methods[method], b = evaluation.interpolation, h = b.hermite;
-    const expectedMetrics = {...final.frame, ...evaluation, mapRecall:b.recall, interpolatedLengthM:b.lengthM,
-      interpolatedOffWallM:b.offWallM, hermiteMapRecall:h.recall, hermiteLengthM:h.lengthM, hermiteOffWallM:h.offWallM, checkedCentreMapF1:evaluation.interpolation.checked.mapF1,rawMapF1:evaluation.interpolation.rawMap.mapF1,linearMapF1:evaluation.interpolation.mapF1,hermiteMapF1:evaluation.interpolation.hermite.mapF1,centreMapF1:evaluation.interpolation.centre.mapF1, centreMapRecall:evaluation.interpolation.centre.recall, centreMapLengthM:evaluation.interpolation.centre.lengthM, centreMapOffWallM:evaluation.interpolation.centre.offWallM};
+    const expectedMetrics = {...final.frame, ...evaluation, mapRecall:b.recall??evaluation.recall, interpolatedLengthM:b.lengthM,
+      interpolatedOffWallM:b.offWallM, hermiteMapRecall:h?.recall, hermiteLengthM:h?.lengthM, hermiteOffWallM:h?.offWallM, checkedCentreMapF1:evaluation.interpolation.checked?.mapF1,rawMapF1:evaluation.interpolation.rawMap.mapF1,linearMapF1:evaluation.interpolation.mapF1,hermiteMapF1:evaluation.interpolation.hermite?.mapF1,centreMapF1:evaluation.interpolation.centre?.mapF1, centreMapRecall:evaluation.interpolation.centre?.recall, centreMapLengthM:evaluation.interpolation.centre?.lengthM, centreMapOffWallM:evaluation.interpolation.centre?.offWallM};
     for (const [key,value] of Object.entries(sweep.methods[method].summary))
       assert.deepEqual(value, expectedMetrics[key], `${method} final ${key}`);
   }

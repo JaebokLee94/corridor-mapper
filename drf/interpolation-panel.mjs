@@ -2,6 +2,7 @@
 export const centreMetricNames = {count:['Centre links','Centre links'], lengthM:['Map length [m]','Map [m]'], offWallM:['Off-wall length [m]','Off-wall [m]'], falseBridges:['Off-wall links','Off-wall links']};
 // Read only the post-hoc evaluation for one method at the selected snapshot.
 export function interpolationResult(e, kind) {
+  if (e?.method==='echoSpline')return e.interpolation?.rawMap;
   return kind === 'linear' ? e?.interpolation : e?.interpolation?.[kind==='off'?'rawMap':kind];
 }
 
@@ -13,17 +14,17 @@ export function interpolationPair(frame, method, kind) {
   return [interpolationResult(e, kind) ?? null, raw];
 }
 
-export function renderInterpolationPanel(get, mode, kind, frame, format) {
-  const single = mode !== 'compare', name = mode === 'baseline' ? 'WM-F' : 'WM-P';
+export function renderInterpolationPanel(get, mode, kind, frame, format, legacy=!!frame?.methods?.baseline) {
+  const echo=mode==='echoSpline', single = mode !== 'compare' && !echo, name = mode === 'baseline' ? 'WM-F' : 'WM-P';
   get('methodMetrics').hidden = single;
   get('interpolationMetrics').hidden = !single;
-  get('methodThresholdNote').hidden = single;
+  get('methodThresholdNote').hidden = single || echo;
   get('bridgeTableNote').hidden = !single;
   get('historyMetric').hidden = single;
   get('interpolationChartMetric').hidden = !single;
   const centre=['centre','checked'].includes(kind);
   const interpolation = kind==='checked' ? 'Extended centre spline' : centre ? 'Centre spline' : kind === 'extended' ? 'Extended linear' : kind === 'hermite' ? 'Gap Hermite' : 'Linear';
-  get('resultsTitle').textContent = single ? name + ' interpolation' : 'Method comparison';
+  get('resultsTitle').textContent = single ? name + ' interpolation' : echo?'EchoSpline fit':'Method comparison';
   get('evaluationNote').textContent = single
     ? interpolation + ' · 0.4 m tolerance'
     : '0.4 m tolerance · same measured prefix';
@@ -31,8 +32,8 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
     get('evaluationNote').textContent = 'Extended linear · may cross openings';
   const completedLabel = kind==='checked' ? 'Ext. centre spline' : interpolation;
   get('interpolatedMapHeading').textContent = completedLabel;
-  get('historyFirst').textContent = single ? completedLabel : 'WM-P';
-  get('historySecond').textContent = single ? get('rawMapHeading').textContent : 'WM-F';
+  get('historyFirst').textContent = single ? completedLabel : legacy?'WM-P':'EchoSpline';
+  get('historySecond').textContent = single ? get('rawMapHeading').textContent : legacy?'WM-F':'WM-P';
   const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');
   if(single){
     get('bridgeTableNote').textContent=kind==='checked' ? 'Extended curves require repeated range support in every tested section. Map lengths include retained fragments.' : centre
@@ -52,7 +53,7 @@ export function renderInterpolationPanel(get, mode, kind, frame, format) {
   const metric = selector.selectedOptions[0].textContent;
   get('metricChart').setAttribute('aria-label', single
     ? name + ' ' + metric + ' with ' + completedLabel.toLowerCase() + ' and the raw map without interpolation over computed snapshots.'
-    : metric + ' for WM-P and WM-F over computed snapshots.');
+    : metric + (echo?' for EchoSpline':legacy?' for WM-P and WM-F':' for EchoSpline and WM-P') + ' over computed snapshots.');
   if (!single) return;
   const pair = interpolationPair(frame, mode, kind);
   for (const row of get('interpolationMetrics').tBodies[0].rows) {

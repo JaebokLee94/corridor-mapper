@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { experimentSettings as normalizeInput } from '../drf/experiment-settings.mjs';
 /** Loopback-only computation service. Workers own jobs independently of clients.
  * SSE carries small availability notices; lossless binary packets are spooled to
  * disk once and fetched separately. Slow/disconnected viewers never pace CPU work.
@@ -15,7 +16,6 @@ import { resolve, join, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream';
 import { createGzip } from 'node:zlib';
-import { normalizeInput } from '../drf/scenario.mjs';
 import { encodePacket } from '../drf/simulation-codec.mjs';
 
 const TERMINAL = new Set(['done', 'cancelled', 'failed']);

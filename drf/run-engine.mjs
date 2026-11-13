@@ -1,8 +1,7 @@
-import { candidateDomain } from './paper-preset.mjs';
-import { normalizeInput } from './scenario.mjs?v=20261112-upper-wmp';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261112-upper-wmp';
 import { createGrid, createField } from './field.mjs';
-import { MethodComparison } from './comparison.mjs?v=20261112-upper-wmp';
+import { EchoComparison } from './echo-comparison.mjs';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
@@ -51,9 +50,8 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask, prepare = g
         frame.candidates = frame.methods.guarded.candidates;
         frame.psptMs = frame.methods.guarded.ms; frame.method = 'guarded-tuned';
         const guarded = run.guardedEvaluator.step(frame, null, frame.methods.guarded.bridges, frame.methods.guarded.extendedBridges, frame.methods.guarded.checkedChains);
-        const baseline = run.baselineEvaluator.step({ ...frame, method: 'baseline-b',
-          candidates: frame.methods.baseline.candidates }, guarded, frame.methods.baseline.bridges, frame.methods.baseline.extendedBridges, frame.methods.baseline.checkedChains);
-        const evaluation = { ...guarded, methods: { guarded, baseline } };
+        const echoSpline = run.echoEvaluator.step({ ...frame, ...frame.methods.echoSpline }, guarded);
+        const evaluation = { ...guarded, methods: { echoSpline, guarded } };
         run.next++;
         if (run.steps > 0) run.steps--;
         send(run, 'frame', { frame, evaluation, next: run.next });
@@ -82,12 +80,13 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask, prepare = g
         send(run, 'progress', { t, total });
       }, { onPhase: phase => send(run, 'preparation', { phase }) });
       if (active !== run || run.epoch !== epoch) return;
+      scenario.input = input;
       run.scenario = scenario;
       run.grid = createGrid(input.grid, input.grid, scenario.domain);
       run.field = createField(run.grid, { band: input.band, perimeter: input.perimeter });
-      run.estimator = new MethodComparison({includeExtended:true, domain:candidateDomain(input.scene), vehicles: input.vehicles, sigmaR: input.sigmaD });
+      run.estimator = new EchoComparison(input,scenario.domain);
       run.guardedEvaluator = createPSPTEvaluator(scenario, run.grid);
-      run.baselineEvaluator = createPSPTEvaluator(scenario, run.grid);
+      run.echoEvaluator = createPSPTEvaluator(scenario, run.grid);
       send(run, 'prepared', { scenario, grid: run.grid, protocol: run.estimator.protocol });
       await pump(run);
     } catch (error) { failed(run, error); }

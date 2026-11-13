@@ -1,15 +1,15 @@
-import { candidateDomain } from './paper-preset.mjs';
-import { normalizeInput } from './scenario.mjs?v=20261112-upper-wmp';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261112-upper-wmp';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
-import { MethodComparison } from './comparison.mjs?v=20261112-upper-wmp';
+import { EchoComparison } from './echo-comparison.mjs';
 
 function summarize(frame, evaluation) {
   const keys = ['precision', 'surfacePrecision', 'recall', 'holdRate', 'firstSupportPrecision',
     'medianError', 'p95', 'offwall', 'f1', 'observedFraction', 'missing',
     'supportedCount', 'pendingCount', 'rejectedCount'];
+  if(evaluation.method==='echoSpline') return {...Object.fromEntries(keys.map(k=>[k,evaluation[k]])),rawMapF1:evaluation.interpolation.rawMap.mapF1,mapRecall:evaluation.recall,Q:frame.Q,admitted:frame.admitted,rejected:frame.rejected};
   return { ...Object.fromEntries(keys.map(key => [key, evaluation[key]])),
     checkedCentreMapF1:evaluation.interpolation.checked.mapF1,
     rawMapF1:evaluation.interpolation.rawMap.mapF1, linearMapF1:evaluation.interpolation.mapF1,
@@ -29,19 +29,19 @@ export async function runExperiment(raw, progress = () => {}, prepare = generate
   if (input.sigmaD === 0) throw new Error('Both methods require range SD σd > 0; exact zero range noise is unsupported.');
   const scenario = await prepare(input), grid = createGrid(input.grid, input.grid, scenario.domain),
     field = createField(grid, { band: input.band, perimeter: input.perimeter }),
-    evaluators = Object.fromEntries(['guarded', 'baseline'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
-    estimator = new MethodComparison({ domain:candidateDomain(input.scene), vehicles: input.vehicles, sigmaR: input.sigmaD, includeExtended:true }), timings = [];
+    evaluators = Object.fromEntries(['echoSpline', 'guarded'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
+    estimator = new EchoComparison(input,scenario.domain), timings = [];
   let frame, evaluations, fieldMs = 0, evaluationMs = 0;
-  const estimatorMs = { guarded: 0, baseline: 0 };
+  const estimatorMs = { echoSpline: 0, guarded: 0 };
   for (const wire of scenario.wire) {
     frame = field.step(wire); fieldMs += frame.ms;
     const methods = estimator.step(wire);
     for (const key of Object.keys(methods)) estimatorMs[key] += methods[key].ms;
-    timings.push(frame.ms + methods.guarded.ms + methods.baseline.ms);
+    timings.push(frame.ms + methods.guarded.ms + methods.echoSpline.ms);
     const start = performance.now();
     const guarded = evaluators.guarded.step({ ...frame, method: 'guarded-tuned', candidates: methods.guarded.candidates }, null, methods.guarded.bridges, methods.guarded.extendedBridges, methods.guarded.checkedChains);
-    const baseline = evaluators.baseline.step({ ...frame, method: 'baseline-b', candidates: methods.baseline.candidates }, guarded, methods.baseline.bridges, methods.baseline.extendedBridges, methods.baseline.checkedChains);
-    evaluations = { guarded, baseline }; evaluationMs += performance.now() - start;
+    const echoSpline = evaluators.echoSpline.step({...frame,...methods.echoSpline},guarded);
+    evaluations = { echoSpline, guarded }; evaluationMs += performance.now() - start;
     progress(frame.t, input.snapshots);
   }
   return { input, wallGeneration: scenario.wallGeneration, method: 'paired-comparison', protocol: estimator.protocol,
@@ -88,7 +88,7 @@ export function aggregateRuns(runs) {
         n, failed, missing };
     }
     return row;
-  }).sort((a, b) => a.roughness - b.roughness || a.sigmaD - b.sigmaD || ['guarded','baseline','historical'].indexOf(a.method) - ['guarded','baseline','historical'].indexOf(b.method));
+  }).sort((a, b) => a.roughness - b.roughness || a.sigmaD - b.sigmaD || ['echoSpline','guarded','baseline','historical'].indexOf(a.method) - ['echoSpline','guarded','baseline','historical'].indexOf(b.method));
 }
 /** Bounded pool: at most four default jobs, no frame history.
  * Cancellation terminates workers and keeps only fully completed seed results. */

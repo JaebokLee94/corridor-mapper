@@ -1,3 +1,4 @@
+import { EchoComparison,echoProtocol } from '../../drf/echo-comparison.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -101,7 +102,7 @@ test('job finishes without any browser/event consumer; late reconnect recovers i
   const state = await waitFor(base, job, value => value.status === 'done');
   const messages = await readMessages(base, job, state.seq), frames = messages.filter(value => value.type === 'frame');
   assert.deepEqual(frames.map(value => value.next), [1, 2, 3]);
-  assert.deepEqual(messages.find(value => value.type === 'prepared').protocol, METHOD_PROTOCOL, 'late reconnect must retain the worker implementation protocol');
+  assert.deepEqual(messages.find(value => value.type === 'prepared').protocol, echoProtocol(input), 'late reconnect must retain the worker implementation protocol');
   const expected = [];
   await createRunEngine({ emit: message => { if (message.type === 'frame') expected.push(message); } }).command({ type: 'start', input, requestId: 1 });
   for (let i = 0; i < frames.length; i++) {
@@ -135,7 +136,7 @@ test('server owns complete sweep dispatch with no browser client and keeps per-s
   const messages = await readMessages(base, job, state.seq), results = messages.filter(value => value.type === 'sweep-result');
   assert.deepEqual(results.map(value => value.id).sort(), [0, 1, 2]);
   assert.equal(state.next, 3); assert.equal(state.total, 3);
-  assert.ok(results.every(value => value.result.methods.guarded && value.result.methods.baseline && !value.result.final));
+  assert.ok(results.every(value => value.result.methods.guarded && value.result.methods.echoSpline && !value.result.final));
 });
 
 test('simultaneous submissions cannot bypass the single-active-job limit', async t => {

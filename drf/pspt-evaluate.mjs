@@ -157,6 +157,10 @@ export function createPSPTEvaluator(scenario, grid) {
       const points=surfelSamples(c), stat=pathLength(points,onWall);
       rawLengthM+=stat.lengthM; rawOffWallM+=stat.offWallM; patches.push(...points);
     }
+    if (frame.curves) for (const curve of frame.curves) {
+      const points=resamplePolyline(curve).map(([x,y])=>({x,y})),stat=pathLength(points,onWall);
+      rawLengthM+=stat.lengthM;rawOffWallM+=stat.offWallM;patches.push(...points);
+    }
     const observed = gt.filter((_, k) => mask[k]), nearPatch = neighborhood(patches),
       precision = fraction(distances.filter(d => d <= tolerance).length, centers.length),
       surfacePrecision = fraction(patches.filter(onWall).length, patches.length),
@@ -179,6 +183,11 @@ export function createPSPTEvaluator(scenario, grid) {
     }
     interpolation.rawMap=rawMap;
     const diagnostics = sharedDiagnostics?.diagnostics ?? diagnostic.step(frame.t);
+    if (frame.curves) return {t:frame.t,method:'echoSpline',diagnostics,observed:observed.map(p=>[p.x,p.y]),proxy:[],
+      surfacePrecision,recall,f1,missing:uncovered.length,observedFraction:fraction(observed.length,gt.length),
+      precision:null,offwall:null,p95:null,medianError:null,holdRate:null,firstSupportPrecision:null,
+      firstSupportCount:null,firstSupportErrors:null,supportedCount:null,pendingCount:null,rejectedCount:null,
+      interpolation:{rawMap}, metricDefinition:'Fitted curve; 0.4 m map tolerance. No candidate decisions or gap interpolation.'};
     return { t: frame.t, diagnostics, method: frame.method ?? 'guarded45', proxy: centers.map(p => [p.x, p.y]), observed: observed.map(p => [p.x, p.y]),
       medianError: percentile(distances, .5), p95: percentile(distances, .95), offwall: precision == null ? null : 1 - precision,
       precision, surfacePrecision, recall, f1, interpolation,

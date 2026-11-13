@@ -1,3 +1,4 @@
+import { EchoComparison,echoProtocol } from '../../drf/echo-comparison.mjs';
 import { METHOD_PROTOCOL, MethodComparison, protocolForFleet } from '../../drf/comparison.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -156,22 +157,22 @@ test('sweep aggregation retains failed seeds separately from genuinely unobserve
 
 test('paired sweep matches both main-view estimators on the same wire and requested duration', async () => {
   const scene=await scenario(), grid=createGrid(scene.input.grid,scene.input.grid,scene.domain), field=createField(grid),
-    comparison=new MethodComparison({sigmaR:scene.input.sigmaD,includeExtended:true}),
+    comparison=new EchoComparison(scene.input,scene.domain),
     evaluators={guarded:createPSPTEvaluator(scene,grid),baseline:createPSPTEvaluator(scene,grid)}, progress=[];
   let last,expected;
   for (const wire of scene.wire) {
     last=field.step(wire);const methods=comparison.step(wire);
     const guarded=evaluators.guarded.step({...last,candidates:methods.guarded.candidates},null,methods.guarded.bridges,methods.guarded.extendedBridges);
-    expected={guarded,baseline:evaluators.baseline.step({...last,candidates:methods.baseline.candidates},guarded,methods.baseline.bridges,methods.baseline.extendedBridges)};
+    expected={guarded,echoSpline:evaluators.baseline.step({...last,...methods.echoSpline},guarded)};
   }
   const run=await runExperiment(input,t=>progress.push(t));
   assert.deepEqual(progress,[1,2,3]);assert.deepEqual(run.input,scene.input);
-  assert.deepEqual(run.protocol,protocolForFleet(scene.input.vehicles));assert.equal(run.method,'paired-comparison');
-  for (const method of ['guarded','baseline']) {
+  assert.deepEqual(run.protocol,echoProtocol(scene.input));assert.equal(run.method,'paired-comparison');
+  for (const method of ['guarded','echoSpline']) {
     const e = expected[method], linear = e.interpolation, cubic = linear.hermite;
     const metrics = {...e, Q:last.Q, admitted:last.admitted, rejected:last.rejected,
-      mapRecall:linear.recall, interpolatedLengthM:linear.lengthM, interpolatedOffWallM:linear.offWallM,
-      hermiteMapRecall:cubic.recall, hermiteLengthM:cubic.lengthM, hermiteOffWallM:cubic.offWallM, checkedCentreMapF1:e.interpolation.checked.mapF1,rawMapF1:e.interpolation.rawMap.mapF1,linearMapF1:e.interpolation.mapF1,hermiteMapF1:e.interpolation.hermite.mapF1,centreMapF1:e.interpolation.centre.mapF1, centreMapRecall:e.interpolation.centre.recall, centreMapLengthM:e.interpolation.centre.lengthM, centreMapOffWallM:e.interpolation.centre.offWallM};
+      mapRecall:linear.recall??e.recall, interpolatedLengthM:linear.lengthM, interpolatedOffWallM:linear.offWallM,
+      hermiteMapRecall:cubic?.recall, hermiteLengthM:cubic?.lengthM, hermiteOffWallM:cubic?.offWallM, checkedCentreMapF1:e.interpolation.checked?.mapF1,rawMapF1:e.interpolation.rawMap.mapF1,linearMapF1:e.interpolation.mapF1,hermiteMapF1:e.interpolation.hermite?.mapF1,centreMapF1:e.interpolation.centre?.mapF1, centreMapRecall:e.interpolation.centre?.recall, centreMapLengthM:e.interpolation.centre?.lengthM, centreMapOffWallM:e.interpolation.centre?.offWallM};
     for (const [key,value] of Object.entries(run.methods[method].summary))
       assert.deepEqual(value, metrics[key], `${method}/${key}`);
   }

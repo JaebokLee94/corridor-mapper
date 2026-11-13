@@ -66,6 +66,21 @@ export function selectGuarded(estimator,rows=estimator.report(),threshold=METHOD
     return {...r,selectionLogit,eligible,originalStatus:r.status,originalReason:r.reason,status,reason};
   });
 }
+export function wmpFrame(candidates,start,includeExtended,gapEvidence) {
+    const extendedBridges=includeExtended?[]:undefined, ambiguous=includeExtended?[]:undefined;
+    const bridges=completeWallGaps(candidates,extendedBridges,gapEvidence,ambiguous);
+    let checkedChains;
+    if(extendedBridges) {
+      markCentreExtensions(candidates,bridges,extendedBridges,gapEvidence);
+      if(ambiguous.length) {
+        const current=centreSpline(candidates,bridges,confirmedExtensions(bridges,extendedBridges));
+        checkedChains=checkedChainTips(candidates,current,ambiguous,gapEvidence);
+      }
+    }
+    return {candidates,bridges,extendedBridges,...(checkedChains?.length?{checkedChains}:{}),ms:performance.now()-start};
+  }
+
+// Historical WM-P / WM-F runner for archived validation.
 export class MethodComparison {
   constructor(options={}) {
     this.protocol = options.vehicles == null ? null : protocolForFleet(options.vehicles);
@@ -79,19 +94,7 @@ export class MethodComparison {
     const {refinement,clustering,parameters} = this.protocol.guarded;
     return new PSPT({refinement,clustering,domain:this.domain,...parameters});
   }
-  mapFrame(candidates,start) {
-    const extendedBridges=this.includeExtended?[]:undefined, ambiguous=this.includeExtended?[]:undefined;
-    const bridges=completeWallGaps(candidates,extendedBridges,this.gapEvidence,ambiguous);
-    let checkedChains;
-    if(extendedBridges) {
-      markCentreExtensions(candidates,bridges,extendedBridges,this.gapEvidence);
-      if(ambiguous.length) {
-        const current=centreSpline(candidates,bridges,confirmedExtensions(bridges,extendedBridges));
-        checkedChains=checkedChainTips(candidates,current,ambiguous,this.gapEvidence);
-      }
-    }
-    return {candidates,bridges,extendedBridges,...(checkedChains?.length?{checkedChains}:{}),ms:performance.now()-start};
-  }
+  mapFrame(candidates,start) { return wmpFrame(candidates,start,this.includeExtended,this.gapEvidence); }
   step(wire) {
     let start=performance.now();
     // Older clients supply fleet size through measured pair IDs on their first frame.

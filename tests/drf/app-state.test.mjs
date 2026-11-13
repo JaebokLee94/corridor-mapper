@@ -1,3 +1,4 @@
+import { echoProtocol } from '../../drf/echo-comparison.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -20,7 +21,7 @@ const section=(start,end)=>{
 // actual protocol view with the same metadata dependencies as the loaded app.
 function attachProtocolView(context) {
   const nodes=new Map();
-  Object.assign(context,{structuredClone,METHOD_PROTOCOL,LEGACY_RUN_PROTOCOL});
+  Object.assign(context,{structuredClone,echoProtocol,METHOD_PROTOCOL,LEGACY_RUN_PROTOCOL});
   context.$ ??= id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);};
   vm.runInContext(section('function renderThresholdProtocol','const fmt ='),context);
 }
@@ -184,7 +185,7 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   const nodes=new Map(),pending=new Map(),charts=new Map();let nextFrame=0,stoppedWorkers=0,cancelledSweeps=0,fitCalls=0;
   const document={body:{dataset:{}},createElement:()=>({}),querySelectorAll:()=>[]};
   const $=id=>{
-    if (!nodes.has(id)) nodes.set(id,{id,value:'',textContent:'old snapshot value',checked:false,options:[],
+    if (!nodes.has(id)) nodes.set(id,{id,value:'',textContent:'old snapshot value',checked:false,options:[],selectedOptions:[],classList:{toggle(){}},parentElement:{},
       ownerDocument:document,addEventListener(){},dataset:{},removeAttribute(){},replaceChildren(...options){this.options=options;}});
     return nodes.get(id);
   };

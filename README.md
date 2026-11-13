@@ -14,11 +14,11 @@ A research workbench for seeing how measurements become surface hypotheses, and 
 
 </div>
 
-![EchoMap: WM-P and WM-F on the same measurement sequence](assets/echomap-comparison.png)
+**Active comparison:** EchoSpline (multi-echo cubic B-spline fit) and WM-P (wall mapping with pair tracking).
 
 Default measurement noise (local and shared): position SD **0 m** (implementing the negligible localization noise assumed by Jung et al., §II-C) and echo-range SD **0.40 m** (wall reconstruction in §VI-A). The default range-noise sweep uses 0.40, 0.70 and 1.00 m. Explicit values in replay links and exports retain their original meaning. Published thresholds below were selected under their documented noise conditions.
 
-*One synthetic scene with independently shaped walls, two causal estimators. The screenshot uses seed 549028359, 10 vehicles, 120 snapshots, and position/range SD 0.1 m. It illustrates the interface, not aggregate performance. [Replay these settings](https://jaeboklee94.github.io/corridor-mapper/drf.html#v1=%7B%22vehicles%22%3A10%2C%22snapshots%22%3A120%2C%22sigmaP%22%3A0.1%2C%22sigmaD%22%3A0.1%2C%22seed%22%3A549028359%7D).*
+The left pane fits one smooth wall to measured ranges. The right pane shows WM-P fragment decisions and optional gap interpolation.
 
 EchoMap is developed by **Jaebok Lee, Wireless Systems Laboratory, Hanyang University**. It studies a question in collaborative sensing: can noisy, unlabeled path lengths distinguish a wall patch from a plausible geometric alternative?
 
@@ -29,7 +29,7 @@ The browser generates curved walls, vehicle motion, and specular/diffuse returns
 | Capability | What you can inspect |
 |:--|:--|
 | Compare two methods | Linked maps, common axes and snapshot, separate decisions and metrics |
-| Inspect ambiguity | Supported, held and rejected hypotheses; WM-F has no rejection decision |
+| Inspect ambiguity | EchoSpline fits one wall; WM-P reports supported, held and rejected hypotheses |
 | Replay the measurement history | Advance one snapshot, pause, replay, or inspect any completed prefix |
 | Control the scene | 2–10 vehicles, 1–120 snapshots, one or two walls, position/range noise and scattering |
 | Run paired sweeps | Both methods, fixed thresholds, current duration; mean and sample SD across seeds |
@@ -45,22 +45,15 @@ $$d = \lVert s-p_i\rVert_2 + \lVert s-p_j\rVert_2.$$
 
 A single range defines an ellipse. Multiple measurements accumulate a **Direct Residual Field (DRF)**, from which each estimator proposes local surface candidates. A bright field peak is a proposal, not wall confirmation.
 
-| | WM-P | WM-F |
-|:--|:--|:--|
-| Representation | Local quadratic patches with mirror alternatives | Fixed 2 m straight fragments |
-| Evidence | Four hypotheses: neither, original, mirror, both | Gaussian range evidence with competition between fragments |
-| Geometry | Updated after predictive scoring | Fixed after proposal |
-| Decision score | Current marginal log-odds, with geometry/evidence guards | Highest qualified Gaussian log-score reached so far |
-| Fixed tuning threshold | **10.754131418601359** for 3 vehicles, **4.5** for 10, **6.650397183049193** otherwise | **28** for 3 vehicles, **29.108623616301394** otherwise |
-| Decisions | Supported / held / rejected | Supported / unselected |
+| | EchoSpline | WM-P |
+|---|---|---|
+| Estimate | Cubic B-spline fitted to stationary multi-echo path lengths | Locally tracked wall fragments and mirror hypotheses |
+| Controls | Knot spacing (2 or 4 m), support reach (1–12 m) | Fleet-specific operating point, optional gap interpolation |
+| Scope | One smooth wall per map; the paper preset uses the upper solution. Other scenes test both signs. | Multiple supported fragments can coexist. |
 
-WM means *wall mapping*. WM-P tracks mirror pairs. WM-F scores fixed straight segments. Both are in-house estimators. The two score scales are different and are not calibrated probabilities. The methods share measurements and a 100 × 100 candidate grid, but their models, state sizes and computational costs differ. Changing the display-field grid does not change their candidate grids.
+Each snapshot uses its measured prefix. Five linked observations are needed to initialise EchoSpline. Its spline is the native map; the sidebar interpolation toggle applies to WM-P only. An unresolved mirrored solution or insufficient support can give an empty map.
 
-![Measured positions, covariances and ranges feed both estimators; ground truth enters post-hoc evaluation only](assets/echomap-method-flow.svg)
-
-The inference wire contains snapshot indices, measured 2D positions, reported pose covariances and unordered total path lengths with their reported range SDs. It excludes true walls, true poses, wall count/side, reflection labels, generator seeds and future observations. Candidate birth data are not reused as subsequent predictive evidence. [Inspect the wire contract](drf/wire.mjs).
-
-## Know which experiment a number belongs to
+### Historical WM-F calibration
 
 For three vehicles, WM-F uses a threshold of 28 selected on 120 opening and branch scenes and tested on 120 separate scenes. The original operating points in the following table come from **exploratory tuning on 200 synthetic scenes**, not an independent test. They maximise observed-wall recall subject to empirical mean grouped-fragment FP ≤ 1% in that tuning set.
 
@@ -86,7 +79,7 @@ The original 54-scene set was initially used for evaluation and later reused for
 - **First support** records centre precision at each candidate's first support decision. Later corrections do not erase an earlier error.
 - **P95 distance** and **off-wall centres** describe supported-centre error. They are not the grouped-fragment loss used for tuning.
 
-D̄ is the mean residual density in m⁻². β̂ is a dimensionless field-contrast index, not a probability. True walls and reflection points are optional evaluation overlays. Interpolation is on by default for WM-P and WM-F with **Extended centre spline** selected. The menu also offers **Extended linear** for a geometric comparison. Turning interpolation off shows the raw map. Explicit older share links still restore Gap Hermite, Linear or Centre spline for reproducibility.
+D̄ is the mean residual density in m⁻². β̂ is a dimensionless field-contrast index, not a probability. True walls and reflection points are optional evaluation overlays. The WM-P interpolation menu includes **Extended centre spline** selected. The menu also offers **Extended linear** for a geometric comparison. Turning WM-P interpolation off shows its supported fragments. Explicit older share links still restore Gap Hermite, Linear or Centre spline for reproducibility.
 
 In the legacy Gap Hermite mode, across short gaps the curve matches the local tangent at each accepted fragment endpoint if they describe one bend. If fitting those tangents would reverse curvature inside the gap, the map retains the straight chord. Both methods join unambiguous, aligned endpoints up to the nominal length of the shorter fragment. For larger gaps, both Gap Hermite and Linear also accept a unique chord when its two tangents meet the same 15° alignment limit and measured ranges repeatedly support every metre of the gap. Each bin requires at least four vehicle pairs, a 75% range-match rate and a 50 percentage-point lead over both displaced-range hypotheses in three distinct snapshots. Both modes retain the straight chord in those larger gaps because the measurement check verifies that geometry. The optional Extended linear view can also join exposed endpoints within four shorter fragment lengths and 45°, skipping occupied or ambiguous gaps. It can bridge real openings; its extra links are evaluated separately. A dotted line marks the inferred gap. Map recall includes this line, while observed recall uses the supported fragments alone.
 
