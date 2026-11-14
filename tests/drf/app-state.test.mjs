@@ -192,10 +192,10 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   const snapshots={value:'3'},elements=[snapshots];elements.namedItem=name=>name==='snapshots' ? snapshots : name==='wallSide' ? {value:'both'} : null;
   const form={elements};$('sweepSettings').elements=[];$('playbackSpeed').value='1';$('analysisDialog').open=true;
   const state={mode:'done',frames:[1,2,3].map(t=>({t,Q:t,admitted:t,rejected:0,ms:1})),evaluations:[{},{},{}],
-    selected:3,next:3,busy:false,replay:false,replayAt:0,generation:0,valid:true,grid:{},
+    selected:3,next:3,busy:false,replay:false,frameTimes:[0,40,120],lastFrameAt:120,generation:0,valid:true,grid:{},
     scenario:{input:{snapshots:3},truth:[{configs:[]},{configs:[]},{configs:[]}],wire:[],walls:[]},
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
-  const context=vm.createContext({state,$,form,hoverGeneration:0,hoverTimer:0,replayFrame:0,
+  const context=vm.createContext({state,$,form,performance:{now:()=>300},hoverGeneration:0,hoverTimer:0,replayFrame:0,
     runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},pageDefaults:{snapshots:60,vehicles:3},LAYERED_DOMAIN,URL,location:new URL('http://localhost/drf.html?interpolation=extended#old'),
     history:{replaceState(_state,_title,url){context.location=url;}},
     document,createDiagnosticView,interpolationResult,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
@@ -293,8 +293,8 @@ function runUiContext(total=120) {
     focus(){context.document.activeElement=this;},removeAttribute(name){delete this.dataset[name];}});return nodes.get(id);};
   const snapshotInput={value:String(total)},elements=[];elements.namedItem=()=>snapshotInput;$('sweepSettings').elements=[];
   const state={generation:1,busy:true,mode:'running',scenario:{input:{snapshots:total}},
-    next:0,frames:[],evaluations:[],selected:0,followLive:true,sweepRuns:[],valid:true};
-  const context=vm.createContext({state,$,form:{elements},document:{body:{dataset:{}},createElement:()=>({})},DEFAULT_INPUT,
+    next:0,frames:[],frameTimes:[],evaluations:[],selected:0,followLive:true,sweepRuns:[],valid:true};
+  const context=vm.createContext({state,$,performance,form:{elements},document:{body:{dataset:{}},createElement:()=>({})},DEFAULT_INPUT,
     runWorker:{postMessage:message=>posted.push({...message})},
     diagnosticWorker:null,diagnosticView:{reset(){}},
     renderSelected:()=>drawn.push(state.selected),notice:text=>{$('status').textContent=text;},
@@ -363,8 +363,9 @@ test('completed runs offer reset-and-run plus replay, while active and partial r
   state.valid=true;state.frames=[];context.controls();assert.deepEqual(visible(),['runButton']);
 });
 
-test('completed replay starts at the first cached snapshot, waits one interval, and never dispatches computation',()=>{
-  const {context,state,$,posted,drawn}=runUiContext(3),pending=new Map();let frameId=0;
+test('replay follows the live snapshot timestamps at each speed without accumulating redraw delay',async()=>{
+  const {context,state,$,posted,drawn,errors}=runUiContext(4),pending=new Map();let frameId=0,now=0;
+  context.performance={now:()=>now};
   context.requestAnimationFrame=callback=>{const id=++frameId;pending.set(id,callback);return id;};
   context.cancelAnimationFrame=id=>pending.delete(id);context.replayFrame=0;
   context.createWorker=()=>assert.fail('Replay must not create a worker');
@@ -372,21 +373,34 @@ test('completed replay starts at the first cached snapshot, waits one interval, 
   $('playbackSpeed').value='1';
   vm.runInContext(section('function stopReplay()','function controls()')+section('function replayTick(','function resetView(')
     +section("$('replayButton').onclick", "document.addEventListener('visibilitychange'"),context);
-  const frames=[{t:1},{t:2},{t:3}],evaluations=[{precision:1},{precision:1},{precision:1}],scenario=state.scenario;
-  Object.assign(state,{mode:'done',frames,evaluations,next:3,selected:2,replay:false,busy:false});context.controls();
+  const frames=state.frames,evaluations=state.evaluations,scenario=state.scenario;
+  for (const [i,arrival] of [300,340,420,450].entries()) {
+    now=arrival;
+    await context.receiveRunMessage({type:'frame',requestId:1,next:i+1,frame:{t:i+1},evaluation:{}},1);
+  }
+  await context.receiveRunMessage({type:'status',requestId:1,mode:'done'},1);
+  assert.deepEqual(errors,[]);assert.deepEqual(state.frameTimes,[0,40,120,150]);
+  now=1000;
   $('completedReplayButton').onclick();
   assert.equal(state.selected,1);assert.equal(Number($('timeSlider').value),1);assert.equal(drawn.at(-1),1);
   assert.equal(state.replay,true);assert.equal(state.followLive,false);assert.equal(pending.size,1);
   assert.equal($('replayButton').textContent,'Stop');assert.equal($('completedReplayButton').textContent,'Stop');
   const tick=time=>{const [id,callback]=pending.entries().next().value;pending.delete(id);callback(time);};
-  tick(1000);tick(1249);assert.equal(state.selected,1,'Do not skip the first snapshot on the first animation callback');
-  tick(1250);assert.equal(state.selected,2);
+  tick(1016);tick(1039);assert.equal(state.selected,1);
+  tick(1041);assert.equal(state.selected,2);tick(1119);assert.equal(state.selected,2);
+  tick(1120);assert.equal(state.selected,3);tick(1150);assert.equal(state.selected,4);
+  tick(1180);assert.equal(state.selected,1,'Loop after holding the final snapshot');
   $('completedReplayButton').onclick();
   assert.equal(state.replay,false);assert.equal(pending.size,0);
   assert.equal($('replayButton').textContent,'Replay');assert.equal($('completedReplayButton').textContent,'Replay');
-  $('replayButton').onclick();assert.equal($('completedReplayButton').textContent,'Stop');
-  context.stopReplay();assert.equal($('completedReplayButton').textContent,'Replay');
-  assert.equal(state.frames,frames);assert.equal(state.evaluations,evaluations);assert.equal(state.scenario,scenario);assert.equal(state.next,3);
+  for(const speed of [2,4]){
+    $('playbackSpeed').value=String(speed);now=2000;state.selected=2;
+    $('replayButton').onclick();assert.equal($('completedReplayButton').textContent,'Stop');
+    tick(now+79/speed);assert.equal(state.selected,2);
+    tick(now+110/speed);assert.equal(state.selected,4,'Catch up even when a repaint misses snapshot 3');
+    context.stopReplay();assert.equal($('completedReplayButton').textContent,'Replay');
+  }
+  assert.equal(state.frames,frames);assert.equal(state.evaluations,evaluations);assert.equal(state.scenario,scenario);assert.equal(state.next,4);
   assert.deepEqual(posted,[],'Playback sends no run or worker commands');
   for (const patch of [{mode:'running'},{mode:'paused'},{mode:'cancelled'},{mode:'done',valid:false},{mode:'done',connecting:true},{mode:'done',frames:[]}]) {
     Object.assign(state,{mode:'done',valid:true,connecting:false,frames,selected:2},patch);
@@ -397,7 +411,7 @@ test('completed replay starts at the first cached snapshot, waits one interval, 
 test('reset-and-run clears the completed result and replay but preserves current parameters and seed',async()=>{
   const {context,state,$,errors}=runUiContext(3),commands=[],input={...DEFAULT_INPUT,snapshots:3,vehicles:4,seed:923};
   let stopped=0,cancelledReplay=0;
-  Object.assign(state,{mode:'done',frames:[{t:1},{t:2},{t:3}],evaluations:[{},{},{}],selected:3,next:3,
+  Object.assign(state,{mode:'done',frames:[{t:1},{t:2},{t:3}],evaluations:[{},{},{}],frameTimes:[0,40,120],selected:3,next:3,
     workers:[{stop(){stopped++;}}],replay:true,generatedSnapshots:3,measurementTotal:3});
   Object.assign(context,{hoverGeneration:0,hoverTimer:0,hoverWorker:{},evalWorker:{},replayFrame:19,location:{hash:'#old'},
     settings:()=>({...input}),fillSettings:()=>assert.fail('Restart must not restore default parameters'),clearTimeout(){},
@@ -411,6 +425,7 @@ test('reset-and-run clears the completed result and replay but preserves current
   await $('runButton').onclick();
   assert.equal(stopped,1);assert.equal(cancelledReplay,1);assert.equal(state.replay,false);
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.selected,0);assert.equal(state.next,0);
+  assert.equal(state.frameTimes.length,0);
   assert.equal(state.mode,'running');assert.equal(state.busy,true);assert.equal(state.generatedSnapshots,0);
   assert.equal(commands.length,1);assert.equal(commands[0].type,'start');assert.deepEqual({...commands[0].input},input);
   assert.deepEqual(JSON.parse(decodeURIComponent(context.location.hash.slice(3))),input);
@@ -423,6 +438,7 @@ test('timeline and replay stay locked until the run ends, including paused and p
   context.requestAnimationFrame=callback=>{const id=++frameId;pending.set(id,callback);return id;};
   context.cancelAnimationFrame=id=>pending.delete(id);
   context.replayFrame=0;context.hoverGeneration=0;context.renderSweep=()=>{};
+  context.performance={now:()=>1000};
   $('playbackSpeed').value='1';
   vm.runInContext(section('function stopReplay()','function controls()')
     +section('function replayTick(','function resetView(')
@@ -431,6 +447,7 @@ test('timeline and replay stay locked until the run ends, including paused and p
   for (const [mode,prepared] of [['running',false],['running',true],['paused',true]]) {
     state.mode=mode;state.scenario=prepared ? {input:{snapshots:5}} : null;
     state.frames=prepared ? [{t:1},{t:2},{t:3}] : [];state.evaluations=state.frames.map(()=>({}));
+    state.frameTimes=prepared ? [0,40,120] : [];state.lastFrameAt=990;
     state.next=state.frames.length;state.selected=state.frames.length;state.followLive=true;state.replay=false;
     context.controls();
     assert.equal($('timeSlider').disabled,true);assert.equal($('replayButton').disabled,true);
@@ -455,7 +472,7 @@ test('timeline and replay stay locked until the run ends, including paused and p
     assert.equal(state.selected,2);assert.equal(state.followLive,false);
     key('ArrowLeft');assert.equal(state.selected,1);key('ArrowRight');assert.equal(state.selected,2);
     $('replayButton').onclick();assert.equal(state.replay,true);assert.equal(pending.size,1);
-    const [id,callback]=pending.entries().next().value;pending.delete(id);callback(1000);
+    const [id,callback]=pending.entries().next().value;pending.delete(id);callback(1080);
     assert.equal(state.selected,3);context.stopReplay();assert.equal(pending.size,0);
   }
   state.frames=[];state.mode='cancelled';context.controls();
@@ -498,6 +515,7 @@ test('UI receives every background result without requesting or acknowledging an
 
 test('Pause, Step and Resume send explicit commands and wait for worker status before enabling another step',async()=>{
   const {context,state,$,posted,errors}=runUiContext(4);
+  let now=100;context.performance={now:()=>now};
   context.commandRun('pause');
   assert.equal(state.mode,'paused');assert.equal(state.busy,true);assert.equal($('stepButton').disabled,true);
   context.commandRun('step');assert.equal(posted.length,1,'A pause request does not mean the worker has stopped yet');
@@ -505,14 +523,16 @@ test('Pause, Step and Resume send explicit commands and wait for worker status b
   assert.equal(state.mode,'paused');assert.equal(state.busy,true);assert.equal(state.frames.length,1,'Keep the snapshot already in flight');
   await context.receiveRunMessage({type:'status',requestId:1,mode:'paused',next:1,total:4},1);
   assert.equal(state.busy,false);assert.equal($('stepButton').disabled,false);
-  state.followLive=false;context.commandRun('step');context.commandRun('step');
+  now=5100;state.followLive=false;context.commandRun('step');context.commandRun('step');
   assert.equal(posted.length,2,'A second click cannot queue a duplicate single step');assert.equal(state.followLive,true);
-  await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:2},evaluation:{},next:2},1);
+  now+=40;await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:2},evaluation:{},next:2},1);
   await context.receiveRunMessage({type:'status',requestId:1,mode:'paused',next:2,total:4},1);
   assert.equal(state.frames.length,2);assert.equal(state.busy,false);assert.equal(state.mode,'paused');
-  context.commandRun('resume');
+  now+=3000;context.commandRun('resume');
   assert.equal(state.mode,'running');assert.equal(state.busy,true);assert.equal($('stepButton').disabled,true);
   assert.deepEqual(posted,[{type:'pause',requestId:1},{type:'step',requestId:1},{type:'resume',requestId:1}]);
+  now+=30;await context.receiveRunMessage({type:'frame',requestId:1,frame:{t:3},evaluation:{},next:3},1);
+  assert.deepEqual(state.frameTimes,[0,40,70],'Timed playback excludes waiting for Step or Resume');
   assert.deepEqual(errors,[]);
 });
 

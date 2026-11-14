@@ -20,7 +20,8 @@ import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 renderMath();
 const $ = id => document.getElementById(id), form = $('settings');
 const state = { mode: 'idle', protocol: null, scenario: null, grid: null, frames: [], evaluations: [], selected: 0, next: 0, generatedSnapshots: 0, measurementTotal: 0,
-  busy: false, replay: false, replayAt: 0, generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
+  busy: false, replay: false, frameTimes: [], lastFrameAt: 0, replayPosition: 0, replayAt: 0,
+  generation: 0, workers: [], sweep: null, sweepRuns: [], valid: false, followLive: true, method: 'compare' };
 let runWorker, evalWorker, hoverWorker, diagnosticWorker, hoverTimer, hoverGeneration = 0, replayFrame = 0, reference = [], provenance = {};
 const runPreloader = createRunPreloader({ createWorker: () => createLocalWorker('run') });
 function renderThresholdProtocol(protocol = echoProtocol()) {
@@ -232,6 +233,7 @@ function cancel(clear = false) {
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
+    state.frameTimes = [];
     state.measurementLabel=''; state.generatedSnapshots = 0; state.measurementTotal = 0;
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
@@ -326,6 +328,9 @@ async function receiveRunMessage(data, generation) {
     }
     if (data.type === 'frame') {
       if (data.next !== state.next + 1) throw new Error('Out-of-order simulation result');
+      const now = performance.now();
+      state.frameTimes.push(state.next ? state.frameTimes.at(-1) + (now - state.lastFrameAt) : 0);
+      state.lastFrameAt = now;
       state.frames.push(data.frame); state.evaluations.push(data.evaluation); state.next = data.next;
       if (state.followLive || !state.selected) state.selected = state.frames.length;
       renderSelected(); controls();
@@ -349,6 +354,8 @@ async function receiveRunMessage(data, generation) {
 function commandRun(type) {
   if (!runWorker || !state.scenario || !['running', 'paused'].includes(state.mode) || state.pendingCommand) return;
   if (type === 'step' && (state.mode !== 'paused' || state.busy)) return;
+  // A manual pause between snapshots is not part of the vehicle's replay time.
+  if (type === 'resume' || type === 'step') state.lastFrameAt = performance.now();
   if (state.server) state.pendingCommand = { type, mode: state.mode, busy: state.busy };
   if (type === 'resume') { state.mode = 'running'; state.followLive = true; }
   if (type === 'pause') state.mode = 'paused';
@@ -505,10 +512,15 @@ function renderDiagnostics() {
 function replayTick(time) {
   if (!state.replay) return;
   if (['running', 'paused'].includes(state.mode)) { stopReplay(); return; }
-  const interval = 250 / Number($('playbackSpeed').value);
-  if (state.replayAt === null) state.replayAt = time;
-  if (time - state.replayAt >= interval) {
-    state.replayAt = time; state.selected = state.selected >= state.frames.length ? 1 : state.selected + 1;
+  const times = state.frameTimes, last = times.at(-1);
+  // Hold the final snapshot for its last measured interval before looping.
+  const cycle = last + Math.max(1, last - (times.at(-2) ?? 0));
+  const elapsed = Math.max(0, time - state.replayAt);
+  state.replayAt += elapsed;
+  state.replayPosition = (state.replayPosition + elapsed * Number($('playbackSpeed').value)) % cycle;
+  const selected = times.findLastIndex(at => at <= state.replayPosition) + 1;
+  if (selected !== state.selected) {
+    state.selected = selected;
     $('timeSlider').value = state.selected; renderSelected();
   }
   replayFrame = requestAnimationFrame(replayTick);
@@ -516,7 +528,10 @@ function replayTick(time) {
 function toggleReplay() {
   if (['running', 'paused'].includes(state.mode) || !state.frames.length) return;
   if (state.replay) stopReplay(); else {
-    state.followLive = false; state.replay = true; state.replayAt = 0;
+    if (state.selected === state.frames.length) state.selected = 1;
+    state.followLive = false; state.replay = true; state.replayAt = performance.now();
+    state.replayPosition = state.frameTimes[state.selected - 1];
+    $('timeSlider').value = state.selected; renderSelected();
     for (const id of ['replayButton', 'completedReplayButton']) if ($(id)) $(id).textContent = 'Stop';
     replayFrame = requestAnimationFrame(replayTick);
   }
@@ -524,9 +539,7 @@ function toggleReplay() {
 function replayFromStart() {
   if (state.mode !== 'done' || !state.valid || !state.frames.length || state.connecting) return;
   if (state.replay) { stopReplay(); return; }
-  // Replay uses saved frames only. Hold the first snapshot for a full interval.
-  state.selected = 1; $('timeSlider').value = 1;
-  toggleReplay(); state.replayAt = null; renderSelected();
+  state.selected = 1; toggleReplay();
 }
 function resetView() {
   for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
@@ -567,6 +580,7 @@ $('replayButton').onclick = toggleReplay;
 if ($('completedReplayButton')) $('completedReplayButton').onclick = replayFromStart;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
+    if (state.replay) state.replayAt = performance.now();
     controls(); renderSelected(); renderSweep();
     if (state.notice) notice(state.notice);
   }

@@ -25,7 +25,7 @@ function exportHandlers(source,state) {
     state,{},()=>[],(blob,name)=>downloads.push({blob,name}),Blob,id=>buttons[id],()=> 't,precision,pspt_ms\r\n1,1,2\r\n',()=>{},sweepCsv);
   return {buttons,downloads};
 }
-const initial=()=>({generation:7,protocol:null,server:{},frames:[],evaluations:[],sweepRuns:[],next:0,selected:0,followLive:true,method:'compare'});
+const initial=()=>({generation:7,protocol:null,server:{},frames:[],frameTimes:[],evaluations:[],sweepRuns:[],next:0,selected:0,followLive:true,method:'compare'});
 const scenario=()=>({input:{snapshots:1},wire:[{t:1,configs:[]}],truth:[{t:1}],walls:[]});
 const frame=()=>({type:'frame',requestId:7,next:1,frame:{t:1,methods:{guarded:{candidates:[],ms:2},baseline:{candidates:[],ms:3}}},evaluation:{methods:{guarded:{},baseline:{}}}});
 
