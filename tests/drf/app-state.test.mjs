@@ -385,20 +385,28 @@ test('replay follows the live snapshot timestamps at each speed without accumula
   assert.equal(state.selected,1);assert.equal(Number($('timeSlider').value),1);assert.equal(drawn.at(-1),1);
   assert.equal(state.replay,true);assert.equal(state.followLive,false);assert.equal(pending.size,1);
   assert.equal($('replayButton').textContent,'Stop');assert.equal($('completedReplayButton').textContent,'Stop');
-  const tick=time=>{const [id,callback]=pending.entries().next().value;pending.delete(id);callback(time);};
+  const tick=time=>{now=time;const [id,callback]=pending.entries().next().value;pending.delete(id);callback(time);};
   tick(1016);tick(1039);assert.equal(state.selected,1);
   tick(1041);assert.equal(state.selected,2);tick(1119);assert.equal(state.selected,2);
   tick(1120);assert.equal(state.selected,3);tick(1150);assert.equal(state.selected,4);
-  tick(1180);assert.equal(state.selected,1,'Loop after holding the final snapshot');
+  tick(2149);assert.equal(state.selected,4);
+  tick(2150);assert.equal(state.selected,1,'Restart at the first snapshot after one second');
+  tick(2190);assert.equal(state.selected,2,'The next lap keeps the recorded run cadence');
   $('completedReplayButton').onclick();
   assert.equal(state.replay,false);assert.equal(pending.size,0);
   assert.equal($('replayButton').textContent,'Replay');assert.equal($('completedReplayButton').textContent,'Replay');
   for(const speed of [2,4]){
-    $('playbackSpeed').value=String(speed);now=2000;state.selected=2;
+    const start=now+100;
+    $('playbackSpeed').value=String(speed);now=start;state.selected=2;
     $('replayButton').onclick();assert.equal($('completedReplayButton').textContent,'Stop');
-    tick(now+79/speed);assert.equal(state.selected,2);
-    tick(now+110/speed);assert.equal(state.selected,4,'Catch up even when a repaint misses snapshot 3');
-    context.stopReplay();assert.equal($('completedReplayButton').textContent,'Replay');
+    tick(start+79/speed);assert.equal(state.selected,2);
+    const arrival=start+1500;
+    tick(arrival);assert.equal(drawn.at(-1),4,'A delayed repaint still displays the final snapshot');
+    tick(arrival+999);assert.equal(state.selected,4,'Speed does not shorten the one-second hold');
+    tick(arrival+1000);assert.equal(state.selected,1);
+    tick(arrival+1000+150/speed);assert.equal(state.selected,4);
+    $('replayButton').onclick();assert.equal(pending.size,0,'Stop during the hold cancels the next lap');
+    assert.equal($('completedReplayButton').textContent,'Replay');
   }
   assert.equal(state.frames,frames);assert.equal(state.evaluations,evaluations);assert.equal(state.scenario,scenario);assert.equal(state.next,4);
   assert.deepEqual(posted,[],'Playback sends no run or worker commands');

@@ -512,16 +512,23 @@ function renderDiagnostics() {
 function replayTick(time) {
   if (!state.replay) return;
   if (['running', 'paused'].includes(state.mode)) { stopReplay(); return; }
-  const times = state.frameTimes, last = times.at(-1);
-  // Hold the final snapshot for its last measured interval before looping.
-  const cycle = last + Math.max(1, last - (times.at(-2) ?? 0));
+  const times = state.frameTimes, previous = state.selected;
   const elapsed = Math.max(0, time - state.replayAt);
-  state.replayAt += elapsed;
-  state.replayPosition = (state.replayPosition + elapsed * Number($('playbackSpeed').value)) % cycle;
-  const selected = times.findLastIndex(at => at <= state.replayPosition) + 1;
-  if (selected !== state.selected) {
-    state.selected = selected;
+  if (previous === times.length) {
+    if (elapsed >= 1000) {
+      state.selected = 1;
+      state.replayPosition = 0;
+      state.replayAt = time;
+    }
+  } else {
+    state.replayAt += elapsed;
+    state.replayPosition += elapsed * Number($('playbackSpeed').value);
+    state.selected = times.findLastIndex(at => at <= state.replayPosition) + 1;
+  }
+  if (state.selected !== previous) {
     $('timeSlider').value = state.selected; renderSelected();
+    // Start the unscaled hold after drawing the final metrics, even on a late repaint.
+    if (state.selected === times.length) state.replayAt = performance.now();
   }
   replayFrame = requestAnimationFrame(replayTick);
 }
