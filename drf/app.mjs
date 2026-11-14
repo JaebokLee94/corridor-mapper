@@ -287,7 +287,11 @@ async function prepare({single = false, newMap = false} = {}) {
         // Favor larger, more frequent bends while leaving fine roughness uniformly sampled.
         let draw = Math.random();
         if (field.name === 'sigmaM') draw = Math.max(draw, Math.random());
-        if (field.name === 'deltaM') draw = Math.min(draw, Math.random());
+        if (field.name === 'deltaM') {
+          // A single 80 m wall needs shorter spacing to show as many bends as the 100 m preset.
+          const samples = input.scene === 'layered' && input.wallSide !== 'both' ? 7 : 5;
+          for (let i = 1; i < samples; i++) draw = Math.min(draw, Math.random());
+        }
         const pick = Math.floor(draw * last);
         field.value = field.min;
         field.stepUp(pick >= previous ? pick + 1 : pick);

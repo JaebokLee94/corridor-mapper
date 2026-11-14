@@ -144,7 +144,7 @@ test('New map & run draws a different seed and four valid wall settings, preserv
     assert.equal(doc.getElementById('showInterpolation').checked,true);
     assert.equal(doc.getElementById('interpolationKind').value,'extended');
     // From the previous minima, select the higher amplitude draw and the lower spacing draw.
-    const draws=[.2,.8,.8,.2,.2,.8];
+    const draws=[.2,.8, .8,.7,.6,.5,.2, .2,.8];
     window.Math.random=()=>{assert.ok(draws.length);return draws.shift();};
     window.state.mode='done';
     await button.onclick();
