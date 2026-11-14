@@ -117,6 +117,7 @@ test('New map & run draws a different seed and four valid wall settings, preserv
   try {
     const doc=window.document, form=doc.getElementById('settings'), button=doc.getElementById('newMapRun');
     assert.equal(button.textContent,'New map & run');
+    assert.equal(form.querySelector('.geometry-fields').closest('details').open,true);
     form.elements.vehicles.value='7';form.elements.snapshots.value='11';form.elements.sigmaD.value='0.7';
     form.elements.seed.value='4294967295';form.elements.specular.checked=false;
     doc.getElementById('showInterpolation').checked=true;doc.getElementById('interpolationKind').value='extended';
@@ -142,6 +143,13 @@ test('New map & run draws a different seed and four valid wall settings, preserv
     assert.equal(window.location.search,'?interpolation=extended');
     assert.equal(doc.getElementById('showInterpolation').checked,true);
     assert.equal(doc.getElementById('interpolationKind').value,'extended');
+    // From the previous minima, select the higher amplitude draw and the lower spacing draw.
+    const draws=[.2,.8,.8,.2,.2,.8];
+    window.Math.random=()=>{assert.ok(draws.length);return draws.shift();};
+    window.state.mode='done';
+    await button.onclick();
+    assert.deepEqual({...starts.at(-1).input},{...expected,seed:0xffffffff,sigmaM:9.7,deltaM:16,sigmaDGeometry:.61,deltaD:17});
+    assert.equal(draws.length,0);
     const fields=[...form.querySelectorAll('.geometry-fields input')];
     for (const draw of [1-Number.EPSILON,1-Number.EPSILON,.371]) {
       const before=window.settings();

@@ -284,7 +284,11 @@ async function prepare({single = false, newMap = false} = {}) {
         const min = Number(field.min), step = Number(field.step);
         const last = Math.round((Number(field.max) - min) / step);
         const previous = Math.round((field.valueAsNumber - min) / step);
-        const pick = Math.floor(Math.random() * last);
+        // Favor larger, more frequent bends while leaving fine roughness uniformly sampled.
+        let draw = Math.random();
+        if (field.name === 'sigmaM') draw = Math.max(draw, Math.random());
+        if (field.name === 'deltaM') draw = Math.min(draw, Math.random());
+        const pick = Math.floor(draw * last);
         field.value = field.min;
         field.stepUp(pick >= previous ? pick + 1 : pick);
         input[field.name] = field.valueAsNumber;

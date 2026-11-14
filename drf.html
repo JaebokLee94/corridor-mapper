@@ -55,7 +55,7 @@
             <label class="field"><span>Range <span data-tex="\sigma_d">σd</span> <small>m</small></span><input name="sigmaD" type="number" min="0.01" max="2" step="0.01" value="0.4" required /></label>
           </div>
         </details>
-        <details class="sidebar-section"><summary>Wall geometry</summary><p class="note geometry-note" id="wallGapNote" hidden title="Both walls have independent shapes and a minimum vertical gap of 6 m.">Independent walls · <span data-tex="\Delta y\ge 6\,\mathrm{m}">Δy ≥6 m</span></p><div class="prop-grid geometry-fields">
+        <details class="sidebar-section" open><summary>Wall geometry</summary><p class="note geometry-note" id="wallGapNote" hidden title="Both walls have independent shapes and a minimum vertical gap of 6 m.">Independent walls · <span data-tex="\Delta y\ge 6\,\mathrm{m}">Δy ≥6 m</span></p><div class="prop-grid geometry-fields">
           <label class="field"><span>Shape amplitude <small>m</small></span><input name="sigmaM" type="number" min="0" max="12" step="0.1" value="6" required /></label>
           <label class="field"><span>Shape spacing <small>m</small></span><input name="deltaM" type="number" min="4" max="60" step="1" value="20" required /></label>
           <label class="field"><span>Roughness height <small>m</small></span><input name="sigmaDGeometry" type="number" min="0" max="3" step="0.01" value="0.33" required /></label>
@@ -176,8 +176,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261114-new-map-geometry';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261114-new-map-geometry';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261114-winding-maps';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261114-winding-maps';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>
