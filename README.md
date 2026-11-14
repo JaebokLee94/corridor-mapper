@@ -95,7 +95,7 @@ In the legacy Gap Hermite mode, across short gaps the curve matches the local ta
 3. Open **Experiments, diagnostics & exports** for paired sweeps and post-hoc scattering diagnostics.
 4. Choose **Share experiment** to copy a seeded settings URL, or download JSON/CSV to retain results.
 
-**New map & run** starts a comparison with a new random seed and the current settings. **Reset & run** keeps the current seed and draws new values for all four wall geometry fields within their displayed limits and steps. **Run comparison** uses the values you entered.
+**New map & run** draws a new seed and four new wall geometry values within their input limits and steps, then runs with your other settings. **Reset & run** repeats the comparison with the same seed and settings.
 
 New visits use **3 vehicles on localhost** and **10 on the shared site**, with a 100 m upper wall, 100 snapshots, straight vehicle tracks (1 m per snapshot), specular returns, 0.6 m range resolution and interpolation off. On this straight route, WM-P uses a log-score threshold of 6.0 for 3 vehicles and 6.5 for 10. See [the comparison protocol](THRESHOLD_PROTOCOL.md) for their tracking parameters and independent test results. Shared URLs preserve their explicit settings, including seed, fleet size and snapshot count, on reload. An unseeded visit chooses a new seed. A URL shares settings, not computed outputs or an immutable software revision; retain the JSON and repository commit for a research record.
 

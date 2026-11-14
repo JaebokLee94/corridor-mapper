@@ -33,7 +33,7 @@
             <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-controls="experimentSidebar" aria-expanded="true" aria-label="Hide experiment controls" title="Hide experiment controls"><svg class="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M16 8l-4 4 4 4" /></svg><span class="sidebar-rail-label" aria-hidden="true">Controls</span></button>
             <button id="sidebarRunButton" class="sidebar-run" type="button" aria-label="Run comparison" title="Run comparison" disabled hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path id="sidebarRunIcon" d="m8 5 11 7-11 7z" /></svg><span id="sidebarRunLabel" aria-hidden="true">Run</span></button>
           </div>
-          <h2>Experiment</h2><button id="newMapRun" class="ghost" type="button" disabled title="Run with a new random seed and the current settings">New map &amp; run</button>
+          <h2>Experiment</h2><button id="newMapRun" class="ghost" type="button" disabled title="Run with a new seed and four new wall geometry values">New map &amp; run</button>
         </div>
         <div id="runActions" class="run-actions" data-mode="idle"><button id="runButton" class="primary run-button" type="button" disabled>Run comparison</button><button id="completedReplayButton" type="button" disabled hidden title="Replay saved snapshots from the beginning">Replay</button><button id="pauseButton" type="button" disabled hidden>Pause</button><button id="stepButton" type="button" disabled hidden>Step</button><button id="cancelButton" type="button" disabled hidden>Cancel</button></div>
         <p id="status" class="status" role="status" aria-live="polite">Press Run comparison to start.</p>
@@ -176,8 +176,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261114-wall-geometry';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261114-wall-geometry';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261114-new-map-geometry';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261114-new-map-geometry';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

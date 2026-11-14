@@ -110,7 +110,7 @@ test('explicit Run starts a new calculation after completion and reconnects only
   }
 });
 
-test('New map & run starts once with a different seed and preserves the other form settings', async()=>{
+test('New map & run draws a different seed and four valid wall settings, preserving all other settings', async()=>{
   const {JSDOM}=await import('jsdom');
   const {experimentSettings}=await import('../../drf/experiment-settings.mjs');
   const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{url:'http://localhost/drf.html?interpolation=extended',runScripts:'outside-only'});
@@ -128,19 +128,36 @@ test('New map & run starts once with a different seed and preserves the other fo
     window.eval(section('function settings()', 'function createLocalWorker(')+section('async function requestedServerJob(', 'function fail(')
       +section("$('runButton').onclick", "$('pauseButton').onclick"));
     const original=window.settings();
+    window.Math.random=()=>0;
     activeJob={mode:'comparison',status:'running',id:'elsewhere'};
     await button.onclick();
-    assert.equal(starts.length,0);assert.equal(form.elements.seed.value,String(original.seed));
+    assert.equal(starts.length,0);assert.deepEqual({...window.settings()},original);
     assert.match(notices.at(-1),/already active/);
     activeJob=null;button.disabled=false;button.click();button.click();
     await new Promise(resolve=>setImmediate(resolve));
-    const expected={...original,seed:0};
+    const expected={...original,seed:0,sigmaM:0,deltaM:4,sigmaDGeometry:0,deltaD:1};
     assert.equal(starts.length,1);assert.equal(starts[0].type,'start');assert.equal(starts[0].single,false);
     assert.deepEqual({...starts[0].input},expected);assert.deepEqual({...window.settings()},expected);
     assert.deepEqual(JSON.parse(decodeURIComponent(window.location.hash.slice(4))),expected);
     assert.equal(window.location.search,'?interpolation=extended');
     assert.equal(doc.getElementById('showInterpolation').checked,true);
     assert.equal(doc.getElementById('interpolationKind').value,'extended');
+    const fields=[...form.querySelectorAll('.geometry-fields input')];
+    for (const draw of [1-Number.EPSILON,1-Number.EPSILON,.371]) {
+      const before=window.settings();
+      window.Math.random=()=>draw;
+      window.state.mode='idle';
+      await button.onclick();
+      const sent=starts.at(-1).input;
+      assert.notEqual(sent.seed,before.seed);
+      for (const field of fields) {
+        assert.notEqual(field.valueAsNumber,before[field.name]);
+        assert.ok(field.validity.valid);
+        assert.equal(sent[field.name],field.valueAsNumber);
+        if (before[field.name]===Number(field.min)) assert.equal(field.valueAsNumber,Number(field.max));
+      }
+      assert.deepEqual(JSON.parse(decodeURIComponent(window.location.hash.slice(4))),{...sent});
+    }
   } finally {window.close();}
 });
 
@@ -451,16 +468,8 @@ test('replay follows the live snapshot timestamps at each speed without accumula
   }
 });
 
-test('reset-and-run clears replay and draws each wall setting on its input grid while preserving other settings',async t=>{
+test('reset-and-run clears the completed result and replay but preserves current parameters and seed',async()=>{
   const {context,state,$,errors}=runUiContext(3),commands=[],input={...DEFAULT_INPUT,snapshots:3,vehicles:4,seed:923};
-  const {JSDOM}=await import('jsdom');
-  const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'));
-  t.after(()=>window.close());
-  const form=window.document.getElementById('settings'), fields=[...form.querySelectorAll('.geometry-fields input')];
-  for (const field of fields) field.value=input[field.name];
-  context.form=form;
-  context.Math=Object.create(Math);
-  context.Math.random=()=>0;
   let stopped=0,cancelledReplay=0;
   Object.assign(state,{mode:'done',frames:[{t:1},{t:2},{t:3}],evaluations:[{},{},{}],frameTimes:[0,40,120],selected:3,next:3,
     workers:[{stop(){stopped++;}}],replay:true,generatedSnapshots:3,measurementTotal:3});
@@ -478,24 +487,8 @@ test('reset-and-run clears replay and draws each wall setting on its input grid 
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.selected,0);assert.equal(state.next,0);
   assert.equal(state.frameTimes.length,0);
   assert.equal(state.mode,'running');assert.equal(state.busy,true);assert.equal(state.generatedSnapshots,0);
-  assert.equal(commands.length,1);assert.equal(commands[0].type,'start');
-  const expected={...input,sigmaM:0,deltaM:4,sigmaDGeometry:0,deltaD:1};
-  assert.deepEqual({...commands[0].input},expected);
-  assert.deepEqual(JSON.parse(decodeURIComponent(context.location.hash.slice(3))),expected);
-  for (const field of fields) {
-    assert.equal(field.valueAsNumber,expected[field.name]);assert.ok(field.validity.valid);
-  }
-  for (const draw of [1-Number.EPSILON,1-Number.EPSILON,.371]) {
-    const before=fields.map(field=>field.valueAsNumber);
-    context.Math.random=()=>draw;
-    Object.assign(state,{mode:'done',valid:true,frames:[{t:1}]});
-    await $('runButton').onclick();
-    for (const [i,field] of fields.entries()) {
-      assert.notEqual(field.valueAsNumber,before[i]);assert.ok(field.validity.valid);
-      assert.equal(commands.at(-1).input[field.name],field.valueAsNumber);
-      if (before[i]===Number(field.min)) assert.equal(field.valueAsNumber,Number(field.max));
-    }
-  }
+  assert.equal(commands.length,1);assert.equal(commands[0].type,'start');assert.deepEqual({...commands[0].input},input);
+  assert.deepEqual(JSON.parse(decodeURIComponent(context.location.hash.slice(3))),input);
   assert.equal($('runButton').hidden,true);assert.equal($('completedReplayButton').hidden,true);assert.deepEqual(errors,[]);
 });
 

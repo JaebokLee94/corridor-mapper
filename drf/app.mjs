@@ -169,7 +169,7 @@ function controls() {
     completedReplay.disabled = !completed || !!state.connecting;
     completedReplay.textContent = state.replay ? 'Stop' : 'Replay';
     $('runButton').textContent = completed ? 'Reset & run' : 'Run comparison';
-    $('runButton').title = completed ? 'Randomize the four wall geometry settings and run with the same seed' : 'Run comparison';
+    $('runButton').title = completed ? 'Clear previous results and run with the current settings' : 'Run comparison';
     $('runActions').dataset.mode = completed ? 'complete' : active ? 'active' : 'idle';
   }
   const runActions = ['runButton', 'pauseButton', 'stepButton', 'cancelButton', 'completedReplayButton'].map($).filter(Boolean);
@@ -278,8 +278,8 @@ async function prepare({single = false, newMap = false} = {}) {
   }
   try {
     const input = settings();
-    if (newMap) input.seed = replaceSeed();
-    else if (!single && !resumeId && state.mode === 'done' && state.valid && state.frames.length) {
+    if (newMap) {
+      input.seed = replaceSeed();
       for (const field of form.querySelectorAll('.geometry-fields input')) {
         const min = Number(field.min), step = Number(field.step);
         const last = Math.round((Number(field.max) - min) / step);
