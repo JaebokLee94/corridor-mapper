@@ -157,7 +157,9 @@ function controls() {
   if (document.hidden) return;
   const active = ['running', 'paused'].includes(state.mode), sweeping = !!state.sweep, preparing = active && !state.scenario;
   const completed = state.mode === 'done' && state.valid && state.frames.length > 0;
-  $('runButton').disabled = active || sweeping || !!state.connecting; $('pauseButton').disabled = !active || preparing || !!state.pendingCommand;
+  $('runButton').disabled = active || sweeping || !!state.connecting;
+  $('newMapRun').disabled = $('runButton').disabled;
+  $('pauseButton').disabled = !active || preparing || !!state.pendingCommand;
   $('pauseButton').textContent = state.mode === 'paused' ? 'Resume' : 'Pause';
   $('stepButton').disabled = preparing || state.busy || state.mode === 'running' || sweeping || !!state.connecting;
   $('cancelButton').disabled = !active;
@@ -255,18 +257,28 @@ async function requestedServerJob(mode) {
     : 'A server comparison is already active. Press Run comparison to reconnect.');
   return job;
 }
-async function prepare(single = false, resumeId) {
-  if (state.connecting) return;
-  if (state.server && !resumeId) {
+function replaceSeed() {
+  const field = form.elements.namedItem('seed');
+  const draw = crypto.getRandomValues(new Uint32Array(1))[0];
+  const seed = draw === Number(field.value) ? (draw + 1) >>> 0 : draw;
+  field.value = String(seed);
+  return seed;
+}
+async function prepare({single = false, newMap = false} = {}) {
+  if (state.connecting || state.sweep || ['running', 'paused'].includes(state.mode)) return;
+  let resumeId;
+  if (state.server) {
     state.connecting = true; controls();
     try {
       const job = await requestedServerJob('comparison');
+      if (job && newMap) { notice('A comparison is already active. Press Run comparison to reconnect.'); return; }
       if (job) { resumeId = job.id; fillSettings(job.input); }
     } catch (error) { notice(error.message); return; }
     finally { state.connecting = false; controls(); }
   }
   try {
     const input = settings();
+    if (newMap) input.seed = replaceSeed();
     cancel(true); state.pendingInput=input; state.mode = 'running'; state.busy = true;
     const generation = state.generation; controls();
     location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`;
@@ -552,8 +564,9 @@ function resetView() {
   for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
 }
 $('runButton').onclick = () => prepare();
+$('newMapRun').onclick = () => prepare({newMap:true});
 $('pauseButton').onclick = () => commandRun(state.mode === 'paused' ? 'resume' : 'pause');
-$('stepButton').onclick = () => { state.mode === 'paused' ? commandRun('step') : prepare(true); };
+$('stepButton').onclick = () => { state.mode === 'paused' ? commandRun('step') : prepare({single:true}); };
 $('firstSnapshot').onclick = resetView;
 $('cancelButton').onclick = () => { cancel(); notice('Cancelled. Completed snapshots remain available.'); };
 $('wallConfiguration').onchange = event => {
@@ -569,16 +582,8 @@ $('wallConfiguration').onchange = event => {
     $('showInterpolation').checked = !paper;
   }
 };
-$('resetButton').onclick = () => {
-  state.sweep?.cancel(); state.sweepRuns = []; cancel(true); fillSettings(pageDefaults);
-  $('showInterpolation').checked = false; $('interpolationKind').value = 'checked';
-  const url = new URL(location.href); url.hash = ''; url.searchParams.delete('interpolation');
-  history.replaceState(null, '', url); renderSelected(); renderSweep();
-  $('sweepStatus').textContent = 'No results yet.'; notice('Restored default settings.');
-};
 form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
 form.addEventListener('change', () => warmSelectedInput());
-$('resetButton').addEventListener('click', () => warmSelectedInput());
 $('timeSlider').oninput = () => {
   if (['running', 'paused'].includes(state.mode)) { $('timeSlider').value = state.selected; return; }
   stopReplay(); state.followLive = false; state.selected = Number($('timeSlider').value); hoverGeneration++; renderSelected();
@@ -796,9 +801,8 @@ if (document.querySelector('meta[name="echomap-compute"]')?.content === 'server'
 warmSelectedInput(initialInput);
 for (const button of document.querySelectorAll('[data-method]')) button.onclick=()=>{state.method=button.dataset.method;map.fit();baselineMap.fit();renderSelected();};
 $('newSeed').onclick=()=>{
-  const seedField=form.elements.namedItem('seed'),old=Number(seedField.value);
-  let seed=crypto.getRandomValues(new Uint32Array(1))[0];if(seed===old) seed=(seed+1)>>>0;
-  seedField.value=seed;form.dispatchEvent(new Event('change'));
+  replaceSeed();
+  form.dispatchEvent(new Event('change'));
 };
 $('shareButton').onclick=async()=>{
   try {

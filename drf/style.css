@@ -338,7 +338,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .run-section { padding:14px 16px 12px; }
   .sidebar-title { margin-bottom:6px; }
   .sidebar-title h2 { display:none; }
-  .sidebar-title #resetButton { margin-left:auto; }
+  .sidebar-title #newMapRun { margin-left:auto; }
   .run-actions { display:flex; gap:6px; }
   .run-button { flex:1; }
   .run-actions button:not(.run-button) { flex:1; min-width:54px; padding:6px; }

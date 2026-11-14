@@ -47,6 +47,7 @@ test('original run area shows only Run initially and switches to the active cont
     const { state, $, update } = fixture(); Object.assign(state, item.input); update();
     assert.deepEqual(actionIds.filter(id => !$(id).hidden), item.shown, `${item.name}: visible actions`);
     assert.deepEqual(actionIds.map(id => $(id).disabled), item.disabled, `${item.name}: existing permission rules`);
+    assert.equal($('newMapRun').disabled, $('runButton').disabled, item.name);
     assert.equal($('pauseButton').textContent, item.label, `${item.name}: pause/resume label`);
   }
 });

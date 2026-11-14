@@ -103,11 +103,45 @@ test('explicit Run starts a new calculation after completion and reconnects only
     });
     vm.runInContext(section('async function requestedServerJob(','function fail('),context);
     assert.equal(queries,0);assert.deepEqual(created,[]);
-    await context.prepare(false);
+    await context.prepare();
     const active=['running','paused'].includes(status);
     assert.equal(queries,1);assert.equal(created.length,1);assert.equal(created[0].resumeId,active?'previous':undefined);
     assert.equal(posted.length,1);assert.equal(posted[0].input,active?previous:selected);
   }
+});
+
+test('New map & run starts once with a different seed and preserves the other form settings', async()=>{
+  const {JSDOM}=await import('jsdom');
+  const {experimentSettings}=await import('../../drf/experiment-settings.mjs');
+  const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{url:'http://localhost/drf.html?interpolation=extended',runScripts:'outside-only'});
+  try {
+    const doc=window.document, form=doc.getElementById('settings'), button=doc.getElementById('newMapRun');
+    assert.equal(button.textContent,'New map & run');
+    form.elements.vehicles.value='7';form.elements.snapshots.value='11';form.elements.sigmaD.value='0.7';
+    form.elements.seed.value='4294967295';form.elements.specular.checked=false;
+    doc.getElementById('showInterpolation').checked=true;doc.getElementById('interpolationKind').value='extended';
+    let activeJob;const starts=[],notices=[];
+    Object.assign(window,{$:id=>doc.getElementById(id),form,normalizeInput:experimentSettings,state:{server:{},workers:[],mode:'done'},
+      connectComputeServer:async()=>({job:activeJob}),notice:text=>notices.push(text),controls(){},cancel(){},
+      createWorker:()=>({postMessage:msg=>starts.push(msg)}),fail:err=>{throw err;}});
+    window.crypto.getRandomValues=array=>{array[0]=0xffffffff;return array;};
+    window.eval(section('function settings()', 'function createLocalWorker(')+section('async function requestedServerJob(', 'function fail(')
+      +section("$('runButton').onclick", "$('pauseButton').onclick"));
+    const original=window.settings();
+    activeJob={mode:'comparison',status:'running',id:'elsewhere'};
+    await button.onclick();
+    assert.equal(starts.length,0);assert.equal(form.elements.seed.value,String(original.seed));
+    assert.match(notices.at(-1),/already active/);
+    activeJob=null;button.disabled=false;button.click();button.click();
+    await new Promise(resolve=>setImmediate(resolve));
+    const expected={...original,seed:0};
+    assert.equal(starts.length,1);assert.equal(starts[0].type,'start');assert.equal(starts[0].single,false);
+    assert.deepEqual({...starts[0].input},expected);assert.deepEqual({...window.settings()},expected);
+    assert.deepEqual(JSON.parse(decodeURIComponent(window.location.hash.slice(4))),expected);
+    assert.equal(window.location.search,'?interpolation=extended');
+    assert.equal(doc.getElementById('showInterpolation').checked,true);
+    assert.equal(doc.getElementById('interpolationKind').value,'extended');
+  } finally {window.close();}
 });
 
 test('an explicit Run cannot duplicate or cancel a different active server job',async()=>{
@@ -119,7 +153,7 @@ test('an explicit Run cannot duplicate or cancel a different active server job',
     fail:error=>{throw error;},
   });
   vm.runInContext(section('async function requestedServerJob(','function fail('),context);
-  await context.prepare(false);
+  await context.prepare();
   assert.equal(state.mode,'idle');assert.equal(state.connecting,false);assert.match(notices.at(-1),/press Run sweep to reconnect/);
 });
 
@@ -136,7 +170,7 @@ test('full runs and single steps send exactly one start command with the request
     });
     attachProtocolView(context);
     vm.runInContext(section('async function prepare(','function fail(')+section('async function receiveRunMessage(','async function hashField('),context);
-    await context.prepare(single);
+    await context.prepare({single});
     assert.equal(posted.length,1,'Starting the run must not dispatch any per-snapshot request');
     assert.equal(posted[0].type,'start');assert.equal(posted[0].requestId,state.generation);assert.equal(posted[0].single,single);
     assert.deepEqual({...posted[0].input},input,'Preserve seed, fleet size and requested run length');
@@ -181,7 +215,7 @@ test('actual preview geometry stays cached when the truth overlay is hidden',()=
   assert.equal(generated,2,'Changing geometry roughness must invalidate the preview');
 });
 
-test('actual view reset preserves simulation, selection and replay; experiment reset still clears them',async()=>{
+test('view reset preserves simulation, selection and replay, and clearing a run releases its results',async()=>{
   const nodes=new Map(),pending=new Map(),charts=new Map();let nextFrame=0,stoppedWorkers=0,cancelledSweeps=0,fitCalls=0;
   const document={body:{dataset:{}},createElement:()=>({}),querySelectorAll:()=>[]};
   const $=id=>{
@@ -207,14 +241,13 @@ test('actual view reset preserves simulation, selection and replay; experiment r
     fillSettings:input=>{snapshots.value=String(input.snapshots);},renderSweep(){},notice:text=>{$('status').textContent=text;},
   });
   attachProtocolView(context);
-  const reset=section("$('resetButton').onclick =", "form.addEventListener('change'");
   const viewReset=source.match(/^\$\('firstSnapshot'\)\.onclick = .*;$/m)?.[0];assert.ok(viewReset,'Actual view reset handler exists');
   vm.runInContext([
     section('function stopReplay()','async function prepare('),
     section('function renderSelected()','// Sweep diagnostics'),
     section('// Sweep diagnostics','function replayTick('),
     section('async function receiveRunMessage(','async function hashField('),
-    section('function replayTick(','$(\'runButton\').onclick'),viewReset,reset,
+    section('function replayTick(','$(\'runButton\').onclick'),viewReset,
   ].join('\n'),context);
   const assertViewOnly=()=>{
     const before={...state},beforeFit=fitCalls,queued=[...pending.keys()],replayFrame=context.replayFrame;
@@ -268,17 +301,14 @@ test('actual view reset preserves simulation, selection and replay; experiment r
   state.workers=[{stop(){stoppedWorkers++;}}];
   state.generatedSnapshots=3;state.measurementTotal=3;
   $('inspector').textContent='old D/A/Q';$('diagnosticSummary').textContent='old Theorem 2';
-  vm.runInContext("$('resetButton').onclick();",context);
-  assert.equal($('interpolationKind').value,'checked');
-  assert.equal($('showInterpolation').checked,false);
+  state.sweep=null; state.sweepRuns=[]; context.cancel(true);
   for (const [id,callback] of [...pending]) {pending.delete(id);callback(400);}
-  assert.equal(pending.size,0);assert.equal(stoppedWorkers,1);assert.equal(cancelledSweeps,1);
+  assert.equal(pending.size,0);assert.equal(stoppedWorkers,1);assert.equal(cancelledSweeps,0);
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.scenario,null);assert.equal(state.valid,false);
   assert.equal($('generationProgress').value,0);assert.equal($('runProgress').value,0);
   assert.equal(state.generatedSnapshots,0);assert.equal(state.measurementTotal,0);
   assert.equal(Number($('timeSlider').max),1);assert.equal(Number($('timeSlider').value),0);assert.equal($('timeSlider').disabled,true);
-  assert.equal($('snapshotLabel').textContent,'0 / 60');
-  assert.equal($('sweepStatus').textContent,'No results yet.');
+  assert.equal($('snapshotLabel').textContent,'0 / 3');
   assert.equal($('diagnosticSummary').textContent,'No diagnostics yet. Run comparison or complete a parameter sweep.');
   assert.equal($('inspector').textContent,'','Reset clears stale inspection without restoring the removed hint');
   assert.equal(charts.get('diagnosticChart').length,0);assert.equal(charts.get('profileChart').length,0);
@@ -634,7 +664,7 @@ test('out-of-order results fail explicitly rather than mislabelling the measured
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.next,0);
 });
 
-test('new and reset defaults coexist with reproducible interpolation share links', async()=>{
+test('initial interpolation settings honor reproducible share links', async()=>{
   const {JSDOM}=await import('jsdom');
   const html=readFileSync(new URL('../../drf.html',import.meta.url),'utf8');
   const {window}=new JSDOM(html);
