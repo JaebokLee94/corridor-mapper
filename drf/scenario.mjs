@@ -61,16 +61,38 @@ export function createSceneGeometry(input) {
     return { spans, walls: sampleWalls(spans, 0.1), wallModel: null, domain: [0, 60, 0, 30], wallGeneration: null };
   }
   const rejections = [];
-  for (let attempt = 0; attempt < 256; attempt++) {
+  // Preserve accepted seed maps. Only exhausted draws use route-aware placement.
+  const originalAttempts = 256;
+  for (let attempt = 0; attempt < 2 * originalAttempts; attempt++) {
+    const recover = attempt >= originalAttempts;
     const wallModel = createTwoLayerWallModel({ ...input, wallSide, L: domain[1], attempt,
-      independent: wallSide === 'both', minWidth: MIN_VERTICAL_GAP }), bounds = twoLayerWallBounds(wallModel), reasons = [];
+      independent: wallSide === 'both', minWidth: MIN_VERTICAL_GAP });
+    let bounds = twoLayerWallBounds(wallModel);
+    const reasons = [];
     if (wallSide === 'both' && !(bounds.minWidth > MIN_VERTICAL_GAP)) reasons.push('passage-width');
+    if (recover) {
+      // A vertical translation fits the original spline whenever its height fits the domain.
+      const shift = Math.max(domain[2] - bounds.ymin, Math.min(0, domain[3] - bounds.ymax));
+      if (shift && bounds.ymax - bounds.ymin < domain[3] - domain[2]) {
+        wallModel.baseline += shift;
+        bounds = twoLayerWallBounds(wallModel);
+      }
+    }
     if (bounds.ymin < domain[2] || bounds.ymax > domain[3]) reasons.push('domain');
     let minVehicleClearance = Infinity;
-    for (let t = 1; t <= 120; t++) for (const [x, y] of truePoses(t, 20, wallModel)) {
-      if (x > wallModel.L) continue; // Open exit: poses continue, finite walls do not.
-      for (const wall of activeWalls) minVehicleClearance = Math.min(minVehicleClearance,
-        wall === 0 ? y - evaluateWall(wallModel, x, wall).value : evaluateWall(wallModel, x, wall).value - y);
+    for (let t = 1; !(recover && paper) && t <= 120; t++) {
+      if (!recover && minVehicleClearance < VERTICAL_CLEARANCE) break;
+      for (const [x, y] of truePoses(t, 20, wallModel)) {
+        if (x > wallModel.L) continue; // Poses continue beyond the finite walls.
+        for (const wall of activeWalls) minVehicleClearance = Math.min(minVehicleClearance,
+          wall === 0 ? y - evaluateWall(wallModel, x, wall).value : evaluateWall(wallModel, x, wall).value - y);
+      }
+    }
+    if (recover && !paper && wallSide !== 'both' && minVehicleClearance < VERTICAL_CLEARANCE) {
+      // Translate the curved fleet route away from its single wall, preserving its lateral motion.
+      const distance = VERTICAL_CLEARANCE - minVehicleClearance + 1e-9;
+      wallModel.routeOffset = wallSide === 'upper' ? -distance : distance;
+      minVehicleClearance += distance;
     }
     if (minVehicleClearance < VERTICAL_CLEARANCE) reasons.push('vehicle-clearance');
     if (reasons.length) { rejections.push({ attempt, reasons }); continue; }
@@ -80,19 +102,19 @@ export function createSceneGeometry(input) {
       const rng = createRng(input.seed, 'paper-initial', i + 1);
       return [1 + 10 * rng.normal(), Math.min(1 + 10 * rng.normal(), bounds.ymin - 3)];
     });
-    const starts = wallModel.starts;
+    const starts = wallModel.starts, offset = wallModel.routeOffset ?? 0;
     return { spans, walls: sampleWalls(spans, 0.1), wallModel, domain: [...domain],
       // Static display envelope: existing wall + all centreline offsets, never future measurements.
       ...(paper ? { cameraBounds: [0, domain[1], Math.min(bounds.ymin, ...starts.map(p=>p[1])), bounds.ymax] }
         : wallSide === 'both' ? {} : { cameraBounds: [0, wallModel.L,
-        Math.min(bounds.ymin, bounds.centreRange[0] - 2), Math.max(bounds.ymax, bounds.centreRange[1] + 2)] }),
+        Math.min(bounds.ymin, bounds.centreRange[0] + offset - 2), Math.max(bounds.ymax, bounds.centreRange[1] + offset + 2)] }),
       wallGeneration: { attempt, attempts: attempt + 1, rejections, bounds, minVehicleClearance,
         ...(paper ? {trajectory:'straight +x, 1 m per snapshot', minVehicleClearance: bounds.ymin - Math.max(...starts.map(p=>p[1]))} : {}),
         wallSide, activeWalls, minWidthRequired: wallSide === 'both' ? MIN_VERTICAL_GAP : null,
         vehicleClearanceRequired: VERTICAL_CLEARANCE, clearanceAxis: 'y',
         validationFleet: { vehicles: 20, snapshots: 120, wallInterval: [0, wallModel.L] } } };
   }
-  throw new Error('All 256 wall-generation attempts were rejected. Reduce geometry amplitudes or choose another seed.');
+  throw new Error('Could not fit a wall and vehicle route within the scene limits for this seed.');
 }
 export function truePoses(t, vehicles = 3, wallModel = null) {
   if (wallModel?.starts) return wallModel.starts.slice(0, vehicles).map(([x,y]) => [x + t - 1, y]);
@@ -109,7 +131,7 @@ export function truePoses(t, vehicles = 3, wallModel = null) {
       centre = wallModel ? evaluateCentre(wallModel, wallX) : { value: 15, first: 0 };
     // The route follows the finished walls' midpoint. The full lateral motion
     // is retained; wall separation supplies clearance instead of shrinking it.
-    return [x, centre.value + centre.first * Math.max(0, x - (wallModel?.L ?? 60)) + LATERAL_AMPLITUDE * Math.sin(2 * Math.PI * x / 30 + v + 1)];
+    return [x, centre.value + centre.first * Math.max(0, x - (wallModel?.L ?? 60)) + LATERAL_AMPLITUDE * Math.sin(2 * Math.PI * x / 30 + v + 1) + (wallModel?.routeOffset ?? 0)];
   });
 }
 /** Noise-free physical snapshot, before optional specular removal/range merging.

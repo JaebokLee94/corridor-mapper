@@ -1,4 +1,4 @@
-import { normalizeInput, createSceneGeometry, truePoses } from './scenario.mjs?v=20261112-upper-wmp';
+import { normalizeInput, createSceneGeometry, truePoses } from './scenario.mjs?v=20261114-wall-geometry';
 import { diffuseProfile } from './diffuse.mjs';
 
 /** Reconstruct one completed sweep experiment's final-snapshot truth profile.

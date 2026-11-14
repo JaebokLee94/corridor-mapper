@@ -1,5 +1,5 @@
-import {normalizeInput,measureTruthSnapshot} from './scenario.mjs?v=20261112-upper-wmp';
-import {prepareScenario,warmTruthCache} from './prepare-scenario.mjs?v=20261112-upper-wmp';
+import {normalizeInput,measureTruthSnapshot} from './scenario.mjs?v=20261114-wall-geometry';
+import {prepareScenario,warmTruthCache} from './prepare-scenario.mjs?v=20261114-wall-geometry';
 
 const publicOrigin='https://jaeboklee94.github.io', endpoint='https://echomap-measure.umkuku-auth.workers.dev/v1/physical';
 // Keep cached physical paths and online inference separate. Public clients apply the same seeded noise locally.

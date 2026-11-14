@@ -201,11 +201,11 @@ test('actual lower-map buttons affect only their own camera',()=>{
 test('actual preview geometry stays cached when the truth overlay is hidden',()=>{
   const truth={checked:true},input={scene:'layered',seed:1,sigmaM:6,deltaM:20,sigmaDGeometry:.33,deltaD:4};
   const walls=[[[0,6],[60,7]],[[0,24],[60,23]]],domain=[0,60,-20,50];
-  let generated=0;
+  let generated=0;const notices=[];
   const context=vm.createContext({state:{},$:()=>truth,form:{},
     FormData:class { *[Symbol.iterator]() { yield* Object.entries(input); } },
-    previewKey:'',preview:[],previewBounds:undefined,previewDomain:undefined,normalizeInput:value=>value,notice:message=>assert.fail(message),
-    createSceneGeometry:()=>{generated++;return {walls,domain};}});
+    previewKey:'',preview:[],previewBounds:undefined,previewDomain:undefined,normalizeInput:value=>value,notice:message=>notices.push(message),
+    createSceneGeometry:value=>{generated++;if (!value.deltaD) throw new Error('Invalid spacing');return {walls,domain};}});
   vm.runInContext(section('function previewWalls()','function renderSelected()'),context);
   const initial=context.previewWalls();
   truth.checked=false;assert.equal(context.previewWalls(),initial,'Hiding the preview must keep the scene extent');
@@ -213,6 +213,11 @@ test('actual preview geometry stays cached when the truth overlay is hidden',()=
   assert.equal(generated,1,'Layer toggles must reuse the scene, without regenerating it');
   input.sigmaDGeometry=.66;context.previewWalls();
   assert.equal(generated,2,'Changing geometry roughness must invalidate the preview');
+  input.deltaD=0;
+  assert.equal(context.previewWalls(),initial);
+  assert.match(notices.at(-1),/Invalid spacing.*previous wall/);
+  input.deltaD=7;context.previewWalls();
+  assert.equal(generated,4,'Correcting the spacing regenerates the wall');
 });
 
 test('view reset preserves simulation, selection and replay, and clearing a run releases its results',async()=>{
@@ -446,8 +451,16 @@ test('replay follows the live snapshot timestamps at each speed without accumula
   }
 });
 
-test('reset-and-run clears the completed result and replay but preserves current parameters and seed',async()=>{
+test('reset-and-run clears replay and draws each wall setting on its input grid while preserving other settings',async t=>{
   const {context,state,$,errors}=runUiContext(3),commands=[],input={...DEFAULT_INPUT,snapshots:3,vehicles:4,seed:923};
+  const {JSDOM}=await import('jsdom');
+  const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'));
+  t.after(()=>window.close());
+  const form=window.document.getElementById('settings'), fields=[...form.querySelectorAll('.geometry-fields input')];
+  for (const field of fields) field.value=input[field.name];
+  context.form=form;
+  context.Math=Object.create(Math);
+  context.Math.random=()=>0;
   let stopped=0,cancelledReplay=0;
   Object.assign(state,{mode:'done',frames:[{t:1},{t:2},{t:3}],evaluations:[{},{},{}],frameTimes:[0,40,120],selected:3,next:3,
     workers:[{stop(){stopped++;}}],replay:true,generatedSnapshots:3,measurementTotal:3});
@@ -465,8 +478,24 @@ test('reset-and-run clears the completed result and replay but preserves current
   assert.equal(state.frames.length,0);assert.equal(state.evaluations.length,0);assert.equal(state.selected,0);assert.equal(state.next,0);
   assert.equal(state.frameTimes.length,0);
   assert.equal(state.mode,'running');assert.equal(state.busy,true);assert.equal(state.generatedSnapshots,0);
-  assert.equal(commands.length,1);assert.equal(commands[0].type,'start');assert.deepEqual({...commands[0].input},input);
-  assert.deepEqual(JSON.parse(decodeURIComponent(context.location.hash.slice(3))),input);
+  assert.equal(commands.length,1);assert.equal(commands[0].type,'start');
+  const expected={...input,sigmaM:0,deltaM:4,sigmaDGeometry:0,deltaD:1};
+  assert.deepEqual({...commands[0].input},expected);
+  assert.deepEqual(JSON.parse(decodeURIComponent(context.location.hash.slice(3))),expected);
+  for (const field of fields) {
+    assert.equal(field.valueAsNumber,expected[field.name]);assert.ok(field.validity.valid);
+  }
+  for (const draw of [1-Number.EPSILON,1-Number.EPSILON,.371]) {
+    const before=fields.map(field=>field.valueAsNumber);
+    context.Math.random=()=>draw;
+    Object.assign(state,{mode:'done',valid:true,frames:[{t:1}]});
+    await $('runButton').onclick();
+    for (const [i,field] of fields.entries()) {
+      assert.notEqual(field.valueAsNumber,before[i]);assert.ok(field.validity.valid);
+      assert.equal(commands.at(-1).input[field.name],field.valueAsNumber);
+      if (before[i]===Number(field.min)) assert.equal(field.valueAsNumber,Number(field.max));
+    }
+  }
   assert.equal($('runButton').hidden,true);assert.equal($('completedReplayButton').hidden,true);assert.deepEqual(errors,[]);
 });
 

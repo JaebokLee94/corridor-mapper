@@ -1,6 +1,6 @@
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 import { diffuseProfile } from './diffuse.mjs';
-import { createSweepProfileSource } from './diagnostic-profile.mjs?v=20261112-upper-wmp';
+import { createSweepProfileSource } from './diagnostic-profile.mjs?v=20261114-wall-geometry';
 let evaluator, secondEvaluator, scenario;
 let sweepSource, sweepKey;
 self.onmessage = ({ data }) => {

@@ -211,3 +211,20 @@ test('41 seeded independent scenes preserve the continuous gap and every support
     }
   }
 });
+
+test('previously exhausted rough walls retain the requested spacing, domain and actual fleet clearance', () => {
+  for (const [scene, wallSide] of [['paper-upper','upper'], ['layered','upper'], ['layered','lower']]) {
+    const selected = normalizeInput({scene, wallSide, seed:2147483648, sigmaM:12, deltaM:4, sigmaDGeometry:3, deltaD:1});
+    const {wallModel, wallGeneration, cameraBounds, domain, walls} = createSceneGeometry(selected);
+    const wall = wallSide === 'upper' ? 1 : 0;
+    assert.equal(wallModel.d[wall].spacing, 1);
+    assert.ok(walls[wall].length > 2 && walls[wall].flat().every(Number.isFinite));
+    assert.ok(wallGeneration.bounds.ymin >= domain[2] && wallGeneration.bounds.ymax <= domain[3]);
+    for (let t=1; t<=120; t++) for (const [x,y] of truePoses(t,20,wallModel)) {
+      if (x < 0 || x > wallModel.L) continue;
+      assert.ok(y >= cameraBounds[2] && y <= cameraBounds[3]);
+      assert.ok((evaluateWall(wallModel,x,wall).value-y)*(wall ? 1 : -1) >= (scene === 'paper-upper' ? 3 : 1)-1e-10);
+    }
+    assert.deepEqual(createSceneGeometry(selected).wallModel,wallModel);
+  }
+});

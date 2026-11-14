@@ -5,13 +5,13 @@ import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs?v=20261112-upper-wmp';
 import { sweepCsv } from './sweep-export.mjs';
-import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261112-upper-wmp';
+import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 import { echoProtocol } from './echo-comparison.mjs?v=20261114-wmp';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261114-wmp';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261114-wall-geometry';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-chain-tips';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -116,7 +116,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261114-wmp';
+  const revision = '20261114-wall-geometry';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -169,7 +169,7 @@ function controls() {
     completedReplay.disabled = !completed || !!state.connecting;
     completedReplay.textContent = state.replay ? 'Stop' : 'Replay';
     $('runButton').textContent = completed ? 'Reset & run' : 'Run comparison';
-    $('runButton').title = completed ? 'Clear previous results and run with the current settings' : 'Run comparison';
+    $('runButton').title = completed ? 'Randomize the four wall geometry settings and run with the same seed' : 'Run comparison';
     $('runActions').dataset.mode = completed ? 'complete' : active ? 'active' : 'idle';
   }
   const runActions = ['runButton', 'pauseButton', 'stepButton', 'cancelButton', 'completedReplayButton'].map($).filter(Boolean);
@@ -279,6 +279,17 @@ async function prepare({single = false, newMap = false} = {}) {
   try {
     const input = settings();
     if (newMap) input.seed = replaceSeed();
+    else if (!single && !resumeId && state.mode === 'done' && state.valid && state.frames.length) {
+      for (const field of form.querySelectorAll('.geometry-fields input')) {
+        const min = Number(field.min), step = Number(field.step);
+        const last = Math.round((Number(field.max) - min) / step);
+        const previous = Math.round((field.valueAsNumber - min) / step);
+        const pick = Math.floor(Math.random() * last);
+        field.value = field.min;
+        field.stepUp(pick >= previous ? pick + 1 : pick);
+        input[field.name] = field.valueAsNumber;
+      }
+    }
     cancel(true); state.pendingInput=input; state.mode = 'running'; state.busy = true;
     const generation = state.generation; controls();
     location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`;
@@ -419,7 +430,10 @@ function previewWalls() {
       key = JSON.stringify([input.scene, input.wallSide, input.vehicles, input.seed, input.sigmaM, input.deltaM, input.sigmaDGeometry, input.deltaD]);
     if (key !== previewKey) { const geometry=createSceneGeometry(input);preview=geometry.walls;previewDomain=geometry.domain;previewBounds=geometry.cameraBounds;previewKey=key; }
     return preview;
-  } catch (error) { notice(error.message); return []; }
+  } catch (error) {
+    notice(`Wall preview unavailable: ${error.message}${preview.length ? ' Showing the previous wall.' : ''}`);
+    return preview;
+  }
 }
 function renderSelected() {
   // Keep every result, but defer hidden-tab chart work until visibility returns.
@@ -582,7 +596,7 @@ $('wallConfiguration').onchange = event => {
     $('showInterpolation').checked = !paper;
   }
 };
-form.addEventListener('change', () => { state.sweepRuns = []; cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; notice('Parameters changed. Run again to compare methods.'); try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
+form.addEventListener('change', () => { state.sweepRuns = []; notice('Parameters changed. Run again to compare methods.'); cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
 form.addEventListener('change', () => warmSelectedInput());
 $('timeSlider').oninput = () => {
   if (['running', 'paused'].includes(state.mode)) { $('timeSlider').value = state.selected; return; }

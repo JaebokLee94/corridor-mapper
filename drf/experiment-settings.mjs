@@ -1,4 +1,4 @@
-import { normalizeInput } from './scenario.mjs?v=20261112-upper-wmp';
+import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 
 // Keep estimator settings out of the hash, request and cache key of physical measurements.
 export function experimentSettings(raw={}) {

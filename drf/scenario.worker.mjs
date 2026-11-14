@@ -1,4 +1,4 @@
-import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261112-upper-wmp';
+import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 self.onmessage = async ({ data }) => {
   if (data.type !== 'generate') return;
   try {
