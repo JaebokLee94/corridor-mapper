@@ -1,5 +1,5 @@
 import { preparePublicScenario } from './public-measure.mjs?v=20261112-upper-wmp';
-import { runExperiment } from './sweep.mjs?v=20261112-upper-wmp';
+import { runExperiment } from './sweep.mjs?v=20261114-wmp';
 self.onmessage = async ({ data }) => {
   if (data.type !== 'run') return;
   try {

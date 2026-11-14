@@ -95,7 +95,7 @@ In the legacy Gap Hermite mode, across short gaps the curve matches the local ta
 3. Open **Experiments, diagnostics & exports** for paired sweeps and post-hoc scattering diagnostics.
 4. Choose **Share experiment** to copy a seeded settings URL, or download JSON/CSV to retain results.
 
-New visits and Reset use **3 vehicles on localhost** and **10 on the shared site**, with a 100 m upper wall, 100 snapshots, straight vehicle tracks (1 m per snapshot), specular returns, 0.6 m range resolution and interpolation off. WM-P loads the fleet-specific parameters and score threshold in [the comparison protocol](THRESHOLD_PROTOCOL.md). Shared URLs preserve their explicit settings, including seed, fleet size and snapshot count, on reload. An unseeded visit chooses a new seed. A URL shares settings, not computed outputs or an immutable software revision; retain the JSON and repository commit for a research record.
+New visits and Reset use **3 vehicles on localhost** and **10 on the shared site**, with a 100 m upper wall, 100 snapshots, straight vehicle tracks (1 m per snapshot), specular returns, 0.6 m range resolution and interpolation off. On this straight route, WM-P uses a log-score threshold of 6.0 for 3 vehicles and 6.5 for 10. See [the comparison protocol](THRESHOLD_PROTOCOL.md) for their tracking parameters and independent test results. Shared URLs preserve their explicit settings, including seed, fleet size and snapshot count, on reload. An unseeded visit chooses a new seed. A URL shares settings, not computed outputs or an immutable software revision; retain the JSON and repository commit for a research record.
 
 In **Both walls**, the upper and lower boundaries have independent large-scale curves and small-scale perturbations. A constant vertical shift, applied only when needed, keeps their minimum vertical separation above 6 m without bending or clipping either curve. The route follows the midpoint of the finished walls with its full ±2 m lateral oscillation. The 6 m gap covers this 4 m motion envelope plus 1 m vertical truth-pose clearance on each side, for all supported vehicles and phases. Single-wall modes retain their earlier generator.
 
@@ -154,7 +154,7 @@ Mirror ambiguity, insufficient noncollinear geometry and noisy pose information 
 | Location | Purpose |
 |:--|:--|
 | [`drf.html`](drf.html), [`drf/`](drf/) | Current application, simulator, estimators and post-hoc evaluation |
-| [`drf/comparison.mjs`](drf/comparison.mjs) | Executable method thresholds and provenance |
+| [`drf/echo-comparison.mjs`](drf/echo-comparison.mjs) | Live straight-route WM-P profiles; [shared and historical thresholds](drf/comparison.mjs) |
 | [`THRESHOLD_PROTOCOL.md`](THRESHOLD_PROTOCOL.md) | Current selection rules, dataset roles and export definitions |
 | [`tests/drf/`](tests/drf/) | Numerical, causal, integration and browser-support checks |
 | [`PSPT_VALIDATION.md`](PSPT_VALIDATION.md) | Historical Python study and JavaScript port evidence |

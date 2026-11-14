@@ -63,7 +63,7 @@
     "release": "compute-20261105",
     "guardedLogThreshold": 6.650397183049193,
     "baselineLogThreshold": 29.108623616301394,
-    "thresholdStatus": "WM-P at 3 and 10 vehicles uses upper-wall raw Map F1 tuning; guardedLogThreshold and thresholdSource refer to other fleet sizes. No certified error bound.",
+    "thresholdStatus": "paperUpperFleetProfiles applies to the straight-route upper wall. Other scenes retain guardedFleetProfiles at 3 and 10 vehicles; other fleet sizes use guardedLogThreshold. No certified error bound.",
     "baselineReference": "2026-10-20 Python baseline.py; source hashes and checkpoints in tests/drf/baseline-reference.json",
     "baselineNoise": "Uses declared uniform range SD; previous experimental configuration was 0.1 m",
     "testCommand": "PSPT_FULL_PARITY=1 npm test",
@@ -85,7 +85,26 @@
         "max_range": 45
       }
     },
-    "historicalBaseline": "WM-F (archived; not run in this pair)"
+    "historicalBaseline": "WM-F (archived; not run in this pair)",
+    "paperUpperFleetProfiles": {
+      "3": {
+        "threshold": 6,
+        "ell": 4,
+        "p_miss": 0.05,
+        "max_range": 45,
+        "ext": 1.1,
+        "K": 8
+      },
+      "10": {
+        "threshold": 6.5,
+        "ell": 1.25,
+        "p_miss": 0.25,
+        "max_range": 45,
+        "frac": 0.08,
+        "sep": 1,
+        "dup": 0.7
+      }
+    }
   },
   "computationRevision": {
     "id": "exact-tracker-reuse-20261113",

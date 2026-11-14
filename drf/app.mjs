@@ -8,10 +8,10 @@ import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261112-upper-wmp';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-chain-tips';
-import { echoProtocol } from './echo-comparison.mjs';
+import { echoProtocol } from './echo-comparison.mjs?v=20261114-wmp';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261112-upper-wmp';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261114-wmp';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-chain-tips';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -116,7 +116,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261112-upper-wmp';
+  const revision = '20261114-wmp';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {

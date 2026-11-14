@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { METHOD_PROTOCOL, protocolForFleet } from '../../drf/comparison.mjs';
+import { EchoComparison, echoProtocol } from '../../drf/echo-comparison.mjs';
 const root = new URL('../../', import.meta.url);
 const read = path => fs.readFileSync(new URL(path, root));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -36,6 +37,22 @@ test('public provenance names the current operating points and their development
     const {threshold,parameters}=protocolForFleet(vehicles).guarded;
     assert.deepEqual(comparison.guardedFleetProfiles[vehicles],{threshold,...parameters});
   }
+});
+
+test('straight-route runs instantiate the published fleet settings and keep them fixed across seeds', () => {
+  const {paperUpperFleetProfiles} = JSON.parse(read('drf/provenance.json')).comparison;
+  for (const vehicles of [3,10]) {
+    const {threshold,...parameters} = paperUpperFleetProfiles[vehicles];
+    for (const [seed,sigmaDGeometry] of [[1,.33],[3296639392,3]]) {
+      const input = {scene:'paper-upper',vehicles,seed,sigmaDGeometry,sigmaD:.4};
+      const run = new EchoComparison(input,[0,100,-20,50]);
+      assert.equal(run.protocol.guarded.threshold,threshold);
+      assert.deepEqual(run.protocol.guarded.parameters,parameters);
+      for (const [key,value] of Object.entries(parameters)) assert.equal(run.wmp[key],value);
+    }
+    assert.deepEqual(echoProtocol({scene:'layered',vehicles}).guarded,protocolForFleet(vehicles).guarded);
+  }
+  assert.deepEqual(echoProtocol({scene:'paper-upper',vehicles:5}).guarded,protocolForFleet(5).guarded);
 });
 
 test('historical 160-run evidence matches archived numerical sources and unchanged estimator sources', () => {

@@ -1,7 +1,7 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261112-upper-wmp';
 import { createGrid, createField } from './field.mjs';
-import { EchoComparison } from './echo-comparison.mjs';
+import { EchoComparison } from './echo-comparison.mjs?v=20261114-wmp';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.

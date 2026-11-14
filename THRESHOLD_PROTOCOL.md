@@ -1,24 +1,40 @@
 # Comparison protocol and evidence provenance
 
-**Original threshold source: `tuning-200-20261020`. Current PSPT revision: `guarded45-shared-pose-bounded-clusters-20261104`.**
+**Original threshold source: `tuning-200-20261020`. Reference PSPT revision: `guarded45-shared-pose-bounded-clusters-20261104`.**
 
-This document distinguishes threshold selection, historical evaluation and the current interactive experiment. The executable source of truth is [`drf/comparison.mjs`](drf/comparison.mjs). The [machine-readable tuning record](validation/threshold-tuning-20261020.json) contains the selected source aggregates, generator settings, condition counts and SHA-256 hashes of the original analysis/plan files. The full external raw tuning archive is not included.
+This document distinguishes threshold selection, historical evaluation and the current interactive experiment. The live straight-route profiles are in [`drf/echo-comparison.mjs`](drf/echo-comparison.mjs). Other fleet profiles and the score rule are in [`drf/comparison.mjs`](drf/comparison.mjs). The [machine-readable tuning record](validation/threshold-tuning-20261020.json) contains the selected source aggregates, generator settings, condition counts and SHA-256 hashes of the original analysis/plan files. The full external raw tuning archive is not included.
 
 ## Operating points
 
 | Method | Current fixed log-score threshold | Previous development threshold | Score used for selection |
 |:--|--:|--:|:--|
-| WM-P, 3 vehicles | 10.754131418601359 | 6.650397183049193 | Current four-hypothesis marginal log-odds |
-| WM-P, 10 vehicles | 4.5 | 6.650397183049193 | Same score |
+| WM-P, straight upper wall, 3 vehicles | 6.0 | 10.754131418601359 | Current four-hypothesis marginal log-odds |
+| WM-P, straight upper wall, 10 vehicles | 6.5 | 4.5 | Same score |
+| WM-P, other scenes, 3 vehicles | 10.754131418601359 | 6.650397183049193 | Current four-hypothesis marginal log-odds |
+| WM-P, other scenes, 10 vehicles | 4.5 | 6.650397183049193 | Same score |
 | WM-P, other fleet sizes | 6.650397183049193 | 6.4615384615384635 | Current marginal log-odds of original/both versus neither/mirror, or the symmetric alternative |
 | WM-F, 3 vehicles | 28 | 29.108623616301394 | Same qualified score, with 2 m fragments and two matching snapshots |
 | WM-F, other fleet sizes | 29.108623616301394 | 12 | Maximum qualified Gaussian log-score observed up to the current snapshot |
 
-WM-P selection used 40 screening scenes and 60 separate tuning scenes to maximize mean final raw Map F1 at 0.4 m. Three vehicles use tangent half-length 4 m, missed-return model probability 0.05 and candidate range 45 m. Ten vehicles use 1.25 m, 0.25 and 45 m respectively. The independent test used 100 separate scenes. The selection objective did not constrain off-wall length or test openings and branches.
+The November 14 straight-route search maximized mean final Map F1 for the supported patches at a 0.4 m tolerance with interpolation off. Each fleet used 16 fit configurations on 16 development seeds, then compared the three best configurations and the incumbent on 96 new seeds. The 116 candidate score thresholds included both incumbents. Each stage balanced wall roughness height SDs of 0.33 and 3 m. All scenes used 100 snapshots, position SD 0 m, range SD 0.4 m, a single upper wall and specular returns. The same frozen setting applies throughout every run of that fleet on the straight route.
+
+- Three vehicles use the last eight snapshots for candidate refinement (`K=8`) and tangent search extent factor `ext=1.1`. Initial tangent half-length stays 4 m, missed-return probability 0.05 and maximum range 45 m.
+- Ten vehicles use a relative ridge cutoff of 0.08, minimum ridge separation 1 m and candidate duplicate radius 0.7 m. Initial tangent half-length stays 1.25 m, missed-return probability 0.25 and maximum range 45 m.
+
+On 512 separate evaluation seeds per fleet (256 per roughness height), the two profiles gave the following final raw map results. Both profiles received the same measurements in every pair. One initial seed exhausted the generator’s 256 attempts before it produced a wall; a replacement from the same 3 m stratum was selected without using either estimator’s output.
+
+| Vehicles | Previous mean F1 | Tuned mean F1 | Difference (95% interval), percentage points | Mean off-wall fragment length, previous → tuned |
+|---:|---:|---:|---:|---:|
+| 3 | 62.78% | 63.48% | +0.70 (+0.22 to +1.19) | 78.8 → 124.6 m |
+| 10 | 72.37% | 77.34% | +4.97 (+4.59 to +5.36) | 41.8 → 57.1 m |
+
+Intervals use 4,000 paired bootstrap resamples within roughness strata. Off-wall length counts each supported fragment, including overlapping fragments. The selection objective was F1 and did not penalize runtime: on a Mac, median time for 100 WM-P tracking steps (8 tuning seeds; no scene generation, evaluation or rendering) changed from 0.63 to 0.55 s for 3 vehicles and from 3.06 to 14.38 s for 10.
+
+The November 12 WM-P selection used 40 screening scenes and 60 separate tuning scenes to maximize mean final raw Map F1 at 0.4 m. Three vehicles use tangent half-length 4 m, missed-return model probability 0.05 and candidate range 45 m. Ten vehicles use 1.25 m, 0.25 and 45 m respectively. The independent test used 100 separate scenes. The selection objective did not constrain off-wall length or test openings and branches.
 
 For three vehicles, WM-F uses a fleet-specific threshold selected on opening and fork scenes using final extended centre spline Map F1, with limits on full opening closures and wrong-branch connections. Selection and confirmation used separate seeds. The full fragment length is 2 m for all vehicle counts.
 
-The previous B value of 12 was the upper endpoint of a 40-point grid over [−12, 12]. The original 200-scene tuning explored all finite eligible score breakpoints. A fragment or patch is supported when its qualified score is **at least** its method's threshold. There is no scene-specific adjustment and no evaluator feedback into the estimator.
+The previous B value of 12 was the upper endpoint of a 40-point grid over [−12, 12]. The original 200-scene tuning explored all finite eligible score breakpoints. A fragment or patch is supported when its qualified score is **at least** its method's threshold. The protocol fixes the threshold before the run; the displayed wall and evaluation metrics do not adjust it.
 
 PSPT also requires its geometry and own-patch evidence guards. B's score is eligible after at least two matched snapshots; a fragment is scored over 20 subsequent snapshots, and regeneration uses a 5-snapshot cooldown. B retains a past qualified crossing even after expiry, while PSPT uses its current hypothesis weights. Their numerical scores and computational budgets are not interchangeable.
 
@@ -55,11 +71,11 @@ Centre precision remains 100% in these four cases. Across the three additional s
 
 Since the independent-wall update on 2026-10-22, the current layered **Both walls** generator draws separate large-scale B-splines for the lower and upper walls. It enforces a minimum 6 m vertical gap through constant symmetric translations, using exact piecewise-cubic extrema. The route is then derived from their midpoint, retaining its full ±2 m lateral oscillation. The minimum gap is twice the sum of that 2 m amplitude and 1 m vertical truth-pose clearance: 6 m. This bounds every vehicle phase, including between snapshots; it is not a vehicle-body or Euclidean-clearance model. Domain rejection remains truth-side and independent of the requested fleet, duration, and measured noise. The exported wall-model kind is `independent-wall-uniform-cubic`; single-wall and archived shared-centre models retain `two-layer-uniform-cubic`. Old shared settings URLs use the current generator, so reproducing earlier walls also requires the earlier commit.
 
-The historical and tuning trajectories advanced 0.75 m per snapshot. The current layered trajectory advances ⅔ m per snapshot; legacy `reference` / `random` trajectories retain 0.75 m for historical fixtures. Consequently, even matching vehicle/noise settings does not recreate the old distribution or full observation sequence. Display-grid resolution is independent of the fixed 100 × 100 candidate grids.
+The archived October trajectories advanced 0.75 m per snapshot. The current layered trajectory advances ⅔ m per snapshot; legacy `reference` / `random` trajectories retain 0.75 m for historical fixtures. Consequently, even matching vehicle/noise settings does not recreate the old distribution or full observation sequence. Display-grid resolution is independent of the fixed 100 × 100 candidate grids.
 
 ## What the tuning result means
 
-The selection objective was maximum observed-wall recall subject to **empirical mean grouped-fragment false-positive loss ≤ 0.01**. The original targets were FP ≤ 1%, recall ≥ 60%, and confidence parameter δ = 0.1. The tuning exercise did not run a new calibration or test stage.
+The October 2026 selection objective was maximum observed-wall recall subject to **empirical mean grouped-fragment false-positive loss ≤ 0.01**. The original targets were FP ≤ 1%, recall ≥ 60%, and confidence parameter δ = 0.1. The tuning exercise did not run a new calibration or test stage.
 
 | Archived tuning statistic | Guarded PSPT | Fixed-fragment B |
 |:--|--:|--:|
@@ -71,7 +87,7 @@ The selection objective was maximum observed-wall recall subject to **empirical 
 
 These are equal-scene means. The tuning grouped-fragment loss treats an empty estimate as zero FP; centre precision excludes empty scenes. This makes the empty-scene fraction essential to interpreting B's result. Grouped-fragment FP is not the browser's fraction of off-wall centres, and 1.0 nonempty centre precision does not imply complete or error-free wall reconstruction.
 
-Neither method obtained an LTT-certified threshold in the earlier calibration study. Applying a fixed development threshold to a new scene does not introduce online truth leakage, but the scene's displayed metrics do not establish generalisation or a certified error rate. The current release has not undergone a fresh independent population study after its trajectory and independent-wall generator changes.
+Neither method obtained an LTT-certified threshold in the earlier calibration study. Applying a fixed development threshold to a new scene does not introduce online truth leakage, but the scene's displayed metrics do not establish generalisation or a certified error rate. The November 14 independent test covers only the straight-route upper-wall simulation at 3 and 10 vehicles. It does not validate the layered generator or establish a false-positive guarantee.
 
 ## Current post-hoc metrics
 
@@ -89,7 +105,7 @@ An empty estimate has undefined precision/P95; its recall is zero if some wall h
 
 ## Main comparison, sweep and exports
 
-Both views use `MethodComparison` and `createPSPTEvaluator`. Each sweep job generates one scene and replays identical measured snapshots through both methods. It inherits the current duration and other settings, changing only range SD, roughness and seed. Aggregation separates methods, full non-seed inputs and method protocols, so different durations or thresholds are not silently pooled.
+The current interactive Run and sweep use `EchoComparison` and `createPSPTEvaluator`. Each sweep job generates one scene and replays identical measured snapshots through both methods. It inherits the current duration and other settings, changing only range SD, roughness and seed. Aggregation separates methods, full non-seed inputs and method protocols, so different durations or thresholds are not silently pooled.
 
 JSON schema **`echomap-drf/5`** includes full estimator threshold and revision metadata, measured prefixes, per-method candidate decisions, post-hoc evaluation, and separately labelled truth. Sweep records include both method summaries and their protocol. CSV adds `selection_threshold`, `threshold_source` and `implementation_revision` to each method/snapshot row. Reconnected runs retain their recorded protocol; packets from the earlier unversioned server are labelled as legacy. Physical duration per snapshot remains unspecified.
 
