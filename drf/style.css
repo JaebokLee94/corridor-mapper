@@ -83,8 +83,8 @@ sub { font-size:.78em; }
 .sidebar-run svg { width:20px; height:20px; fill:currentColor; }
 .sidebar { min-width:0; align-self:start; position:sticky; top:0; max-height:100dvh; overflow:auto; overscroll-behavior-y:contain; background:var(--color-surface-1); border-right:1px solid var(--color-line); scrollbar-width:thin; }
 .run-section { padding:20px; position:sticky; top:0; z-index:2; background:var(--color-surface-1); box-shadow:0 1px 0 var(--color-line); }
-.sidebar-title { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px; margin:0 -12px 12px; }
-#newMapRun { margin-inline-start:auto; padding-inline:4px; white-space:nowrap; }
+.sidebar-title { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; row-gap:4px; margin:0 0 12px -12px; }
+#newMapRun { margin-inline-start:auto; padding-inline:2px; white-space:nowrap; }
 .sidebar-title h2 { font-size:18px; margin-right:auto; }
 .run-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; min-height:42px; }
 .run-actions[data-mode="complete"] { grid-template-columns:repeat(2,minmax(0,1fr)); }
