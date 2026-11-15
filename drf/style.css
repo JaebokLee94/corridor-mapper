@@ -542,3 +542,14 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 @media(max-width:800px) { .sweep-charts { grid-template-columns:1fr; } }
 
 #methodMetrics.echo-only tr > :nth-child(3), #methodMetrics.echo-only tr:has(#precisionValue, #firstPrecisionValue, #offwallValue, #p95Value, #pendingValue, #supportedValue, #contradictedValue) { display:none; }
+
+#methodMetrics.right-only tr > :nth-child(2),
+#methodMetrics.curves-only tr:has(#precisionValue, #firstPrecisionValue, #offwallValue, #p95Value, #pendingValue, #supportedValue, #contradictedValue) { display:none; }
+
+#rightMethod {
+  font:inherit; color:var(--color-baseline); field-sizing:content; max-width:100%;
+  min-height:28px; padding:2px 4px; border:1px solid transparent; border-radius:4px;
+  background-color:transparent; cursor:pointer;
+}
+#rightMethod:hover, #rightMethod:focus-visible { border-color:currentColor; }
+#rightMethod:disabled { cursor:default; }

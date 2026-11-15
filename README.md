@@ -14,7 +14,7 @@ A research workbench for seeing how measurements become surface hypotheses, and 
 
 </div>
 
-**Active comparison:** EchoSpline (multi-echo cubic B-spline fit) and WM-P (wall mapping with pair tracking).
+**Active comparison:** EchoSpline is the left estimator. Choose EchoSpline + GBDT, GAT + GPR, WM-P, EchoArc-CNN or WM-F in the right map heading. WM-P with extended centre spline interpolation is the default. A change after a completed run recomputes the same seed and settings. The learned estimators use frozen three-vehicle upper-wall checkpoints and only the measured prefix.
 
 Default measurement noise (local and shared): position SD **0 m** (implementing the negligible localization noise assumed by Jung et al., §II-C) and echo-range SD **0.40 m** (wall reconstruction in §VI-A). The default range-noise sweep uses 0.40, 0.70 and 1.00 m. Explicit values in replay links and exports retain their original meaning. Published thresholds below were selected under their documented noise conditions.
 

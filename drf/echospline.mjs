@@ -5,6 +5,7 @@
  * For M nonempty pair/snapshots, N horizontal samples and K spline coefficients,
  * each fit iteration scans O(MN) distances, plus echo assignment and a banded solve.
  */
+import { minimumAssignment } from './range-assignment.mjs';
 const clip=(x,a,b)=>Math.min(b,Math.max(a,x));
 const zeros=n=>new Float64Array(n);
 const median=a=>{a.sort((x,y)=>x-y);const i=a.length>>1;return a.length%2?a[i]:(a[i-1]+a[i])/2;};
@@ -72,7 +73,7 @@ function smoothed(track,k){
   }
   return weights.map(row=>row.reduce((sum,w,i)=>sum+w*track[start+i].r,0));
 }
-function inversePoint(p,r,rate,sign,straight,limits){
+function inversePoint(p,r,rate,sign,straight,limits,referenceFit){
   const {a,b,va,vb}=p,bx=b[0]-a[0],by=sign*(b[1]-a[1]),s=r*r-bx*bx-by*by;
   if(!(s>.01&&r>0&&Math.abs(rate)<.975*(Math.hypot(...va)+Math.hypot(...vb))))return [];
   const midX=(a[0]+b[0])/2,midY=sign*(a[1]+b[1])/2;
@@ -88,9 +89,9 @@ function inversePoint(p,r,rate,sign,straight,limits){
   for(let j=1;j<=steps;j++){
     const hi=-edge+2*edge*j/steps,fh=sample(hi);
     if((fl<=0&&fh>=0)||(fl>=0&&fh<=0)){
-      let a0=lo,b0=hi;
-      for(let k=0;k<(straight?18:30);k++){const m=(a0+b0)/2;if((sample(m)<0)===(fl<0))a0=m;else b0=m;}
-      const p=sample((a0+b0)/2,true);if(p)roots.push(p);
+      let a0=lo,b0=hi,lastMid=lo;
+      for(let k=0;k<(straight?18:30);k++){const m=(a0+b0)/2;lastMid=m;if((sample(m)<0)===(fl<0))a0=m;else b0=m;}
+      const p=sample(referenceFit && straight?lastMid:(a0+b0)/2,true);if(p)roots.push(p);
     }lo=hi;fl=fh;
   }return roots;
 }
@@ -106,7 +107,7 @@ function initialise(points,x){
     y[j]=median(local.map(([px,py,s])=>py+(q-px)*clip(s,hi-lo>=2?-Infinity:-1.5,hi-lo>=2?Infinity:1.5)));
   }return {y,near};
 }
-function fit(observations,points,sign,grid){
+function fit(observations,points,sign,grid,details){
   const {x,knots,n,B,spacing,support}=grid,{y,near}=initialise(points,x),prior=zeros(n*4),rhs=zeros(n);
   for(let j=0;j<x.length;j++){
     const {idx,w}=B[j],weight=1/(1+(near[j]/2)**2);outer(prior,idx,w,weight);
@@ -135,7 +136,7 @@ function fit(observations,points,sign,grid){
       pairs.sort((a,b)=>Math.abs(a.e)-Math.abs(b.e)||a.i-b.i||a.k-b.k);
       const used=new Set(),usedHit=new Set();
       for(const {i,k,e} of pairs){if(used.has(i)||usedHit.has(k))continue;used.add(i);usedHit.add(k);const h=resolved[k];
-        matches.push({e,g:h.g,b:basis(h.x,knots,n,spacing)});dataLoss+=.0625*(Math.hypot(1,e/.25)-1);}
+        matches.push({e,g:h.g,x:h.x,b:basis(h.x,knots,n,spacing)});dataLoss+=.0625*(Math.hypot(1,e/.25)-1);}
       dataLoss+=(rs.length-used.size)*.0625*(Math.sqrt(37)-1);
     }
     const diff=c.map((v,j)=>v-pin[j]),rd=mul(reg,diff);
@@ -157,11 +158,12 @@ function fit(observations,points,sign,grid){
   const curves=[];let run=[];
   for(let j=0;j<x.length;j++){if(near[j]<=support)run.push([x[j],state.heights[j]]);else{if(run.length>=2)curves.push(run);run=[];}}
   if(run.length>=2)curves.push(run);
-  return {curves,cost:state.dataLoss/nr,matched:state.matches.length};
+  return {curves,cost:state.dataLoss/nr,matched:state.matches.length,
+    ...(details?{fit:{points,x,prior:y,heights:state.heights,near,matches:state.matches}}:{})};
 }
 export class EchoSpline {
   constructor({domain,upper=false,spacing=2,support=8}={}){
-    const [lo,hi]=domain??[0,100];this.limits=[lo,hi];this.upper=upper;this.pairs=new Map();this.obs=[];this.tracks=[];
+    const [lo,hi]=domain??[0,100];this.limits=[lo,hi];this.upper=upper;this.referenceFit=upper;this.pairs=new Map();this.obs=[];this.tracks=[];
     const x=Float64Array.from({length:Math.round((hi-lo)/.2)+1},(_,k)=>lo+k*.2);
     const knots=[lo,lo,lo,lo];for(let k=lo+spacing;k<hi;k+=spacing)knots.push(k);knots.push(hi,hi,hi,hi);
     const n=knots.length-4;this.grid={x,knots,n,spacing,support,B:Array.from(x,u=>basis(u,knots,n,spacing))};this.straight=true;
@@ -183,23 +185,24 @@ export class EchoSpline {
       }
       const pred=pair.active.map(tr=>{const last=tr.at(-1).r,n=Math.min(tr.length-1,3);return last+(n?clip((last-tr[tr.length-1-n].r)/n,-1.8,1.8):0);});
       const next=[],used=new Set();
-      for(const [i,j] of match(pred,rs))if(Math.abs(pred[i]-rs[j])<=3.25){const tr=pair.active[i];tr.push({r:rs[j],p});next.push(tr);used.add(j);}
+      const matches=this.referenceFit?minimumAssignment(pred.length,rs.length,(i,j)=>Math.abs(pred[i]-rs[j])):match(pred,rs);
+      for(const [i,j] of matches)if(Math.abs(pred[i]-rs[j])<=3.25){const tr=pair.active[i];tr.push({r:rs[j],p});next.push(tr);used.add(j);}
       rs.forEach((r,j)=>{if(!used.has(j)){const tr=[{r,p}];next.push(tr);this.tracks.push(tr);}});pair.active=next;
     }
   }
-  step(wire){this.observe(wire);return this.estimate();}
-  estimate(){
+  step(wire,details=false){this.observe(wire);return this.estimate(details); }
+  estimate(details=false){
     let best=null,ambiguous=false;
     for(const sign of this.upper?[1]:[1,-1]){
       const pts=[];
       for(const tr of this.tracks)if(tr.length>=5)for(let j=0;j<tr.length;j++){
-        const [r,rate]=smoothed(tr,j);for(const q of inversePoint(tr[j].p,r,rate,sign,this.straight,this.limits))pts.push(q);
+        const [r,rate]=smoothed(tr,j);for(const q of inversePoint(tr[j].p,r,rate,sign,this.straight,this.limits,this.referenceFit))pts.push(q);
       }
       if(pts.length<5)continue;
-      const candidate=fit(this.obs,pts,sign,this.grid);
+      const candidate=fit(this.obs,pts,sign,this.grid,details);
       if(!best||candidate.cost<best.cost-1e-10){best=candidate;ambiguous=false;}
       else if(Math.abs(candidate.cost-best.cost)<=1e-10)ambiguous=true;
     }
-    return {curves:ambiguous?[]:best?.curves??[],matchedEchoes:best?.matched??0,rangeCount:this.obs.reduce((s,o)=>s+o.rs.length,0),ambiguous};
+    return {...(details && !ambiguous && best?{fit:best.fit}:{}),curves:ambiguous?[]:best?.curves??[],matchedEchoes:best?.matched??0,rangeCount:this.obs.reduce((s,o)=>s+o.rs.length,0),ambiguous};
   }
 }

@@ -1,5 +1,5 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs';
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261112-checkedcentre';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-right-method';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-right-method';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
@@ -7,12 +7,13 @@ import { createDiagnosticView } from './diagnostic-ui.mjs?v=20261112-upper-wmp';
 import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
-import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261112-chain-tips';
-import { echoProtocol } from './echo-comparison.mjs?v=20261114-wmp';
+import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261115-right-method';
+import { rightMethods } from './right-methods.mjs';
+import { echoProtocol } from './echo-comparison.mjs?v=20261115-right-method';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261114-wall-geometry';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261112-chain-tips';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261115-right-method';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261115-right-method';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -27,6 +28,12 @@ const runPreloader = createRunPreloader({ createWorker: () => createLocalWorker(
 function renderThresholdProtocol(protocol = echoProtocol()) {
   if(protocol.echoSpline){
     const wmp=protocol.guarded, p=protocol.echoSpline.parameters;
+    if(wmp.id){
+      const info=rightMethods[wmp.id];
+      $('thresholdSummary').textContent=wmp.threshold==null ? info.description : info.name+' threshold: '+wmp.threshold;
+      $('thresholdDetails').textContent=info.description+(wmp.training?' '+wmp.training+'.':'');
+      return;
+    }
     $('thresholdSummary').textContent=`WM-P selection threshold: ${wmp.threshold.toFixed(4)}`;
     $('thresholdDetails').textContent=`EchoSpline uses ${p.knotSpacingM} m knots and ${p.supportDistanceM} m support reach. WM-P uses the fixed selection threshold ${wmp.threshold.toFixed(4)}.`;
     return;
@@ -101,7 +108,7 @@ function installSidebarControls() {
   }, true);
 }
 function fillSettings(input) {
-  for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,...input})) {
+  for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,rightMethod:'wmp',...input})) {
     const field = form.elements.namedItem(key);
     if (field) field.type === 'checkbox' ? field.checked = value : field.value = String(value);
   }
@@ -116,7 +123,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261114-wall-geometry';
+  const revision = '20261115-right-method';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -128,7 +135,7 @@ function warmSelectedInput(input) {
   try { runPreloader.schedule(input ?? settings()); } catch { runPreloader.dispose(); }
 }
 function createWorker(name, options = {}) {
-  if (name === 'run' && state.server) return createServerRunWorker(state.server, options);
+  if (name === 'run' && state.server && (!options.input?.rightMethod || state.server.rightMethods?.includes(options.input.rightMethod))) return createServerRunWorker(state.server, options);
   if (name === 'run') return runPreloader.take(options.input) ?? createLocalWorker(name);
   return createLocalWorker(name);
 }
@@ -192,7 +199,7 @@ function controls() {
   const backend=state.scenario?.measurementBackend;
   const source={'public-dgx-cuda':'H200 paths','dgx-cuda':'H200 paths','dgx-cuda-physical':'H200 paths','local-physical-cache':'Saved paths','saved-physical-paths':'Saved paths','dgx-physical-cache':'Saved H200 paths','cpu-fallback':'CPU paths','browser-fallback':'Browser paths',browser:'Browser paths'}[backend];
   if(source) $('runState').textContent += ' · '+source;
-  else if (state.server) $('runState').textContent += ' · Server';
+  else if (state.server && (!state.pendingInput?.rightMethod || state.server.rightMethods?.includes(state.pendingInput.rightMethod))) $('runState').textContent += ' · Server';
   $('newSeed').disabled = active || sweeping;
 }
 function renderExportControls() {
@@ -451,17 +458,22 @@ function renderSelected() {
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
   const legacy=!!state.protocol && !state.protocol.echoSpline;
   const first=legacy?'guarded':'echoSpline', second=legacy?'baseline':'guarded';
-  const names=legacy?['WM-P','WM-F']:['EchoSpline','WM-P'];
+  const rightId=legacy?'wmf':state.protocol?.guarded?.id ?? form.elements.namedItem('rightMethod')?.value ?? 'wmp';
+  const right=rightMethods[rightId]??rightMethods.wmp;
+  const names=legacy?['WM-P','WM-F']:['EchoSpline',right.name];
   const buttons=[$('methodGuarded'),$('methodBaseline')];
   [first,second].forEach((key,k)=>{buttons[k].dataset.method=key;buttons[k].textContent=names[k];buttons[k].title=names[k];});
   if(!['compare',first,second].includes(state.method))state.method='compare';
   const selected=state.method==='compare'?first:state.method;
-  const echoOnly=state.method==='echoSpline';
-  $('showInterpolation').disabled=echoOnly;
+  const rightSolo=state.method===second && !!right.curves;
+  const echoOnly=state.method==='echoSpline'||rightSolo;
+  const curveView=echoOnly||!!right.curves && state.method==='compare';
+  $('interpolationLabel').textContent=(legacy?'Map':right.name)+' interpolation';
+  $('showInterpolation').disabled=curveView;
   const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse'].map(id => [id, $(id).checked]));
   const interpolate = $('showInterpolation').checked, kind = $('interpolationKind').value;
-  $('centreLegend').hidden=echoOnly || !interpolate || !['centre','checked'].includes(kind) || !layers.showProxy;
-  $('interpolationKind').disabled = echoOnly || !interpolate && state.method === 'compare';
+  $('centreLegend').hidden=curveView || !interpolate || !['centre','checked'].includes(kind) || !layers.showProxy;
+  $('interpolationKind').disabled = curveView || !interpolate && state.method === 'compare';
   const visibleBridges = method => {
     const map = frame?.methods?.[method];
     if(kind==='checked' && map?.checkedChains?.length) {
@@ -476,14 +488,25 @@ function renderSelected() {
     history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
   $('mapPair').dataset.mode=state.method;
   $('baselinePane').hidden=state.method!=='compare';
-  const longName=k=>({echoSpline:'EchoSpline',guarded:'WM-P (Wall Mapping with Pair Tracking)',baseline:'WM-F (Wall Mapping with Fixed Segments)'})[k];
+  const longName=k=>!legacy && k===second && rightId!=='wmp' ? (rightId==='wmf'?'WM-F (Wall Mapping with Fixed Segments)':right.name) : ({echoSpline:'EchoSpline',guarded:'WM-P (Wall Mapping with Pair Tracking)',baseline:'WM-F (Wall Mapping with Fixed Segments)'})[k];
   $('primaryMapName').textContent=longName(selected);
   $('primaryMapName').classList.toggle('baseline-name',selected===second);
   $('secondaryMapName').textContent=longName(second);
+  const selector=$('rightMethod'),primaryTitle=$('primaryMapName'),secondaryTitle=$('secondaryMapName');
+  const rightPrimary=state.method===second;
+  const title=rightPrimary?primaryTitle:secondaryTitle;
+  if(selector.parentElement!==title.parentElement)title.parentElement.append(selector);
+  selector.hidden=legacy;
+  primaryTitle.hidden=!legacy && rightPrimary;secondaryTitle.hidden=!legacy && !rightPrimary;
+  $('baselineCanvas').setAttribute('aria-label',names[1]+' wall estimate, sharing the '+names[0]+' camera and snapshot');
+  $('mapCanvas').setAttribute('aria-label',longName(selected)+' wall estimate');
+
   document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{th.textContent=names[i];th.dataset.methodCol=i?'second':'first';});
-  $('methodMetrics').classList.toggle('echo-only',echoOnly);
+  $('methodMetrics').classList.toggle('echo-only',state.method==='echoSpline');
+  $('methodMetrics').classList.toggle('right-only',rightSolo);
+  $('methodMetrics').classList.toggle('curves-only',curveView);
   $('historySecond').parentElement.hidden=echoOnly;
-  for(const opt of $('historyMetric').options)opt.disabled=echoOnly&&!['mapF1','recall','surfacePrecision'].includes(opt.value);
+  for(const opt of $('historyMetric').options)opt.disabled=curveView&&!['mapF1','recall','surfacePrecision'].includes(opt.value);
   if($('historyMetric').selectedOptions[0]?.disabled)$('historyMetric').value='mapF1';
   map.set({...display,curves:frame?.methods?.[selected]?.curves,mode:'geometry',xRange:[-10,display.domain[1]+10]});
   baselineMap.set({...display,bridges:visibleBridges(second),curves:frame?.methods?.[second]?.curves,candidates:frame?.methods?.[second]?.candidates ?? [],mode:'geometry',xRange:[-10,display.domain[1]+10]});
@@ -491,7 +514,7 @@ function renderSelected() {
   densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
   contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
   $('snapshotLabel').textContent = `${frame?.t ?? 0} / ${scenario?.input.snapshots ?? form.elements.namedItem('snapshots').value}`;
-  renderInterpolationPanel($, state.method, kind, evaluation, fmt, legacy);
+  renderInterpolationPanel($, state.method, kind, evaluation, fmt, legacy, right.name, rightSolo);
   for (const [method,prefix] of [[first,''],[second,'b']]) {
     const e=evaluation?.methods?.[method] ?? (method==='guarded' ? evaluation : null);
     const node=(name)=>$(prefix ? prefix+name[0].toUpperCase()+name.slice(1) : name);
@@ -500,13 +523,13 @@ function renderSelected() {
     for (const [id,key] of [['p95Value','p95'],['f1Value','f1']]) node(id).textContent=fmt(e?.[key]);
     const candidates=frame?.methods?.[method]?.candidates ?? [];
     for (const [id,status] of [['supportedValue','supported'],['pendingValue','pending'],['contradictedValue','contradicted']])
-      node(id).textContent=method==='echoSpline' || method==='baseline' && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
+      node(id).textContent=method==='echoSpline' || method===second && right.curves || (method==='baseline' || method===second && rightId==='wmf') && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
     const completed = interpolationResult(e, kind);
     const mapScore=interpolationResult(e,interpolate ? kind : 'off')?.mapF1;
     node('mapF1Value').textContent=mapScore==null ? '—' : fmt(100*mapScore,1);
     const mapRecall = node('mapRecallValue'), coverage = interpolate ? completed?.recall : e?.recall;
     mapRecall.textContent = coverage == null ? '—' : fmt(100 * coverage, 1);
-    mapRecall.title = method==='echoSpline' ? 'Observed-wall coverage of the fitted curve' : !interpolate ? 'Supported fragments only' : completed && ['centre','checked'].includes(kind) ? `${completed.count} centre links · ${fmt(completed.lengthM,2)} m of mapped wall · ${fmt(completed.offWallM,2)} m outside tolerance` : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
+    mapRecall.title = (method==='echoSpline' || method===second && right.curves) ? 'Observed-wall coverage of the fitted curve' : !interpolate ? 'Supported fragments only' : completed && ['centre','checked'].includes(kind) ? `${completed.count} centre links · ${fmt(completed.lengthM,2)} m of mapped wall · ${fmt(completed.offWallM,2)} m outside tolerance` : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
     node('firstPrecisionValue').title=e?.firstSupportCount!=null ? `First-support errors: ${e.firstSupportErrors} / ${e.firstSupportCount}` : '';
   }
   for (const button of document.querySelectorAll('[data-method]')) button.setAttribute('aria-pressed',String(button.dataset.method===state.method));
@@ -518,7 +541,7 @@ function renderSelected() {
   $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
   const historyMetric = $(state.method === 'compare' || echoOnly ? 'historyMetric' : 'interpolationChartMetric').value;
-  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind,legacy);
+  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind,legacy,rightSolo);
   renderDiagnostics();
 }
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
@@ -603,7 +626,17 @@ $('wallConfiguration').onchange = event => {
     form.elements.specular.checked = defaults.specular;
   }
 };
+$('rightMethod').addEventListener('change', () => {
+  const rerun=state.frames.length>0;
+  form.dispatchEvent(new Event('change'));
+  if(rerun)void prepare();
+});
 form.addEventListener('change', () => { state.sweepRuns = []; notice('Parameters changed. Run again to compare methods.'); cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
+$('rightMethod').addEventListener('change', () => {
+  const rerun=state.frames.length>0;
+  form.dispatchEvent(new Event('change'));
+  if(rerun)void prepare();
+});
 form.addEventListener('change', () => warmSelectedInput());
 $('timeSlider').oninput = () => {
   if (['running', 'paused'].includes(state.mode)) { $('timeSlider').value = state.selected; return; }
@@ -650,7 +683,7 @@ function renderSweep() {
   if (document.hidden || $('sweepPanel').hidden) return;
   const aggregates = aggregateRuns(state.sweepRuns);
   for (const [method, canvas] of [[aggregates.some(row=>row.method==='baseline')?'guarded':'echoSpline','sweepChart'],[aggregates.some(row=>row.method==='baseline')?'baseline':'guarded','sweepBaselineChart']])
-    { const title=({echoSpline:'EchoSpline',guarded:'WM-P',baseline:'WM-F'})[method];$(canvas).previousElementSibling.textContent=title;$(canvas).setAttribute('aria-label',title+' observed recall');drawSweep($(canvas), aggregates.filter(row => row.method === method), [], 'recall'); }
+    { const title=aggregates.find(r=>r.method===method)?.protocol?.name ?? ({echoSpline:'EchoSpline',guarded:'WM-P',baseline:'WM-F'})[method];$(canvas).previousElementSibling.textContent=title;$(canvas).setAttribute('aria-label',title+' observed recall');drawSweep($(canvas), aggregates.filter(row => row.method === method), [], 'recall'); }
   const body = $('sweepTable').querySelector('tbody'); body.replaceChildren();
   const statistic = (metric, total, scale = 1, places = 3) => {
     const counts = `valid ${metric.n}/${total}, failed ${metric.failed}, missing ${metric.missing}`;
@@ -703,7 +736,7 @@ async function runSweep(jobs, resumeId) {
       completedCount = completed;
       if (!progress || progress.type === 'sweep-result') renderSweep();
     };
-    handle = state.sweep = state.server ? startServerSweep(state.server, jobs, onProgress, { resumeId }) : startSweep(jobs, onProgress);
+    handle = state.sweep = state.server && (!jobs[0]?.rightMethod || state.server.rightMethods?.includes(jobs[0].rightMethod)) ? startServerSweep(state.server, jobs, onProgress, { resumeId }) : startSweep(jobs, onProgress);
     controls();
     const result = await handle.promise;
     if (generation !== state.generation) return;
@@ -748,7 +781,7 @@ $('exportCsv').onclick = () => {
     const lines=psptSnapshotCsv(frames,state.evaluations.map(e=>e.methods[method]),{includeInterpolation:true}).replace(/^\ufeff/,'').trim().split('\r\n');
     header=lines[0].replace('pspt_ms','estimator_ms');
     const loaded = protocol[method], revision = loaded.revision ?? 'legacy-unversioned';
-    rows.push(...lines.slice(1).map(line=>[method,loaded.threshold,csvValue(loaded.tuning?.id),line,csvValue(revision)].join(',')));
+    rows.push(...lines.slice(1).map(line=>[loaded.id??method,loaded.threshold,csvValue(loaded.tuning?.id??loaded.training??''),line,csvValue(revision)].join(',')));
   }
   download(new Blob(['\ufeffmethod,selection_threshold,threshold_source,'+header+',implementation_revision\r\n'+rows.join('\r\n')+'\r\n'],{type:'text/csv;charset=utf-8'}),'echomap-method-comparison.csv');
 };

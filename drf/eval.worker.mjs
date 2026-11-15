@@ -1,4 +1,4 @@
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-right-method';
 import { diffuseProfile } from './diffuse.mjs';
 import { createSweepProfileSource } from './diagnostic-profile.mjs?v=20261114-wall-geometry';
 let evaluator, secondEvaluator, scenario;

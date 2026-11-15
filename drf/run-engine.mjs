@@ -1,8 +1,8 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-right-method';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid, createField } from './field.mjs';
-import { EchoComparison } from './echo-comparison.mjs?v=20261114-wmp';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261112-chain-tips';
+import { EchoComparison } from './echo-comparison.mjs?v=20261115-right-method';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-right-method';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
  * No page acknowledgement, animation callback or parent timer is required.
@@ -48,8 +48,8 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask, prepare = g
         const frame = run.field.step(wire);
         frame.methods = run.estimator.step(wire);
         frame.candidates = frame.methods.guarded.candidates;
-        frame.psptMs = frame.methods.guarded.ms; frame.method = 'guarded-tuned';
-        const guarded = run.guardedEvaluator.step(frame, null, frame.methods.guarded.bridges, frame.methods.guarded.extendedBridges, frame.methods.guarded.checkedChains);
+        frame.psptMs = frame.methods.guarded.ms; frame.method = run.estimator.id==='wmp' ? 'guarded-tuned' : run.estimator.id;
+        const guarded = run.guardedEvaluator.step(frame.methods.guarded.curves ? {...frame, curveMethod:run.estimator.id, curves:frame.methods.guarded.curves} : frame, null, frame.methods.guarded.bridges, frame.methods.guarded.extendedBridges, frame.methods.guarded.checkedChains);
         const echoSpline = run.echoEvaluator.step({ ...frame, ...frame.methods.echoSpline }, guarded);
         const evaluation = { ...guarded, methods: { echoSpline, guarded } };
         run.next++;
@@ -85,6 +85,8 @@ export function createRunEngine({ emit, yieldTask = yieldWorkerTask, prepare = g
       run.grid = createGrid(input.grid, input.grid, scenario.domain);
       run.field = createField(run.grid, { band: input.band, perimeter: input.perimeter });
       run.estimator = new EchoComparison(input,scenario.domain);
+      await run.estimator.loadModel();
+      if (active !== run || run.epoch !== epoch) return;
       run.guardedEvaluator = createPSPTEvaluator(scenario, run.grid);
       run.echoEvaluator = createPSPTEvaluator(scenario, run.grid);
       send(run, 'prepared', { scenario, grid: run.grid, protocol: run.estimator.protocol });

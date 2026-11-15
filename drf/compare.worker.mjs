@@ -1,12 +1,13 @@
-import { EchoComparison } from './echo-comparison.mjs?v=20261114-wmp';
+import { EchoComparison } from './echo-comparison.mjs?v=20261115-right-method';
 // Only declared range noise and measured snapshots cross the inference boundary.
 let estimator;
-globalThis.onmessage=({data})=>{
+globalThis.onmessage=async ({data})=>{
   try {
-    const allowed=data.type==='init' ? ['type','requestId','sigmaR','vehicles','domain','scene','echoKnotM','echoSupportM'] : ['type','requestId','snapshot'];
+    const allowed=data.type==='init' ? ['type','requestId','sigmaR','vehicles','domain','scene','echoKnotM','echoSupportM','rightMethod'] : ['type','requestId','snapshot'];
     if (Object.keys(data).some(k=>!allowed.includes(k))) throw new Error('Non-measurement worker input');
     if (data.type==='init') {
       estimator=new EchoComparison({...data,sigmaD:data.sigmaR},data.domain);
+      if(data.rightMethod)await estimator.loadModel();
       globalThis.postMessage({type:'initialized',requestId:data.requestId});
     } else if (data.type==='step') {
       if (!estimator) throw new Error('Comparison worker must be initialized');

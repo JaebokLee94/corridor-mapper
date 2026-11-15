@@ -183,7 +183,7 @@ export function createPSPTEvaluator(scenario, grid) {
     }
     interpolation.rawMap=rawMap;
     const diagnostics = sharedDiagnostics?.diagnostics ?? diagnostic.step(frame.t);
-    if (frame.curves) return {t:frame.t,method:'echoSpline',diagnostics,observed:observed.map(p=>[p.x,p.y]),proxy:[],
+    if (frame.curves) return {t:frame.t,method:frame.curveMethod??'echoSpline',diagnostics,observed:observed.map(p=>[p.x,p.y]),proxy:[],
       surfacePrecision,recall,f1,missing:uncovered.length,observedFraction:fraction(observed.length,gt.length),
       precision:null,offwall:null,p95:null,medianError:null,holdRate:null,firstSupportPrecision:null,
       firstSupportCount:null,firstSupportErrors:null,supportedCount:null,pendingCount:null,rejectedCount:null,

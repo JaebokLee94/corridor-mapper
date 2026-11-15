@@ -1,6 +1,12 @@
-import { EchoSpline } from './echospline.mjs';
+import { rightMethods } from './right-methods.mjs';
+import { Baseline } from './baseline.mjs';
+import { modelData, neuralRuntime } from './model-runtime.mjs';
+import { correctFit } from './echospline-gbdt.mjs';
+import { GatGpr } from './gat-gpr.mjs';
+import { EchoArcCNN } from './echoarc-cnn.mjs';
+import { EchoSpline } from './echospline.mjs?v=20261115-right-method';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
-import { PSPT } from './pspt.mjs?v=20261112-upper-wmp';
+import { PSPT, prepareMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
 
 const paperSettings = new Map([
@@ -9,6 +15,7 @@ const paperSettings = new Map([
 ]);
 
 export function echoProtocol(input={}) {
+  if(input.rightMethod!=null&&!Object.hasOwn(rightMethods,input.rightMethod))throw new RangeError('Unknown right-hand comparison method');
   const spacing=input.echoKnotM??2,support=input.echoSupportM??8;
   const previous=protocolForFleet(input.vehicles).guarded;
   const selected=input.scene==='paper-upper' && paperSettings.get(input.vehicles);
@@ -21,24 +28,51 @@ export function echoProtocol(input={}) {
     parameters:{knotSpacingM:spacing,supportDistanceM:support,rangeGateM:1.5,regularization:.2},
     wallHypothesis:input.scene==='paper-upper'?'upper':'select one side by range residual',
     score:'robust one-to-one multi-echo range fit',tuning:{id:'single-wall-multiecho',certified:false}},
-    guarded};
+    guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded : input.rightMethod==='wmf'
+      ? {...protocolForFleet(input.vehicles).baseline,id:'wmf'}
+      : {...rightMethods[input.rightMethod],id:input.rightMethod,threshold:input.rightMethod==='arc'?0.7:null,
+        training:'Frozen three-vehicle upper-wall checkpoint',revision:'20261115'}};
 }
 
 export class EchoComparison {
   constructor(input,domain) {
     this.protocol=echoProtocol(input);
-    const {parameters,refinement,clustering}=this.protocol.guarded;
-    this.wmp=new PSPT({refinement,clustering,domain:input.scene==='paper-upper'?domain:undefined,...parameters});
-    this.evidence=new GapRangeEvidence(input.sigmaD);
-    this.spline=new EchoSpline({domain,upper:input.scene==='paper-upper',spacing:input.echoKnotM,support:input.echoSupportM});
+    this.id=input.rightMethod??'wmp'; this.vehicles=input.vehicles; this.lastT=0;
+    const bounds=input.scene==='paper-upper'?domain:undefined;
+    const splineOptions={domain,upper:input.scene==='paper-upper',spacing:input.echoKnotM,support:input.echoSupportM};
+    this.spline=new EchoSpline(splineOptions);
+    if(this.id==='gbdt')this.fixedSpline=(input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
+      ? this.spline : new EchoSpline({...splineOptions,spacing:2,support:8});
+    if(this.id==='wmp'||this.id==='wmf'){
+      const {parameters,refinement,clustering}=this.protocol.guarded;
+      this.tracker=this.id==='wmp'?new PSPT({refinement,clustering,domain:bounds,...parameters}):new Baseline({domain:bounds,sigmaR:input.sigmaD});
+      if(this.id==='wmp')this.wmp=this.tracker;
+      this.evidence=new GapRangeEvidence(input.sigmaD);
+    }
+  }
+  async loadModel(){
+    if(this.id==='gbdt')this.tree=await modelData('gbdt');
+    else if(this.id==='gat')this.model=new GatGpr(await neuralRuntime('gat'),this.vehicles);
+    else if(this.id==='arc')this.model=new EchoArcCNN(await neuralRuntime('arc'));
   }
   step(wire) {
-    const start=performance.now();
-    // WM-P validates the full measurement packet before either estimator changes state.
-    const rows=selectGuarded(this.wmp,this.wmp.step(wire),this.protocol.guarded.threshold);
-    this.evidence.add(wire);
-    const guarded=wmpFrame(rows,start,true,this.evidence);
-    const fitStart=performance.now(),curve=this.spline.step(wire);
-    return {echoSpline:{...curve,candidates:[],ms:performance.now()-fitStart},guarded};
+    const start=performance.now();let guarded;
+    if(this.tracker){
+      const cut=this.protocol.guarded.threshold;
+      const rows=this.id==='wmp'?selectGuarded(this.tracker,this.tracker.step(wire),cut):this.tracker.step(wire,cut);
+      this.evidence.add(wire);guarded=wmpFrame(rows,start,true,this.evidence);
+    }else{
+      if(wire.t!==this.lastT+1)throw new RangeError('Snapshots must be consecutive from t=1');
+      prepareMeasuredSnapshot(wire);
+      if(this.model)guarded={...this.model.step(wire),ms:performance.now()-start};
+    }
+    const fitStart=performance.now(),left=this.spline.step(wire,this.fixedSpline===this.spline),leftMs=performance.now()-fitStart;
+    if(this.id==='gbdt'){
+      const t=performance.now(),f=this.fixedSpline===this.spline?left:this.fixedSpline.step(wire,true);
+      guarded={curves:f.fit?correctFit(f.fit,this.tree,wire.configs.length,8):[],candidates:[],ms:performance.now()-t};
+    }
+    if(this.fixedSpline===this.spline)delete left.fit;
+    this.lastT=wire.t;
+    return {echoSpline:{...left,candidates:[],ms:leftMs},guarded};
   }
 }

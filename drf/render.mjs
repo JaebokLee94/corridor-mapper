@@ -1,6 +1,6 @@
 import {confirmedExtensions} from './checked-centre.mjs?v=20261112-chain-tips';
 import { centreSpline } from './centre-spline.mjs';
-import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261112-checkedcentre';
+import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261115-right-method';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
@@ -482,7 +482,7 @@ export function drawSweep(canvas,aggregates,reference=[],metric='medianError',re
  */
 export async function sweepPng(aggregates) {
   if (!Array.isArray(aggregates)) throw new TypeError('Sweep aggregates must be an array.');
-  const methods=aggregates.some(r=>r.method==='baseline')?[['guarded','WM-P'],['baseline','WM-F']]:[['echoSpline','EchoSpline'],['guarded','WM-P']];
+  const methods=aggregates.some(r=>r.method==='baseline')?[['guarded','WM-P'],['baseline','WM-F']]:[['echoSpline','EchoSpline'],['guarded',aggregates.find(r=>r.method==='guarded')?.protocol?.name??'WM-P']];
   const rows=aggregates.filter(row=>methods.some(([method])=>row.method===method));
   if (!rows.length) throw new Error('Run a parameter sweep before exporting its charts.');
   if (rows.some(row=>!Number.isFinite(row.sigmaD) || !Number.isFinite(row.roughness) || !row.recall))
@@ -548,14 +548,14 @@ export function drawCounts(canvas,counts,predicted) {
 /** Shared-axis comparison; one solid and one dashed curve distinguish methods.
  * Missing precision stays a gap. No smoothing, interpolation of missing data or CI.
  */
-export function drawComparisonHistory(canvas,evaluations,selection='mapF1',snapshots=120,mode='compare',kind='linear',legacy=false) {
+export function drawComparisonHistory(canvas,evaluations,selection='mapF1',snapshots=120,mode='compare',kind='linear',legacy=false,rightSolo=false) {
   const surface=chartSurface(canvas);if(!surface)return;
-  const single = mode !== 'compare' && mode !== 'echoSpline';
+  const single = mode !== 'compare' && mode !== 'echoSpline' && !rightSolo;
   const percent = single ? ['recall','mapF1'].includes(selection) : selection !== 'p95';
   const count = single && ['missing','count','falseBridges'].includes(selection);
   const series = [[], []];
   for (const e of evaluations) {
-    const pair = single ? interpolationPair(e, mode, kind) : mode==='echoSpline'?[e.methods?.echoSpline,null]:legacy||e.methods?.baseline?[e.methods?.guarded,e.methods?.baseline]:[e.methods?.echoSpline,e.methods?.guarded];
+    const pair = single ? interpolationPair(e, mode, kind) : rightSolo?[e.methods?.guarded,null]:mode==='echoSpline'?[e.methods?.echoSpline,null]:legacy||e.methods?.baseline?[e.methods?.guarded,e.methods?.baseline]:[e.methods?.echoSpline,e.methods?.guarded];
     pair.forEach((record, i) => {
       const value = !single && selection==='mapF1' ? interpolationResult(record,kind)?.mapF1 : record?.[selection];
       series[i].push({x:e.t, y:value==null ? NaN : value*(percent ? 100 : 1)});

@@ -10,6 +10,8 @@ import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
 import { interpolationResult } from '../../drf/interpolation-panel.mjs';
 import { createDiagnosticView } from '../../drf/diagnostic-ui.mjs';
 
+import { rightMethods } from '../../drf/right-methods.mjs';
+
 const source=readFileSync(process.env.DRF_APP_SOURCE || new URL('../../drf/app.mjs',import.meta.url),'utf8');
 const section=(start,end)=>{
   const a=source.indexOf(start),b=source.indexOf(end,a+start.length);
@@ -249,7 +251,7 @@ test('view reset preserves simulation, selection and replay, and clearing a run 
   const nodes=new Map(),pending=new Map(),charts=new Map();let nextFrame=0,stoppedWorkers=0,cancelledSweeps=0,fitCalls=0;
   const document={body:{dataset:{}},createElement:()=>({}),querySelectorAll:()=>[]};
   const $=id=>{
-    if (!nodes.has(id)) nodes.set(id,{id,value:'',textContent:'old snapshot value',checked:false,options:[],selectedOptions:[],classList:{toggle(){}},parentElement:{},
+    if (!nodes.has(id)) nodes.set(id,{id,value:'',textContent:'old snapshot value',checked:false,options:[],selectedOptions:[],classList:{toggle(){}},parentElement:{append(el){el.parentElement=this;}},setAttribute(){},
       ownerDocument:document,addEventListener(){},dataset:{},removeAttribute(){},replaceChildren(...options){this.options=options;}});
     return nodes.get(id);
   };
@@ -259,7 +261,7 @@ test('view reset preserves simulation, selection and replay, and clearing a run 
     selected:3,next:3,busy:false,replay:false,frameTimes:[0,40,120],lastFrameAt:120,generation:0,valid:true,grid:{},
     scenario:{input:{snapshots:3},truth:[{configs:[]},{configs:[]},{configs:[]}],wire:[],walls:[]},
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
-  const context=vm.createContext({state,$,form,performance:{now:()=>300},hoverGeneration:0,hoverTimer:0,replayFrame:0,
+  const context=vm.createContext({state,$,form,rightMethods,performance:{now:()=>300},hoverGeneration:0,hoverTimer:0,replayFrame:0,
     runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},pageDefaults:{snapshots:60,vehicles:3},LAYERED_DOMAIN,URL,location:new URL('http://localhost/drf.html?interpolation=extended#old'),
     history:{replaceState(_state,_title,url){context.location=url;}},
     document,createDiagnosticView,interpolationResult,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
