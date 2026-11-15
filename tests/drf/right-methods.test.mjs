@@ -7,6 +7,24 @@ import { EchoComparison } from '../../drf/echo-comparison.mjs';
 import { createSceneGeometry,generateSnapshot } from '../../drf/scenario.mjs';
 import { gpSubset } from '../../drf/gat-gpr.mjs';
 import { rightMethods } from '../../drf/right-methods.mjs';
+import { fitMethodLabel, setMethodLabel } from '../../drf/method-label.mjs';
+
+test('a wrapped GBDT label keeps its accessible name and expands again when it fits',()=>{
+  const doc=new JSDOM('<table><tr><th></th></tr></table>').window.document;
+  const heading=doc.querySelector('th'),full='EchoSpline + GBDT';
+  let lines=[{width:60},{width:40}];
+  heading.getClientRects=()=>[{width:60}];
+  doc.defaultView.Range.prototype.getClientRects=()=>lines;
+  setMethodLabel(heading,full);
+  assert.equal(heading.textContent,'+GBDT');
+  assert.equal(heading.getAttribute('aria-label'),full);
+  lines=[{width:120}];
+  fitMethodLabel(heading);
+  assert.equal(heading.textContent,full);
+  setMethodLabel(heading,'WM-P');
+  assert.equal(heading.textContent,'WM-P');
+  assert.equal(heading.hasAttribute('aria-label'),false);
+});
 
 test('the map heading owns the ordered selector; its form still saves/defaults the experiment',()=>{
   const dom=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'));

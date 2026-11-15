@@ -1,3 +1,4 @@
+import { setMethodLabel } from './method-label.mjs';
 // Table/selector/axis labels for lengths of the reconstructed map, not added gaps.
 export const centreMetricNames = {count:['Centre links','Centre links'], lengthM:['Map length [m]','Map [m]'], offWallM:['Off-wall length [m]','Off-wall [m]'], falseBridges:['Off-wall links','Off-wall links']};
 // Read only the post-hoc evaluation for one method at the selected snapshot.
@@ -24,7 +25,7 @@ export function renderInterpolationPanel(get, mode, kind, frame, format, legacy=
   get('interpolationChartMetric').hidden = !single;
   const centre=['centre','checked'].includes(kind);
   const interpolation = kind==='checked' ? 'Extended centre spline' : centre ? 'Centre spline' : kind === 'extended' ? 'Extended linear' : kind === 'hermite' ? 'Gap Hermite' : 'Linear';
-  get('resultsTitle').textContent = single ? name + ' interpolation' : echo?(rightSolo?rightName:'EchoSpline')+' fit':'Method comparison';
+  setMethodLabel(get('resultsTitle'),single ? name + ' interpolation' : echo?(rightSolo?rightName:'EchoSpline')+' fit':'Method comparison');
   get('evaluationNote').textContent = single
     ? interpolation + ' · 0.4 m tolerance'
     : '0.4 m tolerance · same measured prefix';
@@ -32,8 +33,8 @@ export function renderInterpolationPanel(get, mode, kind, frame, format, legacy=
     get('evaluationNote').textContent = 'Extended linear · may cross openings';
   const completedLabel = kind==='checked' ? 'Ext. centre spline' : interpolation;
   get('interpolatedMapHeading').textContent = completedLabel;
-  get('historyFirst').textContent = single ? completedLabel : legacy?'WM-P':rightSolo?rightName:'EchoSpline';
-  get('historySecond').textContent = single ? get('rawMapHeading').textContent : legacy?'WM-F':rightName;
+  setMethodLabel(get('historyFirst'),single ? completedLabel : legacy?'WM-P':rightSolo?rightName:'EchoSpline');
+  setMethodLabel(get('historySecond'),single ? get('rawMapHeading').textContent : legacy?'WM-F':rightName);
   const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');
   if(single){
     get('bridgeTableNote').textContent=kind==='checked' ? 'Extended curves require repeated range support in every tested section. Map lengths include retained fragments.' : centre

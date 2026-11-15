@@ -10,6 +10,7 @@ import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
 import { interpolationResult } from '../../drf/interpolation-panel.mjs';
 import { createDiagnosticView } from '../../drf/diagnostic-ui.mjs';
 
+import { setMethodLabel } from '../../drf/method-label.mjs';
 import { rightMethods } from '../../drf/right-methods.mjs';
 
 const source=readFileSync(process.env.DRF_APP_SOURCE || new URL('../../drf/app.mjs',import.meta.url),'utf8');
@@ -261,7 +262,7 @@ test('view reset preserves simulation, selection and replay, and clearing a run 
     selected:3,next:3,busy:false,replay:false,frameTimes:[0,40,120],lastFrameAt:120,generation:0,valid:true,grid:{},
     scenario:{input:{snapshots:3},truth:[{configs:[]},{configs:[]},{configs:[]}],wire:[],walls:[]},
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
-  const context=vm.createContext({state,$,form,rightMethods,performance:{now:()=>300},hoverGeneration:0,hoverTimer:0,replayFrame:0,
+  const context=vm.createContext({state,$,form,rightMethods,setMethodLabel,performance:{now:()=>300},hoverGeneration:0,hoverTimer:0,replayFrame:0,
     runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},pageDefaults:{snapshots:60,vehicles:3},LAYERED_DOMAIN,URL,location:new URL('http://localhost/drf.html?interpolation=extended#old'),
     history:{replaceState(_state,_title,url){context.location=url;}},
     document,createDiagnosticView,interpolationResult,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},

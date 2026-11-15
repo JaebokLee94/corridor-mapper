@@ -1,5 +1,5 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-four-methods';
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-four-methods';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-compact-gbdt';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
@@ -8,6 +8,7 @@ import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261115-four-methods';
+import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
 import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
 import { echoProtocol } from './echo-comparison.mjs?v=20261115-four-methods';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
@@ -463,13 +464,13 @@ function renderSelected() {
   const right=rightMethods[rightId]??state.protocol?.guarded??rightMethods.wmp;
   const names=legacy?['WM-P','WM-F']:['EchoSpline',right.name];
   const buttons=[$('methodGuarded'),$('methodBaseline')];
-  [first,second].forEach((key,k)=>{buttons[k].dataset.method=key;buttons[k].textContent=names[k];buttons[k].title=names[k];});
+  [first,second].forEach((key,k)=>{buttons[k].dataset.method=key;setMethodLabel(buttons[k],names[k]);buttons[k].title=names[k];});
   if(!['compare',first,second].includes(state.method))state.method='compare';
   const selected=state.method==='compare'?first:state.method;
   const rightSolo=state.method===second && !!right.curves;
   const echoOnly=state.method==='echoSpline'||rightSolo;
   const curveView=echoOnly||!!right.curves && state.method==='compare';
-  $('interpolationLabel').textContent=(legacy?'Map':right.name)+' interpolation';
+  setMethodLabel($('interpolationLabel'),(legacy?'Map':right.name)+' interpolation');
   $('showInterpolation').disabled=curveView;
   const layers = Object.fromEntries(['showEllipses', 'showVehicles', 'showProxy', 'showTruth', 'showSpecular', 'showDiffuse'].map(id => [id, $(id).checked]));
   const interpolate = $('showInterpolation').checked, kind = $('interpolationKind').value;
@@ -502,7 +503,7 @@ function renderSelected() {
   $('baselineCanvas').setAttribute('aria-label',names[1]+' wall estimate, sharing the '+names[0]+' camera and snapshot');
   $('mapCanvas').setAttribute('aria-label',longName(selected)+' wall estimate');
 
-  document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{th.textContent=names[i];th.dataset.methodCol=i?'second':'first';});
+  document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{setMethodLabel(th,names[i]);th.dataset.methodCol=i?'second':'first';});
   $('methodMetrics').classList.toggle('echo-only',state.method==='echoSpline');
   $('methodMetrics').classList.toggle('right-only',rightSolo);
   $('methodMetrics').classList.toggle('curves-only',curveView);
@@ -798,6 +799,10 @@ $('exportPng').onclick = async () => {
 const chartResize = new ResizeObserver(() => { renderSelected(); renderSweep(); });
 chartResize.observe($('analysis-panel') ?? $('sweepPanel'));
 chartResize.observe($('metricChart'));
+const labelResize=new ResizeObserver(()=>{
+  document.querySelectorAll('[data-full-method-label]').forEach(fitMethodLabel);
+});
+for(const section of document.querySelectorAll('#methodMetrics, .method-switch, .history-legend, .results-heading, .interpolation-controls'))labelResize.observe(section);
 window.addEventListener('resize', () => { renderSelected(); renderSweep(); });
 window.addEventListener('beforeunload', () => {
   runPreloader.dispose();
