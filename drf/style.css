@@ -189,14 +189,15 @@ body:has(#showProxy:not(:checked)) [data-layer="proxy"],body:has(#showTruth:not(
 .results-heading>span { display:block; font-size:14px; }
 #evaluationNote { margin:12px 0; }
 table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
-.comparison-table { table-layout:fixed; }
 .comparison-table th { text-align:left; font-weight:400; }
 .comparison-table thead th { color:var(--color-ink-muted); font-weight:600; padding:7px 0; border-bottom:1px solid var(--color-line); }
-.comparison-table thead th:first-child { width:60%; }
 .comparison-table thead th:not(:first-child) { text-align:right; }
+#methodMetrics [data-method-col] { width:1%; white-space:nowrap; }
+#methodMetrics [data-method-col]:last-child { padding-inline-start:8px; }
+#methodMetrics [data-full-method-label] { width:32%; white-space:normal; }
 .comparison-table td { text-align:right; font-weight:400; }
-.comparison-table tbody th,.comparison-table tbody td { padding:7px 0; vertical-align:top; }
-.comparison-table tbody th { color:var(--color-ink-muted); padding-right:8px; line-height:1.35; }
+.comparison-table tbody th,.comparison-table tbody td { padding:7px 0; vertical-align:middle; line-height:1.4; }
+.comparison-table tbody th { color:var(--color-ink-muted); padding-right:8px; }
 .comparison-table .major-metric td { font-weight:700; }
 .comparison-table .major-metric th { color:var(--color-ink); }
 .comparison-table .count-row>* { border-top:1px solid var(--color-line); padding-top:13px; }
@@ -212,8 +213,8 @@ table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums;
 .metrics>div { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:4px 0; }
 .metrics dt { color:var(--color-ink-muted); }
 .metrics dd { margin:0; text-align:right; }
-.run-counts { margin:0; line-height:1.35; font-variant-numeric:tabular-nums; }
-.run-counts>div { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:8px; padding:1px 0; }
+.run-counts { margin:0; line-height:1.4; font-variant-numeric:tabular-nums; }
+.run-counts>div { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:8px; padding:7px 0; }
 .run-counts dd { white-space:nowrap; }
 .counts-heading { margin:14px 0 0; font-size:14px; line-height:1.35; font-weight:650; }
 .playback-bar { display:flex; gap:18px; align-items:center; padding:14px 0; }
@@ -315,8 +316,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 @media(max-width:1000px) {
   .main-grid { grid-template-columns:minmax(0,1fr); }
   .results-panel { padding:18px; }
-  .comparison-table thead th:first-child { width:60%; }
-  .comparison-table tbody th,.comparison-table tbody td { padding:6px 0; }
+  .comparison-table tbody th,.comparison-table tbody td,.run-counts>div { padding:6px 0; }
   .results-heading { display:flex; justify-content:space-between; gap:12px; }
   .map-heading { flex-wrap:wrap; }
   .method-switch .view-meta { width:auto; margin:0 0 0 auto; }
@@ -463,16 +463,13 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .legend-row { padding:4px 12px; gap:4px; }
   .legend { gap:4px 12px; }
   .plot-note { padding:2px 12px 6px; line-height:1.3; }
-  .results-panel { padding:8px 12px; overflow:auto; overscroll-behavior:contain; display:grid;
-    grid-template-rows:auto auto minmax(min-content,2.25fr) auto auto minmax(min-content,1fr); }
-  .results-panel .run-counts { display:grid; grid-template-rows:repeat(4,1fr); align-items:center; }
+  .results-panel { padding:8px 10px; overflow:auto; overscroll-behavior:contain; align-self:start; max-height:100%; }
   .results-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 8px; }
   .results-heading h2 { font-size:15px; margin:0; }
   #evaluationNote { margin:4px 0; font-size:13px; }
-  .comparison-table thead th { padding:3px 0; }
-  .comparison-table thead th:first-child { width:58%; }
-  .comparison-table tbody th,.comparison-table tbody td { padding:2px 0; font-size:13px; line-height:1.35; }
-  .comparison-table .count-row>* { padding-top:5px; }
+  .comparison-table thead th { padding:3px 0; font-size:13px; }
+  .comparison-table tbody th,.comparison-table tbody td,.run-counts>div { padding:4px 0; font-size:13px; line-height:1.4; }
+  .comparison-table .count-row>* { padding-top:4px; }
   .comparison-note { margin-top:5px; padding-top:5px; font-size:12px; line-height:1.4; }
   .run-counts { font-size:13px; }
   .run-diagnostics { margin-top:4px; }
