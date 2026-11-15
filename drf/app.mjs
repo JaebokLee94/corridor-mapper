@@ -1,5 +1,5 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-right-method';
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-right-method';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-four-methods';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-four-methods';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
@@ -7,13 +7,13 @@ import { createDiagnosticView } from './diagnostic-ui.mjs?v=20261112-upper-wmp';
 import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
-import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261115-right-method';
-import { rightMethods } from './right-methods.mjs';
-import { echoProtocol } from './echo-comparison.mjs?v=20261115-right-method';
+import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261115-four-methods';
+import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
+import { echoProtocol } from './echo-comparison.mjs?v=20261115-four-methods';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261115-right-method';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261115-right-method';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261115-four-methods';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261115-four-methods';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -29,9 +29,9 @@ function renderThresholdProtocol(protocol = echoProtocol()) {
   if(protocol.echoSpline){
     const wmp=protocol.guarded, p=protocol.echoSpline.parameters;
     if(wmp.id){
-      const info=rightMethods[wmp.id];
+      const info=rightMethods[wmp.id]??wmp;
       $('thresholdSummary').textContent=wmp.threshold==null ? info.description : info.name+' threshold: '+wmp.threshold;
-      $('thresholdDetails').textContent=info.description+(wmp.training?' '+wmp.training+'.':'');
+      $('thresholdDetails').textContent=(info.description??info.name)+(wmp.training?' '+wmp.training+'.':'');
       return;
     }
     $('thresholdSummary').textContent=`WM-P selection threshold: ${wmp.threshold.toFixed(4)}`;
@@ -110,6 +110,7 @@ function installSidebarControls() {
 function fillSettings(input) {
   for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,rightMethod:'wmp',...input})) {
     const field = form.elements.namedItem(key);
+    if(key==='rightMethod' && value==='wmf'){field.value='wmp';continue;}
     if (field) field.type === 'checkbox' ? field.checked = value : field.value = String(value);
   }
   $('wallConfiguration').value = input.scene === PAPER_SETTINGS.scene ? input.scene : input.wallSide;
@@ -123,7 +124,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261115-right-method';
+  const revision = '20261115-four-methods';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -459,7 +460,7 @@ function renderSelected() {
   const legacy=!!state.protocol && !state.protocol.echoSpline;
   const first=legacy?'guarded':'echoSpline', second=legacy?'baseline':'guarded';
   const rightId=legacy?'wmf':state.protocol?.guarded?.id ?? form.elements.namedItem('rightMethod')?.value ?? 'wmp';
-  const right=rightMethods[rightId]??rightMethods.wmp;
+  const right=rightMethods[rightId]??state.protocol?.guarded??rightMethods.wmp;
   const names=legacy?['WM-P','WM-F']:['EchoSpline',right.name];
   const buttons=[$('methodGuarded'),$('methodBaseline')];
   [first,second].forEach((key,k)=>{buttons[k].dataset.method=key;buttons[k].textContent=names[k];buttons[k].title=names[k];});
@@ -496,8 +497,8 @@ function renderSelected() {
   const rightPrimary=state.method===second;
   const title=rightPrimary?primaryTitle:secondaryTitle;
   if(selector.parentElement!==title.parentElement)title.parentElement.append(selector);
-  selector.hidden=legacy;
-  primaryTitle.hidden=!legacy && rightPrimary;secondaryTitle.hidden=!legacy && !rightPrimary;
+  selector.hidden=legacy || !Object.hasOwn(rightMethods,rightId);
+  primaryTitle.hidden=!selector.hidden && rightPrimary;secondaryTitle.hidden=!selector.hidden && !rightPrimary;
   $('baselineCanvas').setAttribute('aria-label',names[1]+' wall estimate, sharing the '+names[0]+' camera and snapshot');
   $('mapCanvas').setAttribute('aria-label',longName(selected)+' wall estimate');
 

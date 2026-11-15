@@ -1,9 +1,9 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-right-method';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-four-methods';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-right-method';
-import { EchoComparison } from './echo-comparison.mjs?v=20261115-right-method';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-four-methods';
+import { EchoComparison } from './echo-comparison.mjs?v=20261115-four-methods';
 
 function summarize(frame, evaluation) {
   const keys = ['precision', 'surfacePrecision', 'recall', 'holdRate', 'firstSupportPrecision',
@@ -104,7 +104,7 @@ export function startSweep(jobs, onProgress, workerCount = Math.min(4, Math.max(
   }
   const count = Math.min(jobs.length, workerCount);
   for (let k = 0; k < count; k++) {
-    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261115-right-method', import.meta.url), { type: 'module' }); workers.push(worker);
+    const worker = new Worker(new URL('./sweep.worker.mjs?v=20261115-four-methods', import.meta.url), { type: 'module' }); workers.push(worker);
     worker.onmessage = ({ data }) => {
       if (cancelled || settled) return;
       if (data.type === 'error') { settled = true; stop(); fail(new Error(data.message)); return; }

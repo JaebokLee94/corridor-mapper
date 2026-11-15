@@ -1,10 +1,9 @@
-import { rightMethods } from './right-methods.mjs';
-import { Baseline } from './baseline.mjs';
+import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
 import { modelData, neuralRuntime } from './model-runtime.mjs';
 import { correctFit } from './echospline-gbdt.mjs';
 import { GatGpr } from './gat-gpr.mjs';
 import { EchoArcCNN } from './echoarc-cnn.mjs';
-import { EchoSpline } from './echospline.mjs?v=20261115-right-method';
+import { EchoSpline } from './echospline.mjs?v=20261115-four-methods';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
 import { PSPT, prepareMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
@@ -28,8 +27,7 @@ export function echoProtocol(input={}) {
     parameters:{knotSpacingM:spacing,supportDistanceM:support,rangeGateM:1.5,regularization:.2},
     wallHypothesis:input.scene==='paper-upper'?'upper':'select one side by range residual',
     score:'robust one-to-one multi-echo range fit',tuning:{id:'single-wall-multiecho',certified:false}},
-    guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded : input.rightMethod==='wmf'
-      ? {...protocolForFleet(input.vehicles).baseline,id:'wmf'}
+    guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded
       : {...rightMethods[input.rightMethod],id:input.rightMethod,threshold:input.rightMethod==='arc'?0.7:null,
         training:'Frozen three-vehicle upper-wall checkpoint',revision:'20261115'}};
 }
@@ -43,10 +41,9 @@ export class EchoComparison {
     this.spline=new EchoSpline(splineOptions);
     if(this.id==='gbdt')this.fixedSpline=(input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
       ? this.spline : new EchoSpline({...splineOptions,spacing:2,support:8});
-    if(this.id==='wmp'||this.id==='wmf'){
+    if(this.id==='wmp'){
       const {parameters,refinement,clustering}=this.protocol.guarded;
-      this.tracker=this.id==='wmp'?new PSPT({refinement,clustering,domain:bounds,...parameters}):new Baseline({domain:bounds,sigmaR:input.sigmaD});
-      if(this.id==='wmp')this.wmp=this.tracker;
+      this.wmp=new PSPT({refinement,clustering,domain:bounds,...parameters});
       this.evidence=new GapRangeEvidence(input.sigmaD);
     }
   }
@@ -57,9 +54,9 @@ export class EchoComparison {
   }
   step(wire) {
     const start=performance.now();let guarded;
-    if(this.tracker){
+    if(this.wmp){
       const cut=this.protocol.guarded.threshold;
-      const rows=this.id==='wmp'?selectGuarded(this.tracker,this.tracker.step(wire),cut):this.tracker.step(wire,cut);
+      const rows=selectGuarded(this.wmp,this.wmp.step(wire),cut);
       this.evidence.add(wire);guarded=wmpFrame(rows,start,true,this.evidence);
     }else{
       if(wire.t!==this.lastT+1)throw new RangeError('Snapshots must be consecutive from t=1');

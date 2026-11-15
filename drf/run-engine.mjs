@@ -1,8 +1,8 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-right-method';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-four-methods';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid, createField } from './field.mjs';
-import { EchoComparison } from './echo-comparison.mjs?v=20261115-right-method';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-right-method';
+import { EchoComparison } from './echo-comparison.mjs?v=20261115-four-methods';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-four-methods';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
  * No page acknowledgement, animation callback or parent timer is required.
