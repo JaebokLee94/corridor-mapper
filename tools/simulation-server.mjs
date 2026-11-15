@@ -219,7 +219,7 @@ export async function createSimulationServer({ root = defaultRoot, cacheDirector
         && request.headers['sec-fetch-mode'] === 'navigate' && request.headers['sec-fetch-dest'] === 'document';
       if (request.headers['sec-fetch-site'] === 'cross-site' && !enteringViewer) throw fail(403, 'Cross-site requests are not allowed');
       if (path === '/api/health' && request.method === 'GET') return json(response, 200,
-        { schema: 'echomap-server/1', service: 'echomap-local', rightMethods:Object.keys(rightMethods), maxConcurrent: 1, sweepWorkers, retentionHours: completedTtlMs / 3600000 });
+        { schema: 'echomap-server/1', service: 'echomap-local', independentMethods:true, rightMethods:Object.keys(rightMethods), maxConcurrent: 1, sweepWorkers, retentionHours: completedTtlMs / 3600000 });
       if (path === '/api/jobs') {
         if (request.method === 'GET') { await cleanup(); return json(response, 200, { jobs: [...jobs.values()].map(view).reverse() }); }
         if (request.method === 'POST') {

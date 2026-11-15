@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { EchoComparison,echoProtocol } from '../../drf/echo-comparison.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -31,6 +32,7 @@ async function moduleWorker(completion) {
   const worker = new Worker(`
     const {parentPort,workerData}=require('node:worker_threads');
     const completed=new Int32Array(workerData.completion);
+    globalThis.Worker=require(${JSON.stringify(fileURLToPath(new URL('./nested-worker.cjs',import.meta.url)))});
     globalThis.postMessage=(message,transfer)=>{
       parentPort.postMessage(message,transfer);
       if(message.type==='status'&&message.mode==='done') Atomics.store(completed,0,1);
@@ -144,4 +146,38 @@ test('cancellation during generation suppresses prepared data and all inference 
   await engine.command({ type: 'start', requestId: 22, input });
   assert.deepEqual(messages.map(message => message.type), ['status', 'preparation', 'progress', 'status']);
   assert.equal(messages.at(-1).mode, 'cancelled');
+});
+
+for(const blockedSide of ['echoSpline','guarded']){
+  test(`the other estimator can finish while ${blockedSide} is still processing snapshot one`,async()=>{
+    const messages=[],release=Promise.withResolvers();
+    const engine=createRunEngine({emit:m=>messages.push(m),createMethod:side=>({
+      async step(wire){
+        if(side===blockedSide&&wire.t===1)await release.promise;
+        return {candidates:[],curves:[],ms:1};
+      },close(){}
+    })});
+    const finished=engine.command({type:'start',requestId:1,input});
+    try{
+      await waitUntil(()=>messages.some(m=>m.type==='method-frame'&&m.t===input.snapshots),'fast side must progress independently');
+      assert.deepEqual(messages.filter(m=>m.type==='method-frame').map(m=>[m.side,m.t]),[1,2,3].map(t=>[blockedSide==='echoSpline'?'guarded':'echoSpline',t]));
+      assert.equal(messages.some(m=>m.type==='frame'||m.mode==='done'),false);
+    }finally{release.resolve();await finished;}
+    assert.deepEqual(messages.filter(m=>m.type==='frame').map(m=>m.next),[1,2,3]);
+    assert.equal(messages.at(-1).mode,'done');
+  });
+}
+
+test('independent learned estimators produce the same prefix outputs as a joint comparison',async()=>{
+  const scene=await generateScenario({...input,scene:'paper-upper',seed:3296639392,snapshots:16});
+  for(const rightMethod of ['gbdt','gat','arc']){
+    const settings={...scene.input,rightMethod},joint=new EchoComparison(settings,scene.domain),
+      left=new EchoComparison(settings,scene.domain,'echoSpline'),right=new EchoComparison(settings,scene.domain,'guarded');
+    await Promise.all([joint.loadModel(),right.loadModel()]);
+    for(const wire of scene.wire){
+      const reference=joint.step(wire);
+      assert.deepEqual(numerical(left.stepLeft(wire)),numerical(reference.echoSpline));
+      assert.deepEqual(numerical(right.stepRight(wire)),numerical(reference.guarded));
+    }
+  }
 });

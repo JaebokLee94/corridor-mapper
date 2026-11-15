@@ -10,11 +10,11 @@ import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261115-four-methods';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
 import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
-import { echoProtocol } from './echo-comparison.mjs?v=20261115-four-methods';
+import { echoProtocol } from './echo-comparison.mjs?v=20261115-independent';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261115-four-methods';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261115-four-methods';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261115-independent';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -125,7 +125,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261115-four-methods';
+  const revision = '20261115-independent';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -137,7 +137,7 @@ function warmSelectedInput(input) {
   try { runPreloader.schedule(input ?? settings()); } catch { runPreloader.dispose(); }
 }
 function createWorker(name, options = {}) {
-  if (name === 'run' && state.server && (!options.input?.rightMethod || state.server.rightMethods?.includes(options.input.rightMethod))) return createServerRunWorker(state.server, options);
+  if (name === 'run' && state.server && (options.resumeId || state.server.independentMethods)) return createServerRunWorker(state.server, options);
   if (name === 'run') return runPreloader.take(options.input) ?? createLocalWorker(name);
   return createLocalWorker(name);
 }
@@ -201,7 +201,7 @@ function controls() {
   const backend=state.scenario?.measurementBackend;
   const source={'public-dgx-cuda':'H200 paths','dgx-cuda':'H200 paths','dgx-cuda-physical':'H200 paths','local-physical-cache':'Saved paths','saved-physical-paths':'Saved paths','dgx-physical-cache':'Saved H200 paths','cpu-fallback':'CPU paths','browser-fallback':'Browser paths',browser:'Browser paths'}[backend];
   if(source) $('runState').textContent += ' · '+source;
-  else if (state.server && (!state.pendingInput?.rightMethod || state.server.rightMethods?.includes(state.pendingInput.rightMethod))) $('runState').textContent += ' · Server';
+  else if (state.server && (!state.pendingInput || state.server.independentMethods)) $('runState').textContent += ' · Server';
   $('newSeed').disabled = active || sweeping;
 }
 function renderExportControls() {
@@ -244,7 +244,7 @@ function cancel(clear = false) {
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
-    state.frameTimes = [];
+    state.frameTimes = []; state.methodFrames=null;
     state.measurementLabel=''; state.generatedSnapshots = 0; state.measurementTotal = 0;
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
@@ -366,14 +366,32 @@ async function receiveRunMessage(data, generation) {
       });
       controls(); return;
     }
+    if(data.type==='method-frame'){
+      state.methodFrames??={echoSpline:[],guarded:[]};
+      const list=state.methodFrames[data.side];
+      if(!list || data.t!==list.length+1)throw new Error('Out-of-order method result');
+      list.push({...data,totalMs:(list.at(-1)?.totalMs??0)+data.result.ms});
+      if(!document.hidden && !state.livePaint){
+        state.livePaint=requestAnimationFrame(()=>{state.livePaint=0;renderSelected();});
+      }
+      return;
+    }
     if (data.type === 'frame') {
       if (data.next !== state.next + 1) throw new Error('Out-of-order simulation result');
       const now = performance.now();
-      state.frameTimes.push(state.next ? state.frameTimes.at(-1) + (now - state.lastFrameAt) : 0);
+      if(state.methodFrames){
+        const pair=Object.entries(state.methodFrames).map(([side,list])=>{
+          const sample=list[data.next-1];
+          sample.result=data.frame.methods[side];sample.evaluation=data.evaluation.methods[side];
+          return sample.at;
+        });
+        state.frameTimes.push(Math.max(...pair));
+      }else state.frameTimes.push(state.next ? state.frameTimes.at(-1) + (now - state.lastFrameAt) : 0);
       state.lastFrameAt = now;
       state.frames.push(data.frame); state.evaluations.push(data.evaluation); state.next = data.next;
       if (state.followLive || !state.selected) state.selected = state.frames.length;
-      renderSelected(); controls();
+      if(!state.methodFrames)renderSelected();
+      controls();
       notice(`Comparing methods ${data.frame.t} / ${state.scenario.input.snapshots}`);
       return;
     }
@@ -476,8 +494,20 @@ function renderSelected() {
   const interpolate = $('showInterpolation').checked, kind = $('interpolationKind').value;
   $('centreLegend').hidden=curveView || !interpolate || !['centre','checked'].includes(kind) || !layers.showProxy;
   $('interpolationKind').disabled = curveView || !interpolate && state.method === 'compare';
+  const independently=!!state.methodFrames&&!legacy;
+  const records={};
+  for(const method of [first,second]){
+    const list=state.methodFrames?.[method];
+    if(list){
+      records[method]=state.replay?list.findLast(s=>s.at<=state.replayPosition):
+        state.followLive && ['running','paused'].includes(state.mode)?list.at(-1):list[state.selected-1];
+    }
+  }
+  const methodResult=method=>independently?records[method]?.result:frame?.methods?.[method];
+  const methodEvaluation=method=>independently?records[method]?.evaluation:evaluation?.methods?.[method];
+  const methodT=method=>independently?(records[method]?.t??0):(frame?.t??0);
   const visibleBridges = method => {
-    const map = frame?.methods?.[method];
+    const map = methodResult(method);
     if(kind==='checked' && map?.checkedChains?.length) {
       return [...map.bridges,...map.extendedBridges,...map.checkedChains.map(l=>({from:l.from,to:l.to,checkedCentrePoints:l.points}))];
     }
@@ -500,7 +530,7 @@ function renderSelected() {
   if(selector.parentElement!==title.parentElement)title.parentElement.append(selector);
   selector.hidden=legacy || !Object.hasOwn(rightMethods,rightId);
   primaryTitle.hidden=!selector.hidden && rightPrimary;secondaryTitle.hidden=!selector.hidden && !rightPrimary;
-  $('baselineCanvas').setAttribute('aria-label',names[1]+' wall estimate, sharing the '+names[0]+' camera and snapshot');
+  $('baselineCanvas').setAttribute('aria-label',names[1]+' wall estimate, sharing the '+names[0]+' camera');
   $('mapCanvas').setAttribute('aria-label',longName(selected)+' wall estimate');
 
   document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{setMethodLabel(th,names[i]);th.dataset.methodCol=i?'second':'first';});
@@ -510,20 +540,34 @@ function renderSelected() {
   $('historySecond').parentElement.hidden=echoOnly;
   for(const opt of $('historyMetric').options)opt.disabled=curveView&&!['mapF1','recall','surfacePrecision'].includes(opt.value);
   if($('historyMetric').selectedOptions[0]?.disabled)$('historyMetric').value='mapF1';
-  map.set({...display,curves:frame?.methods?.[selected]?.curves,mode:'geometry',xRange:[-10,display.domain[1]+10]});
-  baselineMap.set({...display,bridges:visibleBridges(second),curves:frame?.methods?.[second]?.curves,candidates:frame?.methods?.[second]?.candidates ?? [],mode:'geometry',xRange:[-10,display.domain[1]+10]});
+  for(const [view,method,labelId] of [[map,selected,'primaryProgress'],[baselineMap,second,'secondaryProgress']]){
+    const t=methodT(method),sample=records[method],result=methodResult(method),label=$(labelId);
+    label.hidden=!independently;
+    if(independently){
+      const ms=sample?.totalMs??0;
+      label.textContent=`Snapshot ${t}/${scenario.input.snapshots} · ${ms<1000?Math.round(ms)+' ms':(ms/1000).toFixed(2)+' s'} total`;
+      label.title='Cumulative estimator compute time through the displayed snapshot. Excludes measurement generation, evaluation and drawing.';
+    }
+    view.set({...display,frame:independently?sample:frame,truth:scenario?.truth[t-1],wire:scenario?.wire[t-1],
+      history:scenario?.wire.slice(0,t),observed:methodEvaluation(method)?.observed,bridges:visibleBridges(method),
+      curves:result?.curves,candidates:result?.candidates??[],mode:'geometry',xRange:[-10,display.domain[1]+10]});
+  }
   const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
   densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
   contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
   $('snapshotLabel').textContent = `${frame?.t ?? 0} / ${scenario?.input.snapshots ?? form.elements.namedItem('snapshots').value}`;
-  renderInterpolationPanel($, state.method, kind, evaluation, fmt, legacy, right.name, rightSolo);
+  const visibleEvaluation=independently?{methods:{[first]:methodEvaluation(first),[second]:methodEvaluation(second)}}:evaluation;
+  renderInterpolationPanel($, state.method, kind, visibleEvaluation, fmt, legacy, right.name, rightSolo);
+  if(state.method==='compare' && independently && methodT(first)!==methodT(second))
+    $('evaluationNote').textContent=`0.4 m tolerance · snapshots ${methodT(first)} / ${methodT(second)}`;
+  $('countsHeading').textContent=independently?`Counts & computation · snapshot ${frame?.t??0}`:'Counts & computation';
   for (const [method,prefix] of [[first,''],[second,'b']]) {
-    const e=evaluation?.methods?.[method] ?? (method==='guarded' ? evaluation : null);
+    const e=methodEvaluation(method) ?? (!independently && method==='guarded' ? evaluation : null);
     const node=(name)=>$(prefix ? prefix+name[0].toUpperCase()+name.slice(1) : name);
     for (const [id,key] of [['precisionValue','precision'],['recallValue','recall'],['firstPrecisionValue','firstSupportPrecision'],['offwallValue','offwall']])
       node(id).textContent=e?.[key]==null ? '—' : fmt(100*e[key],1);
     for (const [id,key] of [['p95Value','p95'],['f1Value','f1']]) node(id).textContent=fmt(e?.[key]);
-    const candidates=frame?.methods?.[method]?.candidates ?? [];
+    const candidates=methodResult(method)?.candidates ?? [];
     for (const [id,status] of [['supportedValue','supported'],['pendingValue','pending'],['contradictedValue','contradicted']])
       node(id).textContent=method==='echoSpline' || method===second && right.curves || (method==='baseline' || method===second && rightId==='wmf') && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
     const completed = interpolationResult(e, kind);
@@ -543,7 +587,11 @@ function renderSelected() {
   $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
   $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
   const historyMetric = $(state.method === 'compare' || echoOnly ? 'historyMetric' : 'interpolationChartMetric').value;
-  drawComparisonHistory($('metricChart'),state.evaluations.slice(0,state.selected),historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind,legacy,rightSolo);
+  const history=independently?Array.from({length:Math.max(methodT(first),methodT(second))},(_,i)=>({
+    t:i+1,methods:{[first]:i<methodT(first)?state.methodFrames[first][i].evaluation:null,
+      [second]:i<methodT(second)?state.methodFrames[second][i].evaluation:null}
+  })):state.evaluations.slice(0,state.selected);
+  drawComparisonHistory($('metricChart'),history,historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind,legacy,rightSolo);
   renderDiagnostics();
 }
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
@@ -571,11 +619,11 @@ function renderDiagnostics() {
 function replayTick(time) {
   if (!state.replay) return;
   if (['running', 'paused'].includes(state.mode)) { stopReplay(); return; }
-  const times = state.frameTimes, previous = state.selected;
+  const times = state.frameTimes, previous = state.selected,previousTime=state.replayPosition;
   const elapsed = Math.max(0, time - state.replayAt);
   if (previous === times.length) {
     if (elapsed >= 1000) {
-      state.selected = 1;
+      state.selected = state.methodFrames?0:1;
       state.replayPosition = 0;
       state.replayAt = time;
     }
@@ -584,7 +632,9 @@ function replayTick(time) {
     state.replayPosition += elapsed * Number($('playbackSpeed').value);
     state.selected = times.findLastIndex(at => at <= state.replayPosition) + 1;
   }
-  if (state.selected !== previous) {
+  const methodChanged=state.methodFrames && Object.values(state.methodFrames).some(list=>
+    list.findLastIndex(s=>s.at<=previousTime)!==list.findLastIndex(s=>s.at<=state.replayPosition));
+  if (state.selected !== previous || methodChanged) {
     $('timeSlider').value = state.selected; renderSelected();
     // Start the unscaled hold after drawing the final metrics, even on a late repaint.
     if (state.selected === times.length) state.replayAt = performance.now();
@@ -596,7 +646,8 @@ function toggleReplay() {
   if (state.replay) stopReplay(); else {
     if (state.selected === state.frames.length) state.selected = 1;
     state.followLive = false; state.replay = true; state.replayAt = performance.now();
-    state.replayPosition = state.frameTimes[state.selected - 1];
+    if(state.methodFrames && state.selected===1)state.selected=0;
+    state.replayPosition = state.frameTimes[state.selected - 1]??0;
     $('timeSlider').value = state.selected; renderSelected();
     for (const id of ['replayButton', 'completedReplayButton']) if ($(id)) $(id).textContent = 'Stop';
     replayFrame = requestAnimationFrame(replayTick);

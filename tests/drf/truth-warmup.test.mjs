@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -117,6 +118,7 @@ async function heldWarmWorker(t) {
       return originalRead.call(this,path,...args);
     };
     require('node:module').syncBuiltinESMExports();
+    globalThis.Worker=require(${JSON.stringify(fileURLToPath(new URL('./nested-worker.cjs',import.meta.url)))});
     globalThis.postMessage=(message,transfer)=>parentPort.postMessage(message,transfer);
     import(${JSON.stringify(workerUrl)}).then(()=>{
       parentPort.on('message',data=>{

@@ -138,6 +138,7 @@ export class DrfMap {
   }
   buildHeat(palette=fieldPalette(this.state.heatField)) {
     this.paletteKey=palette.key;this.heatPalette=palette.colors;
+    if(this.state.mode==='geometry')return;
     const {grid:g,frame,heatField="Dbar",scaleMode="linear"}=this.state;
     if (!g) {this.heat.width=1;this.heat.height=1;this.maxValue=0;return;}
     this.heat.width=g.nx; this.heat.height=g.ny;

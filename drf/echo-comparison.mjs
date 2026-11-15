@@ -33,13 +33,14 @@ export function echoProtocol(input={}) {
 }
 
 export class EchoComparison {
-  constructor(input,domain) {
+  constructor(input,domain,side) {
     this.protocol=echoProtocol(input);
-    this.id=input.rightMethod??'wmp'; this.vehicles=input.vehicles; this.lastT=0;
+    this.id=input.rightMethod??'wmp'; this.vehicles=input.vehicles; this.lastT=0;this.leftT=0;
     const bounds=input.scene==='paper-upper'?domain:undefined;
     const splineOptions={domain,upper:input.scene==='paper-upper',spacing:input.echoKnotM,support:input.echoSupportM};
-    this.spline=new EchoSpline(splineOptions);
-    if(this.id==='gbdt')this.fixedSpline=(input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
+    if(side!=='guarded')this.spline=new EchoSpline(splineOptions);
+    if(side==='echoSpline')return;
+    if(this.id==='gbdt')this.fixedSpline=this.spline && (input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
       ? this.spline : new EchoSpline({...splineOptions,spacing:2,support:8});
     if(this.id==='wmp'){
       const {parameters,refinement,clustering}=this.protocol.guarded;
@@ -52,24 +53,37 @@ export class EchoComparison {
     else if(this.id==='gat')this.model=new GatGpr(await neuralRuntime('gat'),this.vehicles);
     else if(this.id==='arc')this.model=new EchoArcCNN(await neuralRuntime('arc'));
   }
-  step(wire) {
-    const start=performance.now();let guarded;
+  stepLeft(wire,details=false) {
+    const start=performance.now();
+    prepareMeasuredSnapshot(wire);
+    if(wire.t!==this.leftT+1)throw new RangeError('Snapshots must be consecutive from t=1');
+    const fit=this.spline.step(wire,details);
+    this.leftT=wire.t;
+    return {...fit,candidates:[],ms:performance.now()-start};
+  }
+  stepRight(wire,sharedFit) {
+    const start=performance.now();
+    if(wire.t!==this.lastT+1)throw new RangeError('Snapshots must be consecutive from t=1');
+    let result;
     if(this.wmp){
       const cut=this.protocol.guarded.threshold;
       const rows=selectGuarded(this.wmp,this.wmp.step(wire),cut);
-      this.evidence.add(wire);guarded=wmpFrame(rows,start,true,this.evidence);
+      this.evidence.add(wire);result=wmpFrame(rows,start,true,this.evidence);
     }else{
-      if(wire.t!==this.lastT+1)throw new RangeError('Snapshots must be consecutive from t=1');
       prepareMeasuredSnapshot(wire);
-      if(this.model)guarded={...this.model.step(wire),ms:performance.now()-start};
+      if(this.id==='gbdt'){
+        const f=sharedFit??this.fixedSpline.step(wire,true);
+        result={curves:f.fit?correctFit(f.fit,this.tree,wire.configs.length,8):[],candidates:[]};
+      }else result=this.model.step(wire);
     }
-    const fitStart=performance.now(),left=this.spline.step(wire,this.fixedSpline===this.spline),leftMs=performance.now()-fitStart;
-    if(this.id==='gbdt'){
-      const t=performance.now(),f=this.fixedSpline===this.spline?left:this.fixedSpline.step(wire,true);
-      guarded={curves:f.fit?correctFit(f.fit,this.tree,wire.configs.length,8):[],candidates:[],ms:performance.now()-t};
-    }
-    if(this.fixedSpline===this.spline)delete left.fit;
     this.lastT=wire.t;
-    return {echoSpline:{...left,candidates:[],ms:leftMs},guarded};
+    return {...result,ms:performance.now()-start};
+  }
+  step(wire) {
+    const shared=this.fixedSpline===this.spline;
+    const echoSpline=this.stepLeft(wire,shared);
+    const guarded=this.stepRight(wire,shared?echoSpline:undefined);
+    if(shared)delete echoSpline.fit;
+    return {echoSpline,guarded};
   }
 }

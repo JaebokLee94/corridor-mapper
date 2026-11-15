@@ -1,5 +1,6 @@
+import { workerMethod } from './method-client.mjs';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { createRunEngine } from './run-engine.mjs?v=20261115-four-methods';
+import { createRunEngine } from './run-engine.mjs?v=20261115-independent';
 import { warmTruthCache } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 import { truthCacheKey } from './truth-cache.mjs';
@@ -10,7 +11,13 @@ const identity = raw => {
 };
 let warming, pendingStart;
 
-const engine = createRunEngine({ prepare:preparePublicScenario, emit(message) {
+const engine = createRunEngine({ prepare:preparePublicScenario,
+  createMethod(side,input,domain){
+    const worker=globalThis.__echoMethodUrl?new Worker(globalThis.__echoMethodUrl):
+      new Worker(new URL('./compare.worker.mjs?v=20261115-independent',import.meta.url),{type:'module'});
+    return workerMethod(worker,side,input,domain);
+  },
+  emit(message) {
   // Only per-frame readout buffers move to the page; accumulator buffers stay here.
   const transfer = message.type === 'frame'
     ? [message.frame.Dbar.buffer, message.frame.betaHat.buffer] : [];

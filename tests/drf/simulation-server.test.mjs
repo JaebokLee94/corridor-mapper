@@ -102,6 +102,15 @@ test('job finishes without any browser/event consumer; late reconnect recovers i
   const state = await waitFor(base, job, value => value.status === 'done');
   const messages = await readMessages(base, job, state.seq), frames = messages.filter(value => value.type === 'frame');
   assert.deepEqual(frames.map(value => value.next), [1, 2, 3]);
+  for(const side of ['echoSpline','guarded']){
+    const early=messages.filter(m=>m.type==='method-frame'&&m.side===side);
+    assert.deepEqual(early.map(m=>m.t),[1,2,3]);
+    for(const m of early){
+      const paired=frames[m.t-1];
+      assert.ok(messages.indexOf(m)<messages.indexOf(paired));
+      assert.deepEqual(m.result,paired.frame.methods[side]);
+    }
+  }
   assert.deepEqual(messages.find(value => value.type === 'prepared').protocol, echoProtocol(input), 'late reconnect must retain the worker implementation protocol');
   const expected = [];
   await createRunEngine({ emit: message => { if (message.type === 'frame') expected.push(message); } }).command({ type: 'start', input, requestId: 1 });

@@ -1,7 +1,7 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-four-methods';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid, createField } from './field.mjs';
-import { EchoComparison } from './echo-comparison.mjs?v=20261115-four-methods';
+import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261115-independent';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-four-methods';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
@@ -17,101 +17,105 @@ export function yieldWorkerTask() {
   });
 }
 
-/** Autonomous run controller shared by the module and offline workers.
- * Input: normalized scenario settings; inference receives only wire[t] and sigmaD.
- * Output: prepared scenario/grid, then one frame/evaluation per causal prefix.
- * The existing numerical kernels are unchanged. Work is the same as a foreground
- * run, but field and method calculations are sequential in this worker. Memory is
- * O(scenario + grid + estimator/evaluator state); frame history belongs to the UI.
- * emit must be nonblocking: the controller never waits for the page to consume it.
+const sides=['echoSpline','guarded'];
+
+function localMethod(side,input,domain){
+  const estimator=new EchoComparison(input,domain,side);
+  return {ready:side==='guarded'?estimator.loadModel():Promise.resolve(),
+    step:wire=>side==='echoSpline'?estimator.stepLeft(wire):estimator.stepRight(wire),close(){}};
+}
+
+/** Each estimator consumes the same ordered wires on its own worker and clock.
+ * Emit its result immediately. Joined frames remain ordered for fields, exports and old clients.
  */
-export function createRunEngine({ emit, yieldTask = yieldWorkerTask, prepare = generateScenario } = {}) {
-  if (typeof emit !== 'function') throw new TypeError('A result emitter is required');
-  let epoch = 0, active = null;
-  const send = (run, type, value = {}) => {
-    if (active === run && run.epoch === epoch) emit({ type, requestId: run.requestId, ...value });
-  };
-  const status = (run, mode) => send(run, 'status', { mode, next: run.next, total: run.input.snapshots });
-  const failed = (run, error) => {
-    if (active !== run || run.epoch !== epoch) return;
-    run.target = 'failed'; send(run, 'error', { message: error.message });
-  };
-
-  async function pump(run) {
-    if (active !== run || run.epoch !== epoch || !run.scenario || run.busy) return;
-    run.busy = true;
-    try {
-      while (active === run && run.epoch === epoch && (run.target === 'running' || run.steps > 0)) {
-        // Truth and future observations stay on the generation/evaluation side.
-        // Neither inference kernel receives the scenario or the run settings.
-        const wire = run.scenario.wire[run.next];
-        const frame = run.field.step(wire);
-        frame.methods = run.estimator.step(wire);
-        frame.candidates = frame.methods.guarded.candidates;
-        frame.psptMs = frame.methods.guarded.ms; frame.method = run.estimator.id==='wmp' ? 'guarded-tuned' : run.estimator.id;
-        const guarded = run.guardedEvaluator.step(frame.methods.guarded.curves ? {...frame, curveMethod:run.estimator.id, curves:frame.methods.guarded.curves} : frame, null, frame.methods.guarded.bridges, frame.methods.guarded.extendedBridges, frame.methods.guarded.checkedChains);
-        const echoSpline = run.echoEvaluator.step({ ...frame, ...frame.methods.echoSpline }, guarded);
-        const evaluation = { ...guarded, methods: { echoSpline, guarded } };
-        run.next++;
-        if (run.steps > 0) run.steps--;
-        send(run, 'frame', { frame, evaluation, next: run.next });
-        if (active !== run || run.epoch !== epoch) return;
-        if (run.next === run.scenario.wire.length) {
-          run.target = 'done'; status(run, 'done'); return;
-        }
-        await yieldTask();
-      }
-      if (active === run && run.epoch === epoch && run.target === 'paused') status(run, 'paused');
-    } catch (error) { failed(run, error); }
-    finally { run.busy = false; }
+export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generateScenario,createMethod=localMethod}={}) {
+  if(typeof emit!=='function')throw new TypeError('A result emitter is required');
+  let active;
+  const current=run=>active===run&&!['done','cancelled','failed'].includes(run.target);
+  const send=(run,type,value={})=>emit({type,requestId:run.requestId,...value});
+  const status=(run,mode)=>send(run,'status',{mode,next:run.next,total:run.input.snapshots});
+  function close(run){for(const lane of Object.values(run.lanes))lane.client.close();}
+  function fail(run,error){
+    if(!current(run))return;
+    run.target='failed';close(run);send(run,'error',{message:error.message});
   }
 
-  async function start(message) {
-    if (active && !['done', 'cancelled', 'failed'].includes(active.target))
-      throw new Error('Cancel the current run before starting another');
-    const input = normalizeInput(message.input);
-    if (input.sigmaD === 0) throw new Error('Both methods require range SD σd > 0.');
-    const run = { epoch: ++epoch, requestId: message.requestId, input, next: 0,
-      target: message.single ? 'paused' : 'running', steps: message.single ? 1 : 0, busy: false };
-    active = run; status(run, 'running');
-    try {
-      const scenario = await prepare(input, (t, total) => {
-        if (active !== run || run.epoch !== epoch) throw new Error('Cancelled');
-        send(run, 'progress', { t, total });
-      }, { onPhase: phase => send(run, 'preparation', { phase }) });
-      if (active !== run || run.epoch !== epoch) return;
-      scenario.input = input;
-      run.scenario = scenario;
-      run.grid = createGrid(input.grid, input.grid, scenario.domain);
-      run.field = createField(run.grid, { band: input.band, perimeter: input.perimeter });
-      run.estimator = new EchoComparison(input,scenario.domain);
-      await run.estimator.loadModel();
-      if (active !== run || run.epoch !== epoch) return;
-      run.guardedEvaluator = createPSPTEvaluator(scenario, run.grid);
-      run.echoEvaluator = createPSPTEvaluator(scenario, run.grid);
-      send(run, 'prepared', { scenario, grid: run.grid, protocol: run.estimator.protocol });
-      await pump(run);
-    } catch (error) { failed(run, error); }
+  function join(run){
+    const t=run.next+1,left=run.lanes.echoSpline.pending.get(t),right=run.lanes.guarded.pending.get(t);
+    if(!left||!right)return;
+    for(const lane of Object.values(run.lanes))lane.pending.delete(t);
+    const frame=run.field.step(run.scenario.wire[run.next]);
+    frame.methods={echoSpline:left.result,guarded:right.result};
+    frame.candidates=right.result.candidates;frame.psptMs=right.result.ms;frame.method=run.method;
+    left.evaluation.diagnostics=right.evaluation.diagnostics;
+    const evaluation={...right.evaluation,methods:{echoSpline:left.evaluation,guarded:right.evaluation}};
+    run.next=t;
+    send(run,'frame',{frame,evaluation,next:t});
   }
-
-  function command(message) {
-    if (message.type === 'start') return start(message);
-    const run = active;
-    if (!run || message.requestId !== run.requestId) return;
-    if (message.type === 'cancel') {
-      if (['done', 'cancelled', 'failed'].includes(run.target)) return;
-      run.target = 'cancelled'; run.steps = 0; status(run, 'cancelled'); epoch++; return;
+  async function advance(run,side){
+    const lane=run.lanes[side];
+    while(current(run)&&run.target==='running'&&lane.next<lane.limit){
+      const wire=run.scenario.wire[lane.next],result=await lane.client.step(wire);
+      if(!current(run))return;
+      const t=++lane.next,at=run.elapsed+performance.now()-run.started;
+      const evaluation=lane.evaluator.step({t,...result,method:run.method,curveMethod:side==='echoSpline'?side:run.input.rightMethod},
+        side==='echoSpline'?{diagnostics:{}}:null,result.bridges,result.extendedBridges,result.checkedChains);
+      lane.pending.set(t,{result,evaluation});
+      const {diagnostics,...metrics}=evaluation;
+      send(run,'method-frame',{side,t,at,result,evaluation:metrics});
+      if(!current(run))return;
+      join(run);
+      if(current(run)&&lane.next<lane.limit)await yieldTask();
     }
-    if (['done', 'cancelled', 'failed'].includes(run.target)) return;
-    if (message.type === 'pause') {
-      run.target = 'paused'; run.steps = 0;
-      if (run.scenario && !run.busy) status(run, 'paused');
-    } else if (message.type === 'resume') {
-      run.target = 'running'; run.steps = 0; status(run, 'running'); return pump(run);
-    } else if (message.type === 'step') {
-      if (run.target !== 'paused' || run.busy || !run.scenario) return;
-      run.steps = 1; status(run, 'running'); return pump(run);
-    } else throw new Error('Unknown run command');
   }
-  return { command };
+  async function pump(run){
+    if(!current(run)||run.busy||!run.ready)return;
+    run.busy=true;run.started=performance.now();
+    try{
+      await Promise.all(sides.map(side=>advance(run,side)));
+      if(!current(run))return;
+      run.elapsed+=performance.now()-run.started;
+      if(run.next===run.input.snapshots){run.target='done';close(run);status(run,'done');}
+      else {run.target='paused';status(run,'paused');}
+    }catch(error){fail(run,error);}
+    finally{run.busy=false;}
+  }
+  async function start(message){
+    if(active&&current(active))throw new Error('Cancel the current run before starting another');
+    const input=normalizeInput(message.input);
+    if(input.sigmaD===0)throw new Error('Both methods require range SD σd > 0.');
+    const run=active={requestId:message.requestId,input,next:0,target:'running',lanes:{},elapsed:0,
+      method:!input.rightMethod||input.rightMethod==='wmp'?'guarded-tuned':input.rightMethod};
+    status(run,'running');
+    try {
+      const scenario=await prepare(input,(t,total)=>{
+        if(!current(run))throw new Error('Cancelled');
+        send(run,'progress',{t,total});
+      },{onPhase:phase=>{if(current(run))send(run,'preparation',{phase});}});
+      if(!current(run))return;
+      scenario.input=input;run.scenario=scenario;
+      const grid=createGrid(input.grid,input.grid,scenario.domain);
+      run.field=createField(grid,{band:input.band,perimeter:input.perimeter});
+      for(const side of sides)run.lanes[side]={client:createMethod(side,input,scenario.domain),
+        evaluator:createPSPTEvaluator(scenario,grid),pending:new Map(),next:0,limit:message.single?1:input.snapshots};
+      await Promise.all(sides.map(side=>run.lanes[side].client.ready));
+      if(!current(run))return;
+      run.ready=true;
+      send(run,'prepared',{scenario,grid,protocol:echoProtocol(input)});
+      await pump(run);
+    }catch(error){fail(run,error);}
+  }
+  function command(message){
+    if(message.type==='start')return start(message);
+    const run=active;
+    if(!run||message.requestId!==run.requestId||!current(run))return;
+    if(message.type==='cancel'){run.target='cancelled';close(run);status(run,'cancelled');return;}
+    if(message.type==='pause'){run.target='paused';if(run.ready&&!run.busy)status(run,'paused');return;}
+    if(!['step','resume'].includes(message.type))throw new Error('Unknown run command');
+    if(message.type==='step'&&(run.target!=='paused'||run.busy))return;
+    for(const lane of Object.values(run.lanes))lane.limit=message.type==='step'?Math.min(lane.next+1,run.input.snapshots):run.input.snapshots;
+    run.target='running';if(message.type==='resume')status(run,'running');
+    return pump(run);
+  }
+  return {command};
 }

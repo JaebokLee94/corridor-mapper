@@ -1,5 +1,6 @@
 import { prepareNodeScenario } from './dgx/client.mjs';
-import { parentPort, workerData } from 'node:worker_threads';
+import { workerMethod } from '../drf/method-client.mjs';
+import { Worker, parentPort, workerData } from 'node:worker_threads';
 import { createRunEngine } from '../drf/run-engine.mjs';
 import { createMessageEncoder, encodePacket } from '../drf/simulation-codec.mjs';
 import { runExperiment } from '../drf/sweep.mjs';
@@ -10,7 +11,11 @@ function send(message, encode = encodePacket) {
     t: message.t, total: message.total, id: message.id, message: message.message, bytes }, [bytes.buffer]);
 }
 
-if (workerData.mode === 'sweep') {
+if(workerData.mode==='estimator'){
+  await import('../drf/compare.worker.mjs');
+  globalThis.postMessage=message=>parentPort.postMessage(message);
+  parentPort.on('message',data=>globalThis.onmessage({data}));
+} else if (workerData.mode === 'sweep') {
   parentPort.on('message', async message => {
     if (message.type !== 'run') return;
     try {
@@ -23,7 +28,8 @@ if (workerData.mode === 'sweep') {
   });
 } else {
   const transport = createMessageEncoder();
-  const engine = createRunEngine({ prepare: prepareNodeScenario, emit: message => send(message, transport.encode),
+  const engine = createRunEngine({ prepare: prepareNodeScenario,
+    createMethod:(side,input,domain)=>workerMethod(new Worker(new URL(import.meta.url),{workerData:{mode:'estimator'}}),side,input,domain), emit: message => send(message, transport.encode),
     yieldTask: () => new Promise(resolve => setImmediate(resolve)) });
   parentPort.on('message', message => {
     try { Promise.resolve(engine.command(message)).catch(error => send({ type: 'error', message: error.message })); }
