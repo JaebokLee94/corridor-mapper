@@ -701,8 +701,8 @@ test('initial interpolation settings honor reproducible share links', async()=>{
   const restore=section('if (location.search) {','fillSettings(initialInput);');
   const controls=window.document.querySelector('.interpolation-controls');
   const markup=controls.innerHTML;
-  for(const [query,expected,on] of [['','checked',false],['extended','extended',true],['off','checked',false],
-    ['unknown','checked',false],['hermite','hermite',true],['centre','centre',true],['linear','linear',true]]){
+  for(const [query,expected,on] of [['','checked',true],['extended','extended',true],['off','checked',false],
+    ['unknown','checked',true],['hermite','hermite',true],['centre','centre',true],['linear','linear',true]]){
     controls.innerHTML=markup;
     const $=id=>window.document.getElementById(id);
     vm.runInNewContext(restore,{location:{search:query?'?interpolation='+query:''},$,URLSearchParams,Option:window.Option});

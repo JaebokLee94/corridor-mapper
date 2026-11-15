@@ -601,7 +601,6 @@ $('wallConfiguration').onchange = event => {
     const defaults = paper ? PAPER_SETTINGS : DEFAULT_INPUT;
     for (const key of ['snapshots','roughness','lambda0','resolution']) form.elements[key].value = defaults[key];
     form.elements.specular.checked = defaults.specular;
-    $('showInterpolation').checked = !paper;
   }
 };
 form.addEventListener('change', () => { state.sweepRuns = []; notice('Parameters changed. Run again to compare methods.'); cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
@@ -785,7 +784,6 @@ try {
     initialInput={...initialInput,seed:1+draw[0]%10};
   }
 } catch (error) { notice(`Could not restore URL settings: ${error.message}`); }
-$('showInterpolation').checked = initialInput.scene !== PAPER_SETTINGS.scene;
 if (location.search) {
   const sharedInterpolation = new URLSearchParams(location.search).get('interpolation');
   const selector = $('interpolationKind');

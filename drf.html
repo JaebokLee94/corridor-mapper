@@ -83,7 +83,7 @@
           <label class="toggle"><input id="showEllipses" type="checkbox" checked /><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipses</label>
           <label class="toggle"><input id="showVehicles" type="checkbox" checked /><span class="swatch swatch-track" aria-hidden="true"></span>Vehicles &amp; trajectories</label>
           <label class="toggle"><input id="showProxy" type="checkbox" checked /><span class="swatch swatch-supported" aria-hidden="true"></span>Estimates &amp; decisions</label>
-          <div class="interpolation-controls"><label class="toggle"><input id="showInterpolation" type="checkbox" autocomplete="off"><span class="swatch swatch-interpolated" aria-hidden="true"></span>WM-P interpolation</label><select id="interpolationKind" aria-label="Interpolation method" autocomplete="off"><option value="checked" selected title="Extended centre spline with measured range confirmation">Extended centre spline</option><option value="extended" title="Joins wider gaps and can cross real openings">Extended linear</option></select></div>
+          <div class="interpolation-controls"><label class="toggle"><input id="showInterpolation" type="checkbox" autocomplete="off" checked><span class="swatch swatch-interpolated" aria-hidden="true"></span>WM-P interpolation</label><select id="interpolationKind" aria-label="Interpolation method" autocomplete="off"><option value="checked" selected title="Extended centre spline with measured range confirmation">Extended centre spline</option><option value="extended" title="Joins wider gaps and can cross real openings">Extended linear</option></select></div>
         </fieldset>
         <fieldset class="toggle-list evaluation"><legend>Ground truth · evaluation only</legend>
           <label class="toggle"><input id="showTruth" type="checkbox" checked /><span class="swatch swatch-truth" aria-hidden="true"></span>True walls</label>
@@ -176,8 +176,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261114-winding70';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261114-winding70';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261115-wmp-spline-default';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261115-wmp-spline-default';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>
