@@ -107,6 +107,15 @@ function initialise(points,x){
     y[j]=median(local.map(([px,py,s])=>py+(q-px)*clip(s,hi-lo>=2?-Infinity:-1.5,hi-lo>=2?Infinity:1.5)));
   }return {y,near};
 }
+// Pairs that share an observed position also share its one-way distances for this wall.
+function rayDistances(ray,heights){
+  if(ray.heights!==heights){
+    const {xx,y,d}=ray;
+    for(let j=0;j<d.length;j++)d[j]=Math.sqrt(xx[j]+(heights[j]-y)**2);
+    ray.heights=heights;
+  }
+  return ray.d;
+}
 function fit(observations,points,sign,grid,details){
   const {x,knots,n,B,spacing,support}=grid,{y,near}=initialise(points,x),prior=zeros(n*4),rhs=zeros(n);
   for(let j=0;j<x.length;j++){
@@ -117,18 +126,34 @@ function fit(observations,points,sign,grid,details){
   for(let j=0;j<n;j++){prior[j*4]+=1e-8;reg[j*4]=strength;}
   for(let j=0;j<n-2;j++){outer(prior,j,[1,-2,1],.1);outer(reg,j,[1,-2,1],strength*.5);}
   const pin=solve(prior,rhs,n),L=zeros(x.length);let coef=pin;
+  const candidates=grid.stationaryCandidates?.(x,observations,sign),words=Math.ceil(x.length/32);
   function evaluate(c){
     const heights=Float64Array.from(B,b=>value(c,b)),matches=[];
     let dataLoss=0;
-    for(const o of observations){
-      const {a,b,rs,xxA,xxB}=o;const minY=Math.max(sign*a[1],sign*b[1]);const hits=[];
-      for(let j=0;j<x.length;j++){const y=heights[j];L[j]=Math.sqrt(xxA[j]+(y-a[1])**2)+Math.sqrt(xxB[j]+(y-b[1])**2);}
-      for(let j=1;j<x.length-1;j++){
-        const d0=L[j]-L[j-1],d1=L[j+1]-L[j];if(d0*d1>0||Math.abs(d1-d0)<1e-12||sign*heights[j]<minY)continue;
+    const bits=candidates?.(heights);
+    for(let oi=0;oi<observations.length;oi++){
+      const {a,b,rs,rayA,rayB}=observations[oi],xxA=rayA.xx,xxB=rayB.xx;
+      const minY=Math.max(sign*a[1],sign*b[1]),hits=[];
+      function refine(j,left,center,right){
+        const d0=center-left,d1=right-center;if(d0*d1>0||Math.abs(d1-d0)<1e-12||sign*heights[j]<minY)return;
         const h=clip(-.5*(d0+d1)/(d1-d0),-.5,.5);
         const deriv=k=>(heights[k]-a[1])/Math.max(1e-8,Math.sqrt(xxA[k]+(heights[k]-a[1])**2))+(heights[k]-b[1])/Math.max(1e-8,Math.sqrt(xxB[k]+(heights[k]-b[1])**2));
         const g=deriv(j);
-        hits.push({x:x[j]+h*.2,r:L[j]+.25*(d0+d1)*h,g:g+Math.abs(h)*(deriv(j+(h>0?1:-1))-g)});
+        hits.push({x:x[j]+h*.2,r:center+.25*(d0+d1)*h,g:g+Math.abs(h)*(deriv(j+(h>0?1:-1))-g)});
+      }
+      if(bits){
+        const lengthAt=j=>Math.sqrt(xxA[j]+(heights[j]-a[1])**2)+Math.sqrt(xxB[j]+(heights[j]-b[1])**2);
+        for(let w=0;w<words;w++){
+          let mask=bits[oi*words+w];
+          while(mask){
+            const j=w*32+31-Math.clz32(mask&-mask);mask&=mask-1;
+            if(j>0&&j<x.length-1)refine(j,lengthAt(j-1),lengthAt(j),lengthAt(j+1));
+          }
+        }
+      }else{
+        const da=rayDistances(rayA,heights),db=rayDistances(rayB,heights);
+        for(let j=0;j<x.length;j++)L[j]=da[j]+db[j];
+        for(let j=1;j<x.length-1;j++)refine(j,L[j-1],L[j],L[j+1]);
       }
       hits.sort((a,b)=>a.r-b.r);const resolved=[];for(const h of hits)if(!resolved.length||h.r-resolved.at(-1).r>=.6)resolved.push(h);
       const pairs=[];
@@ -136,7 +161,7 @@ function fit(observations,points,sign,grid,details){
       pairs.sort((a,b)=>Math.abs(a.e)-Math.abs(b.e)||a.i-b.i||a.k-b.k);
       const used=new Set(),usedHit=new Set();
       for(const {i,k,e} of pairs){if(used.has(i)||usedHit.has(k))continue;used.add(i);usedHit.add(k);const h=resolved[k];
-        matches.push({e,g:h.g,x:h.x,b:basis(h.x,knots,n,spacing)});dataLoss+=.0625*(Math.hypot(1,e/.25)-1);}
+        matches.push({e,g:h.g,x:h.x});dataLoss+=.0625*(Math.hypot(1,e/.25)-1);}
       dataLoss+=(rs.length-used.size)*.0625*(Math.sqrt(37)-1);
     }
     const diff=c.map((v,j)=>v-pin[j]),rd=mul(reg,diff);
@@ -145,7 +170,8 @@ function fit(observations,points,sign,grid,details){
   let state=evaluate(coef);
   for(let it=0;it<10&&state.matches.length;it++){
     const H=reg.slice(),h=state.rd.map(v=>-v);
-    for(const {e,g,b:{idx,w}} of state.matches){
+    for(const {e,g,x:at} of state.matches){
+      const {idx,w}=basis(at,knots,n,spacing);
       const weight=1/Math.hypot(1,e/.25);outer(H,idx,w,weight*g*g);
       for(let k=0;k<4;k++)h[idx+k]-=weight*g*w[k]*e;
     }
@@ -155,6 +181,7 @@ function fit(observations,points,sign,grid,details){
       if(next.loss<=state.loss+1e-12){move=Math.max(...c.map((v,i)=>Math.abs(v-coef[i])));coef=c;state=next;accepted=true;break;}
     }if(!accepted||move<.002)break;
   }
+  if(details)for(const m of state.matches)m.b=basis(m.x,knots,n,spacing);
   const curves=[];let run=[];
   for(let j=0;j<x.length;j++){if(near[j]<=support)run.push([x[j],state.heights[j]]);else{if(run.length>=2)curves.push(run);run=[];}}
   if(run.length>=2)curves.push(run);
@@ -162,13 +189,19 @@ function fit(observations,points,sign,grid,details){
     ...(details?{fit:{points,x,prior:y,heights:state.heights,near,matches:state.matches}}:{})};
 }
 export class EchoSpline {
-  constructor({domain,upper=false,spacing=2,support=8}={}){
+  constructor({domain,upper=false,spacing=2,support=8,stationaryCandidates}={}){
     const [lo,hi]=domain??[0,100];this.limits=[lo,hi];this.upper=upper;this.referenceFit=upper;this.pairs=new Map();this.obs=[];this.tracks=[];
     const x=Float64Array.from({length:Math.round((hi-lo)/.2)+1},(_,k)=>lo+k*.2);
     const knots=[lo,lo,lo,lo];for(let k=lo+spacing;k<hi;k+=spacing)knots.push(k);knots.push(hi,hi,hi,hi);
-    const n=knots.length-4;this.grid={x,knots,n,spacing,support,B:Array.from(x,u=>basis(u,knots,n,spacing))};this.straight=true;
+    const n=knots.length-4;this.grid={x,knots,n,spacing,support,stationaryCandidates,B:Array.from(x,u=>basis(u,knots,n,spacing))};this.straight=true;
   }
   observe(wire){
+    const rays=new Map(),x=this.grid.x;
+    function rayAt(p){
+      const key=p[0]+','+p[1];
+      if(!rays.has(key))rays.set(key,{xx:x.map(v=>(v-p[0])**2),y:p[1],d:zeros(x.length)});
+      return rays.get(key);
+    }
     for(const c of wire.configs){
       const key=c.i+','+c.j,rs=c.paths.map(p=>p.dHat),a=c.pHat_i,b=c.pHat_j;
       if(!this.pairs.has(key))this.pairs.set(key,{frames:[],active:[]});
@@ -181,7 +214,7 @@ export class EchoSpline {
       }
       frames.push(p);
       if(rs.length){
-        const x=this.grid.x;p.xxA=x.map(v=>(v-a[0])**2);p.xxB=x.map(v=>(v-b[0])**2);this.obs.push(p);
+        p.rayA=rayAt(a);p.rayB=rayAt(b);this.obs.push(p);
       }
       const pred=pair.active.map(tr=>{const last=tr.at(-1).r,n=Math.min(tr.length-1,3);return last+(n?clip((last-tr[tr.length-1-n].r)/n,-1.8,1.8):0);});
       const next=[],used=new Set();
@@ -193,11 +226,20 @@ export class EchoSpline {
   step(wire,details=false){this.observe(wire);return this.estimate(details); }
   estimate(details=false){
     let best=null,ambiguous=false;
-    for(const sign of this.upper?[1]:[1,-1]){
-      const pts=[];
-      for(const tr of this.tracks)if(tr.length>=5)for(let j=0;j<tr.length;j++){
-        const [r,rate]=smoothed(tr,j);for(const q of inversePoint(tr[j].p,r,rate,sign,this.straight,this.limits,this.referenceFit))pts.push(q);
+    const signs=this.upper?[1]:[1,-1],sides=signs.map(()=>[]);
+    for(const tr of this.tracks)if(tr.length>=5)for(let j=0;j<tr.length;j++){
+      const row=tr[j];
+      // Once the 9-sample window and centered velocity are complete, later packets cannot change this inverse.
+      let roots=row.straight===this.straight?row.roots:null;
+      if(!roots){
+        const [r,rate]=smoothed(tr,j);
+        roots=signs.map(sign=>inversePoint(row.p,r,rate,sign,this.straight,this.limits,this.referenceFit));
+        if(tr.length>=9&&j+4<tr.length){row.straight=this.straight;row.roots=roots;}
       }
+      for(let i=0;i<sides.length;i++)for(const q of roots[i])sides[i].push(details?q.slice():q);
+    }
+    for(let i=0;i<signs.length;i++){
+      const sign=signs[i],pts=sides[i];
       if(pts.length<5)continue;
       const candidate=fit(this.obs,pts,sign,this.grid,details);
       if(!best||candidate.cost<best.cost-1e-10){best=candidate;ambiguous=false;}

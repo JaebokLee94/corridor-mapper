@@ -151,10 +151,11 @@ export class PSPT {
         .map((s) => Math.min(...veh.map((p) => distance(p, s.center))))) > this.max_range) continue;
       for (let k = 0; k < 2; k++) {
         const s = g.s[k], entries = [];
+        let frame;
         for (const c of pre) {
           const p = !g.retired?.[k] && (k === 0 || this.mirror) ? s.predict(c.pi, c.pj, { ext: this.ext }) : null;
           if (p === null) { entries.push(null); continue; }
-          const [, tangent, normal, curvature] = s.frame(), a = curvature * p[1], denom = Math.hypot(1, a),
+          const [, tangent, normal, curvature] = frame ??= s.frame(), a = curvature * p[1], denom = Math.hypot(1, a),
             rootNormal = normal.map((v, i) => (v - a * tangent[i]) / denom),
             incidence = Math.min(-dot(p[3], rootNormal), -dot(p[4], rootNormal));
           if (incidence <= 0 || (this.cos_inc !== null && incidence < this.cos_inc)) { entries.push(null); continue; }
@@ -232,8 +233,9 @@ export class PSPT {
       const centers = g.s.filter((_, k) => !g.retired?.[k]).map((s) => s.center),
         dL = [0, 0, 0, 0], comps = [[], []], coreConfigs = [0, 0];
       let ncfg = 0;
+      const pred0 = pred.get(key(g.gid, 0)), pred1 = pred.get(key(g.gid, 1));
       for (let ci = 0; ci < pre.length; ci++) {
-        const c = pre[ci], E = [0, 1].map((k) => pred.get(key(g.gid, k))[ci]);
+        const c = pre[ci], E = [pred0[ci], pred1[ci]];
         E.forEach((e, k) => { coreConfigs[k] += Number(e !== null && e.core); });
         if (!E.some((e) => e !== null && e.core)) continue;
         ncfg++;

@@ -28,3 +28,30 @@ test('fitted curve uses whole-map geometry, without fabricated fragment decision
   const e=createPSPTEvaluator(s,{}).step({t:1,candidates:[],curves:[[[0,8],[10,8]]]}, {diagnostics:{}});
   assert.equal(e.interpolation.rawMap.mapF1,1);assert.equal(e.precision,null);assert.equal(e.supportedCount,null);assert.equal(e.firstSupportCount,null);
 });
+
+test('reused inverse points survive a late turn, returned diagnostics edits and both mirror hypotheses',()=>{
+  const options={domain:[0,40]},online=new EchoSpline(options),history=[];
+  for(let t=1;t<=16;t++){
+    const wire=flat(t,8);
+    if(t>=13)for(const c of wire.configs){c.pHat_i[1]+=.1*(t-12);c.pHat_j[1]+=.1*(t-12);}
+    history.push(wire);
+    const cached=online.step(wire,true),fresh=new EchoSpline(options);
+    for(const frame of history)fresh.observe(frame);
+    assert.deepEqual(cached,fresh.estimate(true));
+    if(cached.fit)cached.fit.points[0][1]+=100;
+  }
+});
+
+test('a conservative stationarity mask keeps the full-grid fit, including lower-wall diagnostics',()=>{
+  const options={domain:[0,40]},cpu=new EchoSpline(options);const testedSigns=new Set();
+  const masked=new EchoSpline({...options,stationaryCandidates:(x,obs,sign)=>{
+    testedSigns.add(sign);
+    const words=new Uint32Array(obs.length*Math.ceil(x.length/32)).fill(0xffffffff);
+    return ()=>words;
+  }});
+  for(let t=1;t<=12;t++){
+    const wire=flat(t,-8);
+    assert.deepEqual(masked.step(wire,true),cpu.step(wire,true));
+  }
+  assert.deepEqual([...testedSigns].sort(),[-1,1]);
+});

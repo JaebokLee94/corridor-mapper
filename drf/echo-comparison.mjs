@@ -33,11 +33,11 @@ export function echoProtocol(input={}) {
 }
 
 export class EchoComparison {
-  constructor(input,domain,side) {
+  constructor(input,domain,side,stationaryCandidates) {
     this.protocol=echoProtocol(input);
     this.id=input.rightMethod??'wmp'; this.vehicles=input.vehicles; this.lastT=0;this.leftT=0;
     const bounds=input.scene==='paper-upper'?domain:undefined;
-    const splineOptions={domain,upper:input.scene==='paper-upper',spacing:input.echoKnotM,support:input.echoSupportM};
+    const splineOptions={domain,upper:input.scene==='paper-upper',spacing:input.echoKnotM,support:input.echoSupportM,stationaryCandidates};
     if(side!=='guarded')this.spline=new EchoSpline(splineOptions);
     if(side==='echoSpline')return;
     if(this.id==='gbdt')this.fixedSpline=this.spline && (input.echoKnotM??2)===2 && (input.echoSupportM??8)===8

@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <array>
+#include <algorithm>
 using namespace Eigen;
 using RowF = Matrix<float,Dynamic,Dynamic,RowMajor>;
 extern "C" {
@@ -38,6 +40,7 @@ int gaussianProcess(const double *x,const double *y,int n,const double *query,in
     double low[]={std::log(.05),std::log(.1),std::log(.01)},high[]={std::log(200.),std::log(160.),std::log(60.)};
     int bounds[]={2,2,2},task[2]={},lsave[4]={},isave[44]={},iwa[9]={},line[2]={};
     double workspace[1420]={},dsave[29]={},loss=0,grad[3]={};
+    std::array<double,3> factored={std::numeric_limits<double>::quiet_NaN(),0.,0.};
     LLT<MatrixXd> chol;
     MatrixXd cov;
     VectorXd alpha;
@@ -46,7 +49,7 @@ int gaussianProcess(const double *x,const double *y,int n,const double *query,in
         cov=amp*(-.5/ell2*dist.array()).exp();
         MatrixXd k=cov;k.diagonal().array()+=noise+1e-8;chol.compute(k);
         if (chol.info()!=Success) return false;
-        alpha=chol.solve(ys);return true;
+        alpha=chol.solve(ys);std::copy_n(pars,3,factored.begin());return true;
     };
     int iterations=0;
     for (;;) {
@@ -61,9 +64,11 @@ int gaussianProcess(const double *x,const double *y,int n,const double *query,in
         grad[1]=.5*(w.array()*cov.array()*dist.array()).sum()/std::exp(2*pars[1]);
         grad[2]=std::exp(2*pars[2])*w.diagonal().sum();
     }
-    if (!factor()) return 0;
-    for(int i=0;i<count;i++) out[i]=std::exp(2*pars[0])*
-        ((-.5/std::exp(2*pars[1])*(xs.array()-query[i]).square()).exp()*alpha.array()).sum();
+    // L-BFGS-B usually returns its last evaluation; reuse that exact factor and solution.
+    if (!std::equal(factored.begin(),factored.end(),pars) && !factor()) return 0;
+    const double variance=std::exp(2*pars[0]), scale=-.5/std::exp(2*pars[1]);
+    for(int i=0;i<count;i++) out[i]=variance*
+        ((scale*(xs.array()-query[i]).square()).exp()*alpha.array()).sum();
     return 1;
 }
 

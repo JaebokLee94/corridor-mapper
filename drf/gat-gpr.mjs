@@ -8,9 +8,10 @@ function association(old,now){
   return result;
 }
 
-function predict(graphs,rt){
+function predict(graphs,rt,neighbors){
   const {weights:w,call}=rt, rows=12*graphs.length;
-  let input=Float32Array.from(graphs.flat(2));
+  let input=new Float32Array(rows*2),at=0;
+  for(const graph of graphs)for(const step of graph){input.set(step,at);at+=step.length;}
   const linear=(a,weight,n)=>call('multiply',[a,weight.values],n*weight.shape[1],[n,...weight.shape]);
   const leaky=x=>x<0?.01*x:x;
   for(let layer=0;layer<4;layer++){
@@ -22,15 +23,17 @@ function predict(graphs,rt){
       a[i*heads+k]=p;b[i*heads+k]=q;
     }
     input=new Float32Array(h.length);
+    const scores=new Float64Array(12);
     for(let i=0;i<rows;i++)for(let k=0;k<heads;k++){
-      const start=i-i%12,neighbors=[],scores=[];
-      for(let j=0;j<12;j++)if(w.mask.values[(i%12)*12+j]){
-        const z=a[i*heads+k]+b[(start+j)*heads+k];neighbors.push(start+j);scores.push(z<0?.2*z:z);
+      const start=i-i%12,adj=neighbors[i%12];let peak=-Infinity,sum=0;
+      for(let j=0;j<adj.length;j++){
+        const z=a[i*heads+k]+b[(start+adj[j])*heads+k];
+        scores[j]=z<0?.2*z:z;peak=Math.max(peak,scores[j]);
       }
-      const peak=Math.max(...scores);let sum=0;
-      for(let j=0;j<scores.length;j++)sum+=(scores[j]=Math.exp(scores[j]-peak));
+      for(let j=0;j<adj.length;j++)sum+=(scores[j]=Math.exp(scores[j]-peak));
+      for(let j=0;j<adj.length;j++)scores[j]/=sum;
       for(let f=0;f<d;f++){
-        let agg=0;for(let j=0;j<scores.length;j++)agg+=scores[j]/sum*h[neighbors[j]*stride+k*d+f];
+        let agg=0;for(let j=0;j<adj.length;j++)agg+=scores[j]*h[(start+adj[j])*stride+k*d+f];
         input[i*stride+k*d+f]=leaky(agg);
       }
     }
@@ -83,15 +86,19 @@ function inliers(points){
   return points.filter((p,i)=>core[i]||enough(p,1,core));
 }
 export class GatGpr{
-  constructor(rt,vehicles){this.rt=rt;this.vehicles=vehicles;this.pairs=new Map();}
+  constructor(rt,vehicles){
+    this.rt=rt;this.vehicles=vehicles;this.pairs=new Map();
+    const nodes=Array.from({length:12},(_,i)=>i);
+    this.neighbors=nodes.map(i=>nodes.filter(j=>rt.weights.mask.values[12*i+j]));
+  }
   step(wire){
     const graphs=[],owners=[],{mu,sd}=this.rt.data;
     for(const c of wire.configs){
       const key=c.i+','+c.j;
       if(!this.pairs.has(key))this.pairs.set(key,{ranges:[],tracks:[],points:[]});
       const pair=this.pairs.get(key),ranges=c.paths.map(p=>p.dHat),assoc=association(pair.ranges,ranges);
+      const poses=[...c.pHat_i,...c.pHat_j].map((v,k)=>(v-mu[k%2])/sd[k%2]);
       const tracks=ranges.map((r,i)=>{
-        const poses=[...c.pHat_i,...c.pHat_j].map((v,k)=>(v-mu[k%2])/sd[k%2]);
         const sample=[...poses,(r-mu[2])/sd[2],0],track=[sample,...(pair.tracks[assoc[i]]??[]).slice(0,3)];
         if(track.length===4){graphs.push(track);owners.push(pair);}
         return track;
@@ -99,7 +106,7 @@ export class GatGpr{
       pair.ranges=ranges;pair.tracks=tracks;
     }
     if(graphs.length){
-      const pr=predict(graphs,this.rt);
+      const pr=predict(graphs,this.rt,this.neighbors);
       owners.forEach((o,i)=>{
         const k=i*8;for(let j=2;j<8;j+=2)if(Math.hypot(pr[k+j]-pr[k+j-2],pr[k+j+1]-pr[k+j-1])>2)return;
         o.points.push([pr[k],pr[k+1]]);

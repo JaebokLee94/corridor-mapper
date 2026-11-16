@@ -16,15 +16,21 @@ function descriptors(points,x,links){
     }
     const closest=Math.abs(points[ids[0]][0]-q);
     function local(rad){
-      let a=cut,b=cut;while(a>0&&points[a-1][0]>=q-rad)a--;while(b<points.length&&points[b][0]<=q+rad)b++;
-      return points.slice(a,b);
+      let lo=0,hi=cut;
+      while(lo<hi){const m=(lo+hi)>>1;if(points[m][0]<q-rad)lo=m+1;else hi=m;}
+      const first=lo;lo=cut;hi=points.length;
+      while(lo<hi){const m=(lo+hi)>>1;if(points[m][0]<=q+rad)lo=m+1;else hi=m;}
+      return [first,lo];
     }
-    const near=local(3),project=p=>p[1]+clamp(p[2],-2,2)*(q-p[0]);
+    const project=p=>p[1]+clamp(p[2],-2,2)*(q-p[0]);
+    const [first,last]=local(3),near=points.slice(first,last);
     const b=quantile(sort((near.length>=2?near:ids.map(i=>points[i])).map(project)),.5);base.push(b);
     const row=[closest,clamp(q-middle,-20,20),quantile(sort(ids.map(i=>points[i][2])),.5)];
     for(const rad of [2,5,10]){
-      const kept=local(Math.max(rad,closest+1)),ys=sort(kept.map(p=>project(p)-b));
-      row.push(...[.15,.5,.85].map(p=>quantile(ys,p)),kept.length/links,quantile(sort(kept.map(p=>p[2])),.5));
+      const [lo,hi]=local(Math.max(rad,closest+1)),ys=new Float64Array(hi-lo),slopes=new Float64Array(hi-lo);
+      for(let j=lo;j<hi;j++){ys[j-lo]=project(points[j])-b;slopes[j-lo]=points[j][2];}
+      ys.sort();slopes.sort();
+      row.push(quantile(ys,.15),quantile(ys,.5),quantile(ys,.85),ys.length/links,quantile(slopes,.5));
     }
     rows.push(row);
   }

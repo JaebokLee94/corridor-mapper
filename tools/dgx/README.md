@@ -30,3 +30,15 @@ GitHub Pages serves the H200-generated bank for the ten default roughness-2 seed
 The relay accepts only bounded physical-measurement blocks and authorizes its single outbound DGX agent with a private secret; no public SSH, shell or local job-control endpoints. Public budget: two blocks in flight, twelve snapshots per block, two default full runs per client per ten minutes and twenty globally at ten vehicles. Quota units scale with pair count, with a minimum charge per request. Public live generation supports up to ten vehicles, roughness up to ten degrees, intensity up to fifteen and cell spacing at least 0.02 m. Zero scattering needs no GPU. Busy, offline and out-of-budget requests fall back to browser generation. Research batches on the loopback service do not use public quotas.
 
 On container restart, restart the localhost CUDA service and then run node tools/dgx/public/agent.mjs with ECHOMAP_RELAY (the relay's wss /agent URL) and the private ECHOMAP_AGENT_KEY supplied from a protected file. Never put this key in a page, a URL or source control. The agent reconnects on a network interruption; it cannot run while the container is stopped.
+
+## Optional H200 EchoSpline estimation for research batches
+
+On the DGX, build the Node add-on with the same Node headers as the measurement module and run the parity check:
+
+```sh
+/usr/local/cuda/bin/nvcc -O3 --fmad=false -arch=sm_90 -shared -Xcompiler=-fPIC -Iinclude/node tools/dgx/stationary.cu -o tools/dgx/stationary.node
+node tools/dgx/check-stationary.mjs
+ECHOMAP_DGX_ESTIMATOR=h200 node tools/dgx/batch.mjs < settings.jsonl > results.jsonl
+```
+
+The flag selects the EchoSpline wall estimator independently of measurement generation. Each prefix uses only the observations received by that step. The H200 marks possible extrema of the two-leg path on the current spline grid in FP64. The JavaScript estimator checks those grid positions, matches ranges, fits the spline and tests upper/lower ambiguity using its usual rules. The batch result records the backend in `timing.echoSplineBackend`. The default is `cpu`; a requested H200 run reports a missing add-on or device as an error. Measure both options on the chosen fleet and run length because small prefixes incur transfer overhead.

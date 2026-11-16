@@ -8,9 +8,13 @@ const normals=Array.from({length:64},(_,i)=>{
 function normalizeSiLU(data,scale,bias,channels){
   const group=channels/4,count=data.length/4;
   const sum=new Float64Array(4),square=new Float64Array(4);
-  for(let i=0;i<data.length;i++){const g=Math.floor(i%channels/group);sum[g]+=data[i];square[g]+=data[i]*data[i];}
+  for(let i=0;i<data.length;)for(let g=0;g<4;g++)for(let k=0;k<group;k++,i++){
+    const v=data[i];sum[g]+=v;square[g]+=v*v;
+  }
   const mean=sum.map(v=>v/count),inv=square.map((s,g)=>1/Math.sqrt(Math.max(0,s/count-mean[g]**2)+1e-5));
-  for(let i=0;i<data.length;i++){const c=i%channels,g=Math.floor(c/group),v=(data[i]-mean[g])*inv[g]*scale[c]+bias[c];data[i]=v/(1+Math.exp(-v));}
+  for(let i=0;i<data.length;)for(let g=0;g<4;g++)for(let k=0;k<group;k++,i++){
+    const c=g*group+k,v=(data[i]-mean[g])*inv[g]*scale[c]+bias[c];data[i]=v/(1+Math.exp(-v));
+  }
 }
 function pool({data,h,w,c}){
   const H=h>>1,W=w>>1,a=new Float32Array(H*W*c);
