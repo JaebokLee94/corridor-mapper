@@ -5,7 +5,7 @@ import { GatGpr } from './gat-gpr.mjs';
 import { EchoArcCNN } from './echoarc-cnn.mjs';
 import { EchoSpline } from './echospline.mjs?v=20261115-four-methods';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
-import { PSPT, prepareMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
+import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
 
 const paperSettings = new Map([
@@ -44,7 +44,7 @@ export class EchoComparison {
       ? this.spline : new EchoSpline({...splineOptions,spacing:2,support:8});
     if(this.id==='wmp'){
       const {parameters,refinement,clustering}=this.protocol.guarded;
-      this.wmp=new PSPT({refinement,clustering,domain:bounds,...parameters});
+      this.wmp=new PSPT({refinement,clustering,domain:bounds,...parameters},{densityOnly:true});
       this.evidence=new GapRangeEvidence(input.sigmaD);
     }
   }
@@ -55,7 +55,7 @@ export class EchoComparison {
   }
   stepLeft(wire,details=false) {
     const start=performance.now();
-    prepareMeasuredSnapshot(wire);
+    wire=validateMeasuredSnapshot(wire);
     if(wire.t!==this.leftT+1)throw new RangeError('Snapshots must be consecutive from t=1');
     const fit=this.spline.step(wire,details);
     this.leftT=wire.t;
@@ -70,14 +70,17 @@ export class EchoComparison {
       const rows=selectGuarded(this.wmp,this.wmp.step(wire),cut);
       this.evidence.add(wire);result=wmpFrame(rows,start,true,this.evidence);
     }else{
-      prepareMeasuredSnapshot(wire);
+      wire=validateMeasuredSnapshot(wire);
       if(this.id==='gbdt'){
         const f=sharedFit??this.fixedSpline.step(wire,true);
-        result={curves:f.fit?correctFit(f.fit,this.tree,wire.configs.length,8):[],candidates:[]};
+        result=this.correctedMap(f,wire.configs.length);
       }else result=this.model.step(wire);
     }
     this.lastT=wire.t;
     return {...result,ms:performance.now()-start};
+  }
+  correctedMap(result,pairCount) {
+    return {curves:result.fit?correctFit(result.fit,this.tree,pairCount,8):[],candidates:[]};
   }
   step(wire) {
     const shared=this.fixedSpline===this.spline;
@@ -86,4 +89,34 @@ export class EchoComparison {
     if(shared)delete echoSpline.fit;
     return {echoSpline,guarded};
   }
+}
+
+// Final-only runs consume every measured snapshot in order, then materialize each wall once.
+export async function estimateFinalMaps(input,domain,wires,stationaryCandidates) {
+  if(!Array.isArray(wires) || !wires.length || wires.some((wire,i)=>wire.t!==i+1))
+    throw new RangeError('Expected nonempty consecutive snapshots from t=1');
+  const estimator=new EchoComparison(input,domain,undefined,stationaryCandidates);
+  await estimator.loadModel();
+  const shared=estimator.fixedSpline===estimator.spline;
+  for(const snapshot of wires){
+    const wire=validateMeasuredSnapshot(snapshot);
+    estimator.spline.observe(wire);
+    if(estimator.wmp){
+      estimator.wmp.observe(wire);
+      estimator.evidence.add(wire);
+    }else if(estimator.fixedSpline){
+      if(!shared)estimator.fixedSpline.observe(wire);
+    }else estimator.model.observe(wire);
+  }
+  const fit=estimator.spline.estimate(shared);
+  let guarded;
+  if(estimator.wmp){
+    const rows=selectGuarded(estimator.wmp,estimator.wmp.report(),estimator.protocol.guarded.threshold);
+    guarded=wmpFrame(rows,performance.now(),true,estimator.evidence);
+    delete guarded.ms;
+  }else if(estimator.fixedSpline){
+    guarded=estimator.correctedMap(shared?fit:estimator.fixedSpline.estimate(true),wires.at(-1).configs.length);
+  }else guarded=estimator.model.estimate();
+  const {fit:details,...echoSpline}=fit;
+  return {echoSpline:{...echoSpline,candidates:[]},guarded};
 }

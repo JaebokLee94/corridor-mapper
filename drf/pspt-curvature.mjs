@@ -21,7 +21,7 @@ export function curvatureConsistentUpdate(s,comps) {
   // Keep construction, solve and arithmetic ordering identical to legacy _kf.
   const M=comps.length,A=comps.map(cm=>cm[4][2]),residual=comps.map(cm=>cm[3]),
     R=Array.from({length:M},(_,i)=>Array.from({length:M},(_,j)=>i===j?comps[i][2]/comps[i][1]:0));
-  for(let a=0;a<M;a++)for(let b=0;b<M;b++) {
+  if(!comps.every(([c])=>c.zeroPose))for(let a=0;a<M;a++)for(let b=0;b<M;b++) {
     const [ca,,,,pa]=comps[a],[cb,,,,pb]=comps[b];
     for(const [va,ea,covariance] of [[ca.i,pa[3],ca.Si],[ca.j,pa[4],ca.Sj]])
       for(const [vb,eb] of [[cb.i,pb[3]],[cb.j,pb[4]]])

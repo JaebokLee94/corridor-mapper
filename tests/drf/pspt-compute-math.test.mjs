@@ -60,18 +60,21 @@ test('input validation still runs when geometry and positions are cached', () =>
   }
 });
 
-test('ten-vehicle reuse computes grid distances once per vehicle, not once per pair', () => {
-  const [actual, expected] = surfaces(), hypot = Math.hypot;
-  let calls = 0, accepted = 0;
+test('ten-vehicle bracket screening shares grid projections and refines only candidate intervals', () => {
+  const [actual, expected] = surfaces(), hypot = Math.hypot, sqrt = Math.sqrt;
+  let calls = 0, gridDistances = 0, accepted = 0;
   try {
     Math.hypot = (...args) => { calls++; return hypot(...args); };
+    Math.sqrt = value => { gridDistances++; return sqrt(value); };
     for (let i = 0; i < 10; i++) for (let j = i + 1; j < 10; j++)
       if (actual.predict(positions[i], positions[j])) accepted++;
-    assert.equal(calls, 10 * 41 + 2 * accepted);
+    assert.equal(gridDistances, 10 * 41);
+    assert.equal(accepted, 45);
+    assert.equal(calls, 4 * 45 + 2 * accepted);
     calls = 0;
     for (let i = 0; i < 10; i++) for (let j = i + 1; j < 10; j++) expected.predict(positions[i], positions[j]);
     assert.equal(calls, 45 * 2 * 41 + 2 * accepted);
-  } finally { Math.hypot = hypot; }
+  } finally { Math.hypot = hypot; Math.sqrt = sqrt; }
 });
 
 test('repeated MAP iterations preserve rows, state and covariance in both modes', () => {

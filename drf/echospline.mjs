@@ -5,10 +5,10 @@
  * For M nonempty pair/snapshots, N horizontal samples and K spline coefficients,
  * each fit iteration scans O(MN) distances, plus echo assignment and a banded solve.
  */
+import { exactMedian } from './order-statistic.mjs';
 import { minimumAssignment } from './range-assignment.mjs';
 const clip=(x,a,b)=>Math.min(b,Math.max(a,x));
 const zeros=n=>new Float64Array(n);
-const median=a=>{a.sort((x,y)=>x-y);const i=a.length>>1;return a.length%2?a[i]:(a[i-1]+a[i])/2;};
 
 // Minimum absolute-distance assignment in 1D: an optimal pairing preserves sorted
 // order. Match every element of the smaller list to a subsequence of the larger.
@@ -60,7 +60,7 @@ function basis(u,knots,n,spacing){
     w[j]=saved;
   }return {idx:span-3,w};
 }
-const value=(c,b)=>b.w.reduce((v,w,k)=>v+w*c[b.idx+k],0);
+const value=(c,{idx,w})=>0+w[0]*c[idx]+w[1]*c[idx+1]+w[2]*c[idx+2]+w[3]*c[idx+3];
 const sgCache=new Map();
 function smoothed(track,k){
   const n=track.length,w=Math.min(9,n%2?n:n-1),start=clip(k-(w>>1),0,n-w),at=k-start,key=w*10+at;
@@ -101,10 +101,15 @@ function initialise(points,x){
   for(let j=0;j<x.length;j++){
     const q=x[j];while(lo<p.length&&p[lo][0]<q-3)lo++;while(hi<p.length&&p[hi][0]<=q+3)hi++;
     while(closest+1<p.length&&Math.abs(p[closest+1][0]-q)<Math.abs(p[closest][0]-q))closest++;
-    near[j]=Math.abs(q-p[closest][0]);let local;
-    if(hi-lo>=2)local=p.slice(lo,hi);
-    else local=p.slice(Math.max(0,closest-5),closest+6).sort((a,b)=>Math.abs(a[0]-q)-Math.abs(b[0]-q)).slice(0,5);
-    y[j]=median(local.map(([px,py,s])=>py+(q-px)*clip(s,hi-lo>=2?-Infinity:-1.5,hi-lo>=2?Infinity:1.5)));
+    near[j]=Math.abs(q-p[closest][0]);
+    if(hi-lo>=2){
+      const projected=new Float64Array(hi-lo);
+      for(let i=lo;i<hi;i++){const [px,py,s]=p[i];projected[i-lo]=py+(q-px)*s;}
+      y[j]=exactMedian(projected);
+    }else{
+      const local=p.slice(Math.max(0,closest-5),closest+6).sort((a,b)=>Math.abs(a[0]-q)-Math.abs(b[0]-q)).slice(0,5);
+      y[j]=exactMedian(local.map(([px,py,s])=>py+(q-px)*clip(s,-1.5,1.5)));
+    }
   }return {y,near};
 }
 // Pairs that share an observed position also share its one-way distances for this wall.
@@ -125,7 +130,7 @@ function fit(observations,points,sign,grid,details){
   const reg=zeros(4*n),nr=observations.reduce((s,o)=>s+o.rs.length,0),strength=.2*Math.max(nr/300,1);
   for(let j=0;j<n;j++){prior[j*4]+=1e-8;reg[j*4]=strength;}
   for(let j=0;j<n-2;j++){outer(prior,j,[1,-2,1],.1);outer(reg,j,[1,-2,1],strength*.5);}
-  const pin=solve(prior,rhs,n),L=zeros(x.length);let coef=pin;
+  const pin=solve(prior,rhs,n);let coef=pin;
   const candidates=grid.stationaryCandidates?.(x,observations,sign),words=Math.ceil(x.length/32);
   function evaluate(c){
     const heights=Float64Array.from(B,b=>value(c,b)),matches=[];
@@ -134,8 +139,8 @@ function fit(observations,points,sign,grid,details){
     for(let oi=0;oi<observations.length;oi++){
       const {a,b,rs,rayA,rayB}=observations[oi],xxA=rayA.xx,xxB=rayB.xx;
       const minY=Math.max(sign*a[1],sign*b[1]),hits=[];
-      function refine(j,left,center,right){
-        const d0=center-left,d1=right-center;if(d0*d1>0||Math.abs(d1-d0)<1e-12||sign*heights[j]<minY)return;
+      function refine(j,center,d0,d1){
+        if(Math.abs(d1-d0)<1e-12||sign*heights[j]<minY)return;
         const h=clip(-.5*(d0+d1)/(d1-d0),-.5,.5);
         const deriv=k=>(heights[k]-a[1])/Math.max(1e-8,Math.sqrt(xxA[k]+(heights[k]-a[1])**2))+(heights[k]-b[1])/Math.max(1e-8,Math.sqrt(xxB[k]+(heights[k]-b[1])**2));
         const g=deriv(j);
@@ -147,13 +152,20 @@ function fit(observations,points,sign,grid,details){
           let mask=bits[oi*words+w];
           while(mask){
             const j=w*32+31-Math.clz32(mask&-mask);mask&=mask-1;
-            if(j>0&&j<x.length-1)refine(j,lengthAt(j-1),lengthAt(j),lengthAt(j+1));
+            if(j>0&&j<x.length-1){
+              const center=lengthAt(j),d0=center-lengthAt(j-1),d1=lengthAt(j+1)-center;
+              if(d0*d1<=0)refine(j,center,d0,d1);
+            }
           }
         }
       }else{
         const da=rayDistances(rayA,heights),db=rayDistances(rayB,heights);
-        for(let j=0;j<x.length;j++)L[j]=da[j]+db[j];
-        for(let j=1;j<x.length-1;j++)refine(j,L[j-1],L[j],L[j+1]);
+        let center=da[1]+db[1],d0=center-(da[0]+db[0]);
+        for(let j=1;j<x.length-1;j++){
+          const right=da[j+1]+db[j+1],d1=right-center;
+          if(d0*d1<=0)refine(j,center,d0,d1);
+          center=right;d0=d1;
+        }
       }
       hits.sort((a,b)=>a.r-b.r);const resolved=[];for(const h of hits)if(!resolved.length||h.r-resolved.at(-1).r>=.6)resolved.push(h);
       const pairs=[];
@@ -219,8 +231,10 @@ export class EchoSpline {
       const pred=pair.active.map(tr=>{const last=tr.at(-1).r,n=Math.min(tr.length-1,3);return last+(n?clip((last-tr[tr.length-1-n].r)/n,-1.8,1.8):0);});
       const next=[],used=new Set();
       const matches=this.referenceFit?minimumAssignment(pred.length,rs.length,(i,j)=>Math.abs(pred[i]-rs[j])):match(pred,rs);
-      for(const [i,j] of matches)if(Math.abs(pred[i]-rs[j])<=3.25){const tr=pair.active[i];tr.push({r:rs[j],p});next.push(tr);used.add(j);}
-      rs.forEach((r,j)=>{if(!used.has(j)){const tr=[{r,p}];next.push(tr);this.tracks.push(tr);}});pair.active=next;
+      for(const tr of pair.active)tr.closed=true;
+      for(const [i,j] of matches)if(Math.abs(pred[i]-rs[j])<=3.25){const tr=pair.active[i];tr.closed=false;tr.push({r:rs[j],p});next.push(tr);used.add(j);}
+      rs.forEach((r,j)=>{if(!used.has(j)){const tr=[{r,p}];next.push(tr);this.tracks.push(tr);}});
+      pair.active=next;
     }
   }
   step(wire,details=false){this.observe(wire);return this.estimate(details); }
@@ -229,12 +243,12 @@ export class EchoSpline {
     const signs=this.upper?[1]:[1,-1],sides=signs.map(()=>[]);
     for(const tr of this.tracks)if(tr.length>=5)for(let j=0;j<tr.length;j++){
       const row=tr[j];
-      // Once the 9-sample window and centered velocity are complete, later packets cannot change this inverse.
+      // A closed track also has fixed edge windows: the following pair frame completed its last velocity.
       let roots=row.straight===this.straight?row.roots:null;
       if(!roots){
         const [r,rate]=smoothed(tr,j);
         roots=signs.map(sign=>inversePoint(row.p,r,rate,sign,this.straight,this.limits,this.referenceFit));
-        if(tr.length>=9&&j+4<tr.length){row.straight=this.straight;row.roots=roots;}
+        if(tr.closed || (tr.length>=9&&j+4<tr.length)){row.straight=this.straight;row.roots=roots;}
       }
       for(let i=0;i<sides.length;i++)for(const q of roots[i])sides[i].push(details?q.slice():q);
     }

@@ -8,7 +8,7 @@ globalThis.onmessage = ({ data }) => {
     const allowed = data.type === 'init' ? ['type', 'requestId'] : ['type', 'requestId', 'snapshot'];
     if (Object.keys(data).some(key => !allowed.includes(key))) throw new Error('Non-measurement worker input');
     if (data.type === 'init') {
-      estimator = new PSPT();
+      estimator = new PSPT({}, {densityOnly:true});
       globalThis.postMessage({ type: 'initialized', requestId: data.requestId, method: 'guarded45', grid: [100, 100] });
     } else if (data.type === 'step') {
       if (!estimator) throw new Error('PSPT worker must be initialized');

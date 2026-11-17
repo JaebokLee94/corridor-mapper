@@ -55,3 +55,21 @@ test('a conservative stationarity mask keeps the full-grid fit, including lower-
   }
   assert.deepEqual([...testedSigns].sort(),[-1,1]);
 });
+
+test('closed short tracks retain their end velocities after missing echoes and a later turn',()=>{
+  const options={domain:[0,40]},cached=new EchoSpline(options),history=[];
+  for(let t=1;t<=22;t++){
+    const wire=flat(t,8);
+    for(const config of wire.configs){
+      if(config.i===1&&config.j===2&&t>6&&t<=12)config.paths=[];
+      if(t>10){
+        config.pHat_i=[config.pHat_i[0],config.pHat_i[1]+.06*(t-10)];
+        config.pHat_j=[config.pHat_j[0],config.pHat_j[1]+.06*(t-10)];
+      }
+    }
+    history.push(wire);
+    const actual=cached.step(wire,true),fresh=new EchoSpline(options);
+    for(const frame of history)fresh.observe(frame);
+    assert.deepEqual(actual,fresh.estimate(true));
+  }
+});

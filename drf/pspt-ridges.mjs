@@ -1,4 +1,4 @@
-import { createGrid, createField } from "./field.mjs";
+import { createGrid, createField, createRidgeDensityField } from "./field.mjs";
 
 /** scipy.ndimage.map_coordinates(order=1, mode='nearest') on y-major data. */
 export function sampleLinear(field, nx, ny, row, column) {
@@ -26,10 +26,10 @@ function gradient(field, nx, ny, dx, dy) {
  * for candidate extraction or beta. Ridges O(grid + candidates²), O(grid) memory.
  */
 export class DRF {
-  constructor({ nx = 100, ny = 100, updateCache = null, domain = [0, 80, -20, 50] } = {}) {
+  constructor({ nx = 100, ny = 100, updateCache = null, densityOnly = false, domain = [0, 80, -20, 50] } = {}) {
     if (nx < 2 || ny < 2) throw new RangeError("ridge grid needs at least two cells per axis");
     this.grid = createGrid(nx, ny, domain);
-    this.field = createField(this.grid, { band: 4, perimeter: "exact", updateCache });
+    this.field = densityOnly ? createRidgeDensityField(this.grid) : createField(this.grid, { band: 4, perimeter: "exact", updateCache });
     const { x, y, dx, dy } = this.grid;
     Object.assign(this, { nx, ny, x, y, dx, dy, D: this.field.D, A: this.field.A });
   }
@@ -38,6 +38,7 @@ export class DRF {
   update(wire) { return this.field.step(wire); }
 
   beta() {
+    if (!this.A) throw new Error("normalized readout requires the full field");
     let maximum = 1e-300;
     for (const value of this.A) maximum = Math.max(maximum, value);
     const epsilon = 1e-12 * maximum;

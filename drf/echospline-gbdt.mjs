@@ -1,5 +1,6 @@
 // The frozen regressor uses 26 inverse-point descriptors and 24 fit descriptors
 // at each x (metres). Only points, matches and heights from this measured prefix enter.
+import { exactQuantile } from './order-statistic.mjs';
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const sort=a=>a.sort((x,y)=>x-y);
 function quantile(sorted,q){
@@ -24,13 +25,20 @@ function descriptors(points,x,links){
     }
     const project=p=>p[1]+clamp(p[2],-2,2)*(q-p[0]);
     const [first,last]=local(3),near=points.slice(first,last);
-    const b=quantile(sort((near.length>=2?near:ids.map(i=>points[i])).map(project)),.5);base.push(b);
+    const b=exactQuantile((near.length>=2?near:ids.map(i=>points[i])).map(project),.5);base.push(b);
     const row=[closest,clamp(q-middle,-20,20),quantile(sort(ids.map(i=>points[i][2])),.5)];
     for(const rad of [2,5,10]){
       const [lo,hi]=local(Math.max(rad,closest+1)),ys=new Float64Array(hi-lo),slopes=new Float64Array(hi-lo);
       for(let j=lo;j<hi;j++){ys[j-lo]=project(points[j])-b;slopes[j-lo]=points[j][2];}
-      ys.sort();slopes.sort();
-      row.push(quantile(ys,.15),quantile(ys,.5),quantile(ys,.85),ys.length/links,quantile(slopes,.5));
+      if(ys.length<32){
+        ys.sort();slopes.sort();
+        row.push(quantile(ys,.15),quantile(ys,.5),quantile(ys,.85),ys.length/links,quantile(slopes,.5));
+      }else{
+        // Increasing ranks reuse the partitions established at the preceding percentile.
+        const last=ys.length-1;
+        row.push(exactQuantile(ys,.15),exactQuantile(ys,.5,Math.floor(.15*last)+1),
+          exactQuantile(ys,.85,Math.floor(.5*last)+1),ys.length/links,exactQuantile(slopes,.5));
+      }
     }
     rows.push(row);
   }

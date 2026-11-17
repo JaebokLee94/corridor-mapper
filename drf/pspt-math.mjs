@@ -61,9 +61,8 @@ const add = (a, b, scale = 1) => a.map((value, i) => value + scale * b[i]);
 const P0_DEFAULT = [[0.25, 0, 0], [0, (Math.PI / 12) ** 2, 0], [0, 0, 0.15 ** 2]];
 
 // Private to each surface: no fitted state or evidence is shared across candidates.
-// For an unchanged surface, all vehicle pairs use the same sampled curve and a
-// vehicle's same range/unit direction. Keep their float64 operation order, then
-// reuse those intermediate values. Large custom grids retain the uncached path.
+// For an unchanged surface, all pairs share per-vehicle projections at each
+// grid point. Large custom grids retain the uncached reference calculation.
 const predictionCaches = new WeakMap(), MAX_CACHED_GRID = 257, MAX_CACHED_POSITIONS = 24;
 function predictionCache(surface, ext, nuGrid) {
   if (nuGrid > MAX_CACHED_GRID || Object.getPrototypeOf(surface) !== Surfel.prototype
@@ -76,6 +75,7 @@ function predictionCache(surface, ext, nuGrid) {
       && Object.is(cache.x[0], surface.x[0]) && Object.is(cache.x[1], surface.x[1]) && Object.is(cache.x[2], surface.x[2])) return cache;
   // A state update invalidates the sample values, but not their float64 storage.
   const storage = cache?.nuGrid === nuGrid ? cache : null;
+  let signGuard = 0;
   const frame = surface.frame(), [center, tangent, normal, curvature] = frame,
     lo = -ext * surface.ell, spacing = 2 * ext * surface.ell / (nuGrid - 1), samples = storage?.samples ?? new Float64Array(5 * nuGrid);
   for (let i = 0; i < nuGrid; i++) {
@@ -85,31 +85,59 @@ function predictionCache(surface, ext, nuGrid) {
     samples[j + 2] = (center[1] + at * tangent[1]) + bend * normal[1];
     samples[j + 3] = tangent[0] + slope * normal[0];
     samples[j + 4] = tangent[1] + slope * normal[1];
+    signGuard = Math.max(signGuard, Math.abs(samples[j + 3]) + Math.abs(samples[j + 4]));
   }
-  cache = { ext, nuGrid, sg: surface.sg, ell: surface.ell, c0: surface.c0.slice(), nu0: surface.nu0.slice(),
+  // The rounding scale for two normalized projections is bounded by the tangent's 1-norm.
+  cache = { ext, nuGrid, signGuard: 32 * Number.EPSILON * Math.max(1, signGuard), sg: surface.sg, ell: surface.ell, c0: surface.c0.slice(), nu0: surface.nu0.slice(),
     x: surface.x.slice(), frame, samples, positions: storage?.positions ?? [], positionsUsed: 0, nextPosition: 0 };
   predictionCaches.set(surface, cache);
   return cache;
 }
 
-function sampledPosition(cache, point, inUse) {
+function sampledProjections(cache, point, inUse) {
   for (let k = 0; k < cache.positionsUsed; k++) {
     const entry = cache.positions[k];
     if (Object.is(entry.x, point[0]) && Object.is(entry.y, point[1])) return entry.values;
   }
-  const k = cache.nextPosition, entry = cache.positions[k] ??= { values: new Float64Array(3 * cache.nuGrid) };
+  const k = cache.nextPosition, entry = cache.positions[k] ??= { values: new Float64Array(cache.nuGrid) };
   // A cache hit for the first focus can be the slot evicted by the second focus.
-  if (entry.values === inUse) entry.values = new Float64Array(3 * cache.nuGrid);
+  if (entry.values === inUse) entry.values = new Float64Array(cache.nuGrid);
   const values = entry.values;
   for (let i = 0; i < cache.nuGrid; i++) {
-    const dx = cache.samples[5 * i + 1] + -1 * point[0], dy = cache.samples[5 * i + 2] + -1 * point[1],
-      range = Math.hypot(dx, dy), j = 3 * i;
-    values[j] = range; values[j + 1] = dx / range; values[j + 2] = dy / range;
+    const j = 5*i, dx = cache.samples[j+1] - point[0], dy = cache.samples[j+2] - point[1];
+    const square = dx*dx + dy*dy, range = square > 1e-270 && square < 1e270 ? Math.sqrt(square) : Math.hypot(dx,dy);
+    values[i] = cache.samples[j+3]*(dx/range) + cache.samples[j+4]*(dy/range);
   }
   entry.x = point[0]; entry.y = point[1];
   cache.positionsUsed = Math.min(cache.positionsUsed + 1, MAX_CACHED_POSITIONS);
   cache.nextPosition = (k + 1) % MAX_CACHED_POSITIONS;
   return values;
+}
+
+// Only screen the sign in factored form. Within a sign-changing or numerically
+// ambiguous interval, recompute both endpoints in the reference operation order.
+function rangeDerivative(sx, sy, tx, ty, pi, pj) {
+  const ax=sx-pi[0], ay=sy-pi[1], bx=sx-pj[0], by=sy-pj[1];
+  const ra=Math.hypot(ax,ay), rb=Math.hypot(bx,by);
+  if (!ra || !rb) return NaN;
+  return (0 + tx*(ax/ra + bx/rb)) + ty*(ay/ra + by/rb);
+}
+function bracketedRoot(cache, pi, pj) {
+  const a=sampledProjections(cache,pi), b=sampledProjections(cache,pj,a), s=cache.samples;
+  let best=null, prev=a[0]+b[0];
+  for (let i=1; i<cache.nuGrid; i++) {
+    const next=a[i]+b[i], j=5*i;
+    if (!(prev*next > 0 && Math.abs(prev)>cache.signGuard && Math.abs(next)>cache.signGuard)) {
+      const left=rangeDerivative(s[j-4],s[j-3],s[j-2],s[j-1],pi,pj);
+      const right=rangeDerivative(s[j+1],s[j+2],s[j+3],s[j+4],pi,pj);
+      if (left*right<=0) {
+        const delta=right-left, root=s[j-5]-left*(s[j]-s[j-5])/(Math.abs(delta)<1e-15 ? 1e-15 : delta);
+        if (best===null || Math.abs(root)<Math.abs(best)) best=root;
+      }
+    }
+    prev=next;
+  }
+  return best;
 }
 
 export class Surfel {
@@ -143,43 +171,25 @@ export class Surfel {
   predict(pi, pj, { ext = 2, nuGrid = 41 } = {}) {
     if (pi.length !== 2 || pj.length !== 2 || ![...pi, ...pj, ext].every(Number.isFinite)
         || ext <= 0 || !Number.isInteger(nuGrid) || nuGrid < 2) throw new RangeError("invalid surface prediction input");
-    const cache = predictionCache(this, ext, nuGrid),
-      [center, tangent, normal, curvature] = cache ? cache.frame : this.frame(),
-      positionsI = cache ? sampledPosition(cache, pi) : null, positionsJ = cache ? sampledPosition(cache, pj, positionsI) : null;
-    const lo = -ext * this.ell, spacing = 2 * ext * this.ell / (nuGrid - 1);
-    let us = null, previousU, previousResidual;
-    for (let i = 0; i < nuGrid; i++) {
-      const at = cache ? cache.samples[5 * i] : lo + i * spacing;
-      let residual = NaN;
-      if (cache) {
-        const j = 3 * i;
-        if (positionsI[j] && positionsJ[j]) {
-          residual = 0;
-          residual += cache.samples[5 * i + 3] * (positionsI[j + 1] + positionsJ[j + 1]);
-          residual += cache.samples[5 * i + 4] * (positionsI[j + 2] + positionsJ[j + 2]);
+    const cache = predictionCache(this, ext, nuGrid);
+    const [center,tangent,normal,curvature] = cache ? cache.frame : this.frame();
+    let us = null;
+    if (cache) {
+      us = bracketedRoot(cache,pi,pj);
+    } else {
+      const lo=-ext*this.ell, spacing=2*ext*this.ell/(nuGrid-1);
+      let previousU, previousResidual;
+      for (let i=0; i<nuGrid; i++) {
+        const at=lo+i*spacing, bend=.5*curvature*at*at, slope=curvature*at;
+        const residual=rangeDerivative((center[0]+at*tangent[0])+bend*normal[0], (center[1]+at*tangent[1])+bend*normal[1],
+          tangent[0]+slope*normal[0],tangent[1]+slope*normal[1],pi,pj);
+        if (i && previousResidual*residual<=0) {
+          const difference=residual-previousResidual;
+          const root=previousU-previousResidual*(at-previousU)/(Math.abs(difference)<1e-15 ? 1e-15 : difference);
+          if (us===null || Math.abs(root)<Math.abs(us)) us=root;
         }
-      } else {
-        const bend = 0.5 * curvature * at * at,
-          sx = (center[0] + at * tangent[0]) + bend * normal[0],
-          sy = (center[1] + at * tangent[1]) + bend * normal[1],
-          dix = sx + -1 * pi[0], diy = sy + -1 * pi[1],
-          djx = sx + -1 * pj[0], djy = sy + -1 * pj[1],
-          ri = Math.hypot(dix, diy), rj = Math.hypot(djx, djy);
-        if (ri && rj) {
-          // Preserve the original dot/add operation order exactly, including its
-          // initial +0. Scalar temporaries remove hundreds of tiny arrays per call.
-          const slope = curvature * at;
-          residual = 0;
-          residual += (tangent[0] + slope * normal[0]) * (dix / ri + djx / rj);
-          residual += (tangent[1] + slope * normal[1]) * (diy / ri + djy / rj);
-        }
+        previousU=at; previousResidual=residual;
       }
-      if (i && previousResidual * residual <= 0) {
-        const difference = residual - previousResidual;
-        const root = previousU - previousResidual * (at - previousU) / (Math.abs(difference) < 1e-15 ? 1e-15 : difference);
-        if (us === null || Math.abs(root) < Math.abs(us)) us = root;
-      }
-      previousU = at; previousResidual = residual;
     }
     if (us === null) return null;
     const s = add(add(center, tangent, us), normal, 0.5 * curvature * us * us);
@@ -215,6 +225,19 @@ export function gate(surface, derivative, poseVariance, rangeVariance, k = 3, mi
  * pose-noise dimensions. O(M+K^3), O(K^2+M) memory; no K-time stacking or jitter.
  */
 export function sharedPoseNormalEquations(matches) {
+  if (matches.every(({config}) => config.zeroPose)) {
+    const N=Array.from({length:3}, () => [0,0,0,0]);
+    for (const {rangeVariance,derivative,residual} of matches) {
+      if (!(rangeVariance>0) || !Number.isFinite(rangeVariance)) throw new RangeError("invalid refinement variance");
+      const weight=1/rangeVariance;
+      for (let i=0; i<3; i++) {
+        for (let j=i; j<3; j++) N[i][j] += weight*derivative[i]*derivative[j];
+        N[i][3] += weight*derivative[i]*residual;
+      }
+    }
+    return {H:[[N[0][0],N[0][1],N[0][2]],[N[0][1],N[1][1],N[1][2]],[N[0][2],N[1][2],N[2][2]]],
+      b:[N[0][3],N[1][3],N[2][3]]};
+  }
   const vehicles = new Map(), sparse = [];
   let dimensions = 0;
   const factorsFor = (id, covariance) => {
@@ -283,7 +306,7 @@ export function refine(surface, snapshots, { iters = 6, ext = 1, refinement = "i
       const prediction = surface.predict(config.pi, config.pj, { ext });
       if (prediction === null) continue;
       const [rho, , derivative, ei, ej] = prediction;
-      const poseVariance = dot(ei, matVec(config.Si, ei)) + dot(ej, matVec(config.Sj, ej));
+      const poseVariance = config.zeroPose ? 0 : dot(ei, matVec(config.Si, ei)) + dot(ej, matVec(config.Sj, ej));
       const m = nearestCluster(config.cl, rho);
       if (m < 0 || Math.abs(config.cl[m][0] - rho) > gate(surface, derivative, poseVariance, config.sr2)) continue;
       const variance = config.sr2 / config.cl[m][1] + poseVariance;
@@ -322,7 +345,7 @@ function refineSharedPose(surface, snapshots, { iters, ext }) {
         const prediction = surface.predict(config.pi, config.pj, { ext });
         if (prediction === null) continue;
         const [rho, , derivative, ei, ej] = prediction;
-        const poseVariance = dot(ei, matVec(config.Si, ei)) + dot(ej, matVec(config.Sj, ej));
+        const poseVariance = config.zeroPose ? 0 : dot(ei, matVec(config.Si, ei)) + dot(ej, matVec(config.Sj, ej));
         const m = nearestCluster(config.cl, rho);
         if (m < 0 || Math.abs(config.cl[m][0] - rho) > gate(surface, derivative, poseVariance, config.sr2)) continue;
         const rangeVariance = config.sr2 / config.cl[m][1];

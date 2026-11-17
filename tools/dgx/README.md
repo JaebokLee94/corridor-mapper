@@ -23,6 +23,8 @@ For a server-side batch, put one simulator input object per line in settings.jso
 ECHOMAP_DGX_URL=http://127.0.0.1:18902 ECHOMAP_DGX_STRICT=1 node tools/dgx/batch.mjs < settings.jsonl > results.jsonl
 ```
 
+To return only the two final wall estimates, run `node tools/dgx/batch.mjs --final-map < settings.jsonl`. It uses the same measurements and selected right-hand method as the simulator. Each line contains the final snapshot number and both maps. The normal sweep also computes per-snapshot metrics and diagnostics.
+
 Use a run-specific directory on the allocated data volume for the input, output and stderr log. For repeatable timing on the Mac, `ECHOMAP_DGX_URL=http://127.0.0.1:18901 node tools/dgx/benchmark.mjs` compares fresh CPU generation and GPU requests including response transfer and decoding. The reported times exclude wall estimation and browser rendering.
 
 GitHub Pages serves the H200-generated bank for the ten default roughness-2 seeds. On an eligible miss, its run and sweep workers request noise-independent physical paths from the dedicated HTTPS relay, then apply the original pose/range noise and run estimation in the browser. GPU availability and quotas do not change estimator settings. A cache hit can also reuse locally saved compatible paths. Other historical bank roughness presets retain their original measurements. To rebuild the GPU preset bank, set ECHOMAP_BUILD_DGX_URL to the private loopback endpoint and run node tools/build-truth-bank.mjs --roughness 2.

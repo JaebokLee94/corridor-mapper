@@ -7,13 +7,16 @@ const normals=Array.from({length:64},(_,i)=>{
 });
 function normalizeSiLU(data,scale,bias,channels){
   const group=channels/4,count=data.length/4;
-  const sum=new Float64Array(4),square=new Float64Array(4);
-  for(let i=0;i<data.length;)for(let g=0;g<4;g++)for(let k=0;k<group;k++,i++){
-    const v=data[i];sum[g]+=v;square[g]+=v*v;
-  }
-  const mean=sum.map(v=>v/count),inv=square.map((s,g)=>1/Math.sqrt(Math.max(0,s/count-mean[g]**2)+1e-5));
-  for(let i=0;i<data.length;)for(let g=0;g<4;g++)for(let k=0;k<group;k++,i++){
-    const c=g*group+k,v=(data[i]-mean[g])*inv[g]*scale[c]+bias[c];data[i]=v/(1+Math.exp(-v));
+  for(let g=0;g<4;g++){
+    const first=g*group;let sum=0,square=0;
+    for(let i=first;i<data.length;i+=channels)for(let k=0;k<group;k++){
+      const v=data[i+k];sum+=v;square+=v*v;
+    }
+    const mean=sum/count,inv=1/Math.sqrt(Math.max(0,square/count-mean**2)+1e-5);
+    for(let i=first;i<data.length;i+=channels)for(let k=0;k<group;k++){
+      const c=first+k,v=(data[i+k]-mean)*inv*scale[c]+bias[c];
+      data[i+k]=v/(1+Math.exp(-v));
+    }
   }
 }
 function pool({data,h,w,c}){
@@ -27,7 +30,9 @@ function concatenate(a,b){
   const c=a.c+b.c,data=new Float32Array(a.h*a.w*c);
   for(let y=0;y<a.h;y++)for(let x=0;x<a.w;x++){
     const i=y*a.w+x,j=Math.floor(y*b.h/a.h)*b.w+Math.floor(x*b.w/a.w);
-    data.set(a.data.subarray(i*a.c,(i+1)*a.c),i*c);data.set(b.data.subarray(j*b.c,(j+1)*b.c),i*c+a.c);
+    const out=i*c,ia=i*a.c,ib=j*b.c;
+    for(let k=0;k<a.c;k++)data[out+k]=a.data[ia+k];
+    for(let k=0;k<b.c;k++)data[out+a.c+k]=b.data[ib+k];
   }
   return {data,h:a.h,w:a.w,c};
 }
@@ -52,10 +57,18 @@ export function decodeArc(logits,cut){
   return done.concat(active.filter(line=>line.length>=3));
 }
 // Round normalized channels as in the float16 training cache.
-function half(v){if(!v)return 0;const unit=2**Math.max(-24,Math.floor(Math.log2(v))-10),q=v/unit,n=Math.floor(q);return unit*(q-n===.5?n+n%2:Math.round(q));}
+const half=Math.f16round??(v=>{
+  if(!v)return 0;
+  const unit=2**Math.max(-24,Math.floor(Math.log2(v))-10),q=v/unit,n=Math.floor(q);
+  return unit*(q-n===.5?n+n%2:Math.round(q));
+});
 export class EchoArcCNN{
-  constructor(runtime){this.rt=runtime;this.votes=new Float32Array(9*NX*NY);}
-  step(wire){
+  constructor(runtime){
+    this.rt=runtime;this.votes=new Float32Array(9*NX*NY);this.input=new Float32Array(this.votes.length);
+    this.changed=new Uint8Array(NX*NY);this.changedCells=[];this.pairs=0;this.scalePairs=0;
+  }
+  observe(wire){
+    this.pairs=wire.configs.length;
     for(const {pHat_i:a,pHat_j:b,paths} of wire.configs){
       const dx=(a[0]-b[0])/2,dy=(a[1]-b[1])/2,mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
       for(const {dHat:r} of paths){
@@ -63,19 +76,40 @@ export class EchoArcCNN{
         for(const [nx,ny,c] of normals){
           const dot=nx*dx+ny*dy,den=Math.sqrt(b2+dot*dot);
           const x=(mx+(b2*nx+dx*dot)/den)/STEP,y=(my+(b2*ny+dy*dot)/den-Y0)/STEP,ix=Math.floor(x),iy=Math.floor(y);
-          for(let j=iy;j<=iy+1;j++)for(let i=ix;i<=ix+1;i++)if(i>=0&&i<NX&&j>=0&&j<NY)
-            this.votes[(j*NX+i)*9+c]+=(1-Math.abs(x-i))*(1-Math.abs(y-j))/64;
+          for(let j=iy;j<=iy+1;j++)for(let i=ix;i<=ix+1;i++)if(i>=0&&i<NX&&j>=0&&j<NY){
+            const cell=j*NX+i;
+            this.votes[cell*9+c]+=(1-Math.abs(x-i))*(1-Math.abs(y-j))/64;
+            if(!this.changed[cell]){this.changed[cell]=1;this.changedCells.push(cell);}
+          }
         }
       }
     }
-    const input=new Float32Array(this.votes.length);
-    for(let i=0;i<input.length;i+=9){
+  }
+  estimate(){
+    const input=this.input,scaleChanged=this.pairs!==this.scalePairs;
+    const n=scaleChanged?NX*NY:this.changedCells.length;
+    let dirty=!this.curves;
+    for(let j=0;j<n;j++){
+      const cell=scaleChanged?j:this.changedCells[j],i=cell*9;
+      this.changed[cell]=0;
       let mass=0;for(let k=0;k<9;k++)mass+=this.votes[i+k];
       if(!mass)continue;
-      const gain=Math.log1p(mass*27/wire.configs.length)/mass;let total=0;
+      const gain=Math.log1p(mass*27/this.pairs)/mass;let total=0;
       for(let k=0;k<9;k++)total+=half(this.votes[i+k]*gain);
-      input.fill(total/9,i,i+9);
+      const value=this.pairs?Math.fround(total/9):NaN;
+      if(!Object.is(value,input[i])){input.fill(value,i,i+9);dirty=true;}
     }
+    this.scalePairs=this.pairs;this.changedCells.length=0;
+    if(dirty){
+      this.curves=undefined;
+      this.curves=this.network(input);
+    }
+    return {curves:this.curves.map(line=>line.map(p=>[...p])),candidates:[]};
+  }
+  step(wire){
+    this.observe(wire);return this.estimate();
+  }
+  network(input){
     const {weights,call}=this.rt;
     const conv=(v,name,dilation=1)=>{
       const {shape,values}=weights[name+'.weight'],[kernel,,inc,c]=shape;
@@ -88,6 +122,6 @@ export class EchoArcCNN{
     };
     const a=block({data:input,h:NY,w:NX,c:9},'e0'),b=block(pool(a),'e1'),c=block(pool(b),'b',2);
     const d=block(concatenate(b,c),'d1'),e=block(concatenate(a,d),'d0');
-    return {curves:decodeArc(conv(e,'out').data,this.rt.data.threshold),candidates:[]};
+    return decodeArc(conv(e,'out').data,this.rt.data.threshold);
   }
 }

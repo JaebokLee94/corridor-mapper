@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { makeWire } from "../../drf/wire.mjs";
-import { createGrid, createField, ellipticE, ellipsePerimeter, pathFieldPoint } from "../../drf/field.mjs";
+import { createGrid, createField, createRidgeDensityField, ellipticE, ellipsePerimeter, pathFieldPoint } from "../../drf/field.mjs";
 
 const config = (paths = [{ dHat: 14, sigmaD: 0.1 }]) => ({
   i: 0, j: 1, pHat_i: [10, 12], pHat_j: [16, 13],
@@ -12,6 +12,20 @@ const close = (actual, expected, relative = 1e-9) => assert.ok(
   Math.abs(actual - expected) <= relative * Math.max(Math.abs(expected), 1e-300),
   `actual ${actual}, expected ${expected}`,
 );
+
+test("bounded WM-P ridge density matches the full field cell by cell", () => {
+  const grid = createGrid(41,37,[-22,39,-17,31]), full = createField(grid), ridges = createRidgeDensityField(grid);
+  for(let t=1; t<=4; t++) {
+    const configs = [[0,1],[0,2],[1,2]].map(([i,j]) => ({
+      i,j,pHat_i:[-3+i*4+t,i%2],pHat_j:[-3+j*4+t,j%2],
+      Sigma_i:t%2?[0,0,0]:[.7,-.2,.4],Sigma_j:t%2?[0,0,0]:[.5,.2,.3],
+      paths:t===3?[]:[3.9,7.2,16.8,25].map(dHat=>({dHat,sigmaD:.13}))
+    }));
+    full.step({t,configs}); ridges.step({t,configs});
+    assert.deepEqual(ridges.D,full.D);
+    assert.equal(ridges.Q,full.Q);
+  }
+});
 
 test("AGM E uses parameter m and reproduces all four 1e-14 fixtures", () => {
   for (const [m, expected] of [[0, 1.570796326794897], [0.5, 1.350643881047675],

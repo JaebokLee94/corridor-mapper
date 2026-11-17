@@ -133,6 +133,72 @@ function lowerBound(paths, value) {
   return lo;
 }
 
+/** WM-P needs the unnormalized density D to locate ridges. Only cells inside
+ * the largest admitted ellipse plus four residual SDs can contribute to D.
+ * Input is the measured wire, output is cumulative density on the cell centers.
+ * O(C*G*P) worst case, O(G) field plus at most 16 MiB of shared focal geometry.
+ */
+export function createRidgeDensityField(grid) {
+  const {nx, ny, x, y, dx, dy} = grid, D = new Float64Array(nx * ny);
+  const delta = new Float64Array(D.length), slots = new Map();
+  const maxSlots = Math.floor(16 * 1024 * 1024 / (D.length * 3 * 8));
+  let t = 0, Q = 0;
+  return {D, get Q() { return Q; }, step(snapshot) {
+    const wire = makeWire(snapshot);
+    if (wire.t !== t + 1) throw new RangeError("snapshots must be processed once in causal t=1,2,... order");
+    delta.fill(0);
+    let admitted = 0;
+    for (const config of wire.configs) {
+      if (!config.paths.length) continue;
+      const sd = config.paths[0].sigmaD;
+      if (!(sd*sd > 0) || !Number.isFinite(sd*sd)) throw new RangeError("ridge density requires finite positive range variance");
+      if (config.paths.some(p => p.sigmaD !== sd)) throw new RangeError("configuration paths must have identical sigmaD");
+      const [ax, ay] = config.pHat_i, [bx, by] = config.pHat_j, focal = Math.hypot(bx - ax, by - ay);
+      const paths = config.paths.filter(p => p.dHat > focal).map(p => ({
+        dHat: p.dHat, inverseP: 1 / ellipsePerimeter(p.dHat, focal)
+      })).sort((a,b) => a.dHat - b.dHat);
+      if (!paths.length) continue;
+      admitted += paths.length;
+      const si = config.Sigma_i, sj = config.Sigma_j, fixed = si.every(v => v === 0) && sj.every(v => v === 0);
+      const variance = sd * sd, fixedSD = Math.sqrt(variance);
+      const minPath = paths[0].dHat, maxPath = paths[paths.length-1].dHat;
+      // The trace of a PSD position covariance bounds its projection on every unit direction.
+      const maxRange = maxPath + 4 * Math.sqrt(variance + si[0] + si[2] + sj[0] + sj[2]);
+      // Project the enclosing ellipse on each axis. Include one extra cell for roundoff.
+      const halfWidth = d => .5 * Math.sqrt(Math.max(0, (maxRange - Math.abs(d)) * (maxRange + Math.abs(d))));
+      const hx = halfWidth(by - ay), hy = halfWidth(bx - ax), mx = .5*ax + .5*bx, my = .5*ay + .5*by;
+      const ix0 = Math.max(0, Math.floor((mx - hx - x[0]) / dx) - 1), ix1 = Math.min(nx-1, Math.ceil((mx + hx - x[0]) / dx) + 1);
+      const iy0 = Math.max(0, Math.floor((my - hy - y[0]) / dy) - 1), iy1 = Math.min(ny-1, Math.ceil((my + hy - y[0]) / dy) + 1);
+      const fi = focalGrid(config.i, config.pHat_i, slots, maxSlots, x, y);
+      const fj = focalGrid(config.j, config.pHat_j, slots, maxSlots, x, y);
+      for (let iy=iy0; iy<=iy1; iy++) for (let ix=ix0; ix<=ix1; ix++) {
+        const cell = iy*nx + ix, j = 3*cell;
+        let rho, sigmaR, factor;
+        if (fi && fj) {
+          rho = fi[j] + fj[j];
+          const u=fi[j+1], v=fi[j+2], w=fj[j+1], z=fj[j+2];
+          sigmaR = fixed ? fixedSD : Math.sqrt(variance + si[0]*u*u + 2*si[1]*u*v + si[2]*v*v + sj[0]*w*w + 2*sj[1]*w*z + sj[2]*z*z);
+          if (!(sigmaR > 0) || !Number.isFinite(sigmaR)) throw new RangeError("invalid residual variance");
+          if (rho+4*sigmaR < minPath || rho-4*sigmaR > maxPath) continue;
+          factor = Math.hypot(u+w,v+z) / (SQRT_2PI * sigmaR);
+        } else {
+          ({rho, sigmaR, factor} = geometry(x[ix], y[iy], config, sd));
+        }
+        const lo=rho-4*sigmaR, hi=rho+4*sigmaR;
+        let sum=0;
+        for (let p=lowerBound(paths,lo); p<paths.length && paths[p].dHat<=hi; p++) {
+          const z=(rho-paths[p].dHat)/sigmaR;
+          sum += paths[p].inverseP * Math.exp(-.5*z*z);
+        }
+        delta[cell] += factor * sum;
+      }
+    }
+    for (let k=0; k<D.length; k++) if (!Number.isFinite(D[k]+delta[k])) throw new RangeError("nonfinite ridge density");
+    for (let k=0; k<D.length; k++) D[k] += delta[k];
+    t=wire.t; Q+=admitted;
+  }};
+}
+
 /** C configurations, G grid cells, P paths/config, B band candidate visits:
  * O(C[P log P+G log P]+B) time, O(G+P) scratch plus up to 16 MiB for focal grids; D/A accumulate float64.
  * F41 A=f(x)Σ(1/P_q); sigmaD must be equal within each configuration.

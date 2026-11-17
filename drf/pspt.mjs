@@ -55,16 +55,8 @@ function validateClustering(clustering) {
     throw new RangeError("invalid range clustering mode");
 }
 
-/** Measured wire -> per-pair clusters [mean m, count, squared scatter m²].
- * Bounded-span partitions sorted ranges with max(range)-min(range) <= gap;
- * this prevents a chain of close neighbours from spanning an arbitrarily wide
- * interval, but does not certify that a cluster comes from one physical wall.
- * Per pair: O(P log P) sorting, O(P) partitioning and temporary memory.
- */
-export function prepareMeasuredSnapshot(snapshot, options = {}) {
-  allowKeys(options, PREPARE_KEYS, "preparation options");
-  const clustering = Object.hasOwn(options, "clustering") ? options.clustering : "single-link";
-  validateClustering(clustering);
+// Range-only estimators share the wire checks but do not use WM-P range clusters.
+export function validateMeasuredSnapshot(snapshot, vehicles = new Map()) {
   allowKeys(snapshot, SNAP_KEYS, "snapshot");
   if (!Array.isArray(snapshot.configs) || !snapshot.configs.length) throw new RangeError("snapshot needs at least one measured configuration");
   for (const c of snapshot.configs) {
@@ -75,9 +67,9 @@ export function prepareMeasuredSnapshot(snapshot, options = {}) {
       if (!(p.sigmaD > 0)) throw new RangeError("PSPT requires sigmaD > 0 for every measured path");
     }
   }
-  const wire = makeWire(snapshot), vehicles = new Map(), pairs = new Set(), pre = [];
+  const wire = makeWire(snapshot), pairs = new Set();
   for (const c of wire.configs) {
-    const pair = [c.i, c.j].sort((a, b) => a - b).join(":");
+    const pair = c.i < c.j ? `${c.i}:${c.j}` : `${c.j}:${c.i}`;
     if (pairs.has(pair)) throw new RangeError("duplicate vehicle pair in snapshot");
     pairs.add(pair);
     for (const [id, position, covariance] of [[c.i, c.pHat_i, c.Sigma_i], [c.j, c.pHat_j, c.Sigma_j]]) {
@@ -86,6 +78,23 @@ export function prepareMeasuredSnapshot(snapshot, options = {}) {
         throw new RangeError("a vehicle must share the same measured pose/covariance across its pairs");
       vehicles.set(id, { position, covariance });
     }
+  }
+  if (vehicles.size < 2 || vehicles.size > 20) throw new RangeError("PSPT supports 2 through 20 measured vehicles");
+  return wire;
+}
+
+/** Measured wire -> per-pair clusters [mean m, count, squared scatter m²].
+ * Bounded-span partitions sorted ranges with max(range)-min(range) <= gap;
+ * this prevents a chain of close neighbours from spanning an arbitrarily wide
+ * interval, but does not certify that a cluster comes from one physical wall.
+ * Per pair: O(P log P) sorting, O(P) partitioning and temporary memory.
+ */
+export function prepareMeasuredSnapshot(snapshot, options = {}) {
+  allowKeys(options, PREPARE_KEYS, "preparation options");
+  const clustering = Object.hasOwn(options, "clustering") ? options.clustering : "single-link";
+  validateClustering(clustering);
+  const vehicles = new Map(), wire = validateMeasuredSnapshot(snapshot, vehicles), pre = [];
+  for (const c of wire.configs) {
     const pi = c.pHat_i, pj = c.pHat_j, Si = cov3(c.Sigma_i), Sj = cov3(c.Sigma_j), baseline = distance(pi, pj);
     const sr2 = c.paths.length ? sum(c.paths.map((p) => p.sigmaD ** 2)) / c.paths.length : NaN;
     const ranges = c.paths.filter((p) => p.dHat > baseline).map((p) => p.dHat).sort((a, b) => a - b), cl = [];
@@ -99,9 +108,9 @@ export function prepareMeasuredSnapshot(snapshot, options = {}) {
         begin = end;
       }
     }
-    pre.push({ i: c.i, j: c.j, pi, pj, Si, Sj, sr2, cl });
+    const zeroPose = c.Sigma_i.every(v => v === 0) && c.Sigma_j.every(v => v === 0);
+    pre.push({ i: c.i, j: c.j, pi, pj, Si, Sj, sr2, cl, zeroPose });
   }
-  if (vehicles.size < 2 || vehicles.size > 20) throw new RangeError("PSPT supports 2 through 20 measured vehicles");
   return { wire, pre, veh: [...vehicles].sort(([a], [b]) => a - b).map(([, v]) => v.position) };
 }
 
@@ -114,7 +123,7 @@ function newGroup(gid, h, c, t, src) {
 }
 
 export class PSPT {
-  constructor(options = {}) {
+  constructor(options = {}, {densityOnly = false} = {}) {
     allowKeys(options, OPTION_KEYS, "options");
     const o = { ...DEFAULTS, ...options };
     validateClustering(o.clustering);
@@ -137,7 +146,7 @@ export class PSPT {
     Object.assign(this, o);
     this.pm = o.p_miss;
     this.cos_inc = o.max_inc_deg === null ? null : Math.cos(o.max_inc_deg * Math.PI / 180);
-    this.drf = new DRF({ nx: o.nx, ny: o.ny, domain: o.domain });
+    this.drf = new DRF({ nx: o.nx, ny: o.ny, domain: o.domain, densityOnly });
     this.hist = []; this.groups = []; this.Dq = [];
     this.ncl = 0; this.ncfg = 0; this.sr2 = .01; this.last_t = null;
     this.geometry_statistic = 0; this.geometry_threshold = Infinity; this.geometry_informative = false;
@@ -160,7 +169,7 @@ export class PSPT {
             incidence = Math.min(-dot(p[3], rootNormal), -dot(p[4], rootNormal));
           if (incidence <= 0 || (this.cos_inc !== null && incidence < this.cos_inc)) { entries.push(null); continue; }
           const sr2 = Number.isFinite(c.sr2) ? c.sr2 : this.sr2,
-            base = quad(p[3], c.Si) + quad(p[4], c.Sj) + quad(p[2], s.P), G = [];
+            base = c.zeroPose ? quad(p[2], s.P) : quad(p[3], c.Si) + quad(p[4], c.Sj) + quad(p[2], s.P), G = [];
           for (let m = 0; m < c.cl.length; m++) {
             const variance = sr2 / c.cl[m][1] + base, residual = c.cl[m][0] - p[0];
             if (!(variance > 0) || !Number.isFinite(variance)) throw new RangeError("PSPT prediction covariance is nonpositive or nonfinite");
@@ -202,6 +211,11 @@ export class PSPT {
   }
 
   step(snapshot) {
+    this.observe(snapshot);
+    return this.report();
+  }
+
+  observe(snapshot) {
     // Validate/copy all input before mutating state, including rejected time order.
     const { wire, pre, veh } = prepareMeasuredSnapshot(snapshot, { clustering: this.clustering }), t = wire.t;
     if (t !== (this.last_t ?? 0) + 1) throw new RangeError("snapshots must be processed once in causal t=1,2,... order");
@@ -291,7 +305,6 @@ export class PSPT {
     this.hist.push([t, pre]); if (this.hist.length > this.K) this.hist.shift();
     this._births(t, veh);
     this.last_t = t;
-    return this.report(t);
   }
 
   _kf(s, comps) {
@@ -302,7 +315,7 @@ export class PSPT {
     }
     const M = comps.length, A = comps.map((cm) => cm[4][2]), residual = comps.map((cm) => cm[3]),
       R = Array.from({ length: M }, (_, i) => Array.from({ length: M }, (_, j) => i === j ? comps[i][2] / comps[i][1] : 0));
-    for (let a = 0; a < M; a++) for (let b = 0; b < M; b++) {
+    if (!comps.every(([c]) => c.zeroPose)) for (let a = 0; a < M; a++) for (let b = 0; b < M; b++) {
       const [ca, , , , pa] = comps[a], [cb, , , , pb] = comps[b];
       for (const [va, ea, covariance] of [[ca.i, pa[3], ca.Si], [ca.j, pa[4], ca.Sj]])
         for (const [vb, eb] of [[cb.i, pb[3]], [cb.j, pb[4]]]) if (va === vb) R[a][b] += dot(ea, matVec(covariance, eb));
