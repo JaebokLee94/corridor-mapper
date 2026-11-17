@@ -39,6 +39,22 @@ test('an empty frame with a changed pair count rescales existing CNN votes',()=>
   assert.equal(model.step({configs:[empty]}).curves[0][0][1],one);
 });
 
+test('resident Arc decodes one logit image and reuses its wall across an empty frame',async()=>{
+  const model=new EchoArcCNN({data:{threshold:.7}});
+  const logits=new Float32Array(144*201).fill(-8);
+  logits.fill(8,40*201,41*201);
+  let forwards=0;
+  model.gpu={async network(){forwards++;return logits;}};
+  const link={pHat_i:[4,2],pHat_j:[8,3],paths:[{dHat:12}]};
+  model.observe({configs:[link]});
+  const first=await model.estimateAsync();
+  assert.deepEqual(first.curves,[Array.from({length:201},(_,x)=>[x*.5,0])]);
+  first.curves[0][0][1]=1;
+  model.observe({configs:[{...link,paths:[]}]});
+  assert.deepEqual((await model.estimateAsync()).curves[0][0],[0,0]);
+  assert.equal(forwards,1);
+});
+
 test('Arc awaits convolution results and recovers the current measured prefix after GPU loss',async()=>{
   const rt=await neuralRuntime('arc'),model=new EchoArcCNN(rt),reference=new EchoArcCNN(rt);
   const link={pHat_i:[4,2],pHat_j:[8,3],paths:[{dHat:12}]};

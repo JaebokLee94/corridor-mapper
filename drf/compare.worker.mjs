@@ -1,4 +1,4 @@
-import { EchoComparison } from './echo-comparison.mjs?v=20261117-arc-webgpu';
+import { EchoComparison } from './echo-comparison.mjs?v=20261117-arc-resident';
 // Only declared range noise and measured snapshots cross the inference boundary.
 let estimator,side;
 globalThis.onmessage=async ({data})=>{

@@ -50,6 +50,8 @@ test('published online and sweep workers request one version of each EchoArc GPU
     'drf/sweep.worker.mjs':['sweep.mjs'],
     'drf/echo-comparison.mjs':['echoarc-cnn.mjs'],
     'drf/echoarc-cnn.mjs':['arc-gpu.mjs'],
+    'drf/arc-gpu.mjs':['arc-gpu-norm.mjs'],
+    'drf/arc-gpu-norm.mjs':['arc-gpu-math.mjs'],
   };
   const versions=new Map();
   for(const [path,targets] of Object.entries(entries)){

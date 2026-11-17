@@ -1,6 +1,6 @@
 // Input is the current measured Tx/Rx packet. Accumulate 64 upper-arc normal directions
 // per ellipse on the training grid (0.5 m). Output curves use the checkpoint's fixed cutoff.
-import { createArcGpu } from './arc-gpu.mjs?v=20261117-arc-webgpu';
+import { createArcGpu } from './arc-gpu.mjs?v=20261117-arc-resident';
 
 const NX=201, NY=144, STEP=.5, Y0=-20;
 const normals=Array.from({length:64},(_,i)=>{
@@ -115,7 +115,7 @@ export class EchoArcCNN{
     return this.map();
   }
   async enableGpu(){
-    const gpu=await createArcGpu(this.rt);
+    const gpu=await createArcGpu(this.rt,input=>this.logits(input));
     if(this.closed)gpu?.destroy();
     else this.gpu=gpu;
   }
@@ -127,11 +127,15 @@ export class EchoArcCNN{
     if(!this.gpu)return this.estimate();
     if(this.updateInput()){
       this.curves=undefined;
-      const layers=this.layers(this.input);
       try{
-        let layer=layers.next();
-        while(!layer.done)layer=layers.next(await this.gpu.convolution(...layer.value));
-        this.curves=layer.value;
+        if(this.gpu.network){
+          this.curves=decodeArc(await this.gpu.network(this.input),this.rt.data.threshold);
+        }else{
+          const layers=this.layers(this.input);
+          let layer=layers.next();
+          while(!layer.done)layer=layers.next(await this.gpu.convolution(...layer.value));
+          this.curves=decodeArc(layer.value,this.rt.data.threshold);
+        }
       }catch(error){
         if(this.closed)throw error;
         this.gpuCallsBeforeLoss=this.gpu.completedCalls;
@@ -151,7 +155,8 @@ export class EchoArcCNN{
     const data=call('convolution',[v.data,values,weights[name+'.bias'].values],v.h*v.w*c,[v.h,v.w,inc,c,kernel,dilation]);
     return {...v,data,c};
   }
-  network(input){
+  network(input){return decodeArc(this.logits(input),this.rt.data.threshold);}
+  logits(input){
     const layers=this.layers(input);
     let layer=layers.next();
     while(!layer.done)layer=layers.next(this.convolution(...layer.value));
@@ -172,6 +177,6 @@ export class EchoArcCNN{
     const d=yield* block(concatenate(b,c),'d1');
     const e=yield* block(concatenate(a,d),'d0');
     const logits=yield [e,'out',1];
-    return decodeArc(logits.data,this.rt.data.threshold);
+    return logits.data;
   }
 }

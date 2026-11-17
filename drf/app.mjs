@@ -10,10 +10,10 @@ import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261115-four-methods';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
 import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
-import { echoProtocol } from './echo-comparison.mjs?v=20261117-arc-webgpu';
+import { echoProtocol } from './echo-comparison.mjs?v=20261117-arc-resident';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-arc-webgpu';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-arc-resident';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261115-independent';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -125,7 +125,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261117-arc-webgpu';
+  const revision = '20261117-arc-resident';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -557,9 +557,11 @@ function renderSelected() {
       label.title=`Estimator compute time through snapshot ${t}: ${(ms/1000).toFixed(3)} s.`;
       if(Number.isFinite(result?.ms)){
         label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
+        if(method==='echoSpline')label.textContent+=' · CPU';
         if(result.backend){
           label.textContent+=` · ${result.backend}`;
           label.title+=` Inference: ${result.backend}. WebGPU convolutions completed: ${result.gpuCalls}.`;
+          if(result.gpuMode==='resident')label.title+=` Group normalization and SiLU: GPU. Wall-logit readbacks: ${result.gpuReadbacks}.`;
           if(result.gpuAdapter)label.title+=` Adapter: ${result.gpuAdapter}.`;
         }
       }
