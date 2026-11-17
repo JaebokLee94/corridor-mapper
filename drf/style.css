@@ -397,9 +397,9 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .map-pane+.map-pane { border-left:1px solid var(--color-line); }
 .map-pane-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; min-width:0; padding:3px var(--plot-right-inset,16px) 3px 10px; }
 .map-heading-details { display:flex; flex-wrap:wrap; align-items:center; gap:0 8px; min-width:0; }
-.compute-timer { align-self:start; white-space:nowrap; color:var(--color-ink-muted); font-size:13px; }
-.compute-timer b { margin-left:2px; font-size:15px; }
-.compute-timer b,.compute-time-row td { color:var(--color-ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* Move the readout into the empty margin above the map's top gridline. */
+.compute-timer { align-self:end; position:relative; top:13px; z-index:1; font-size:15px; line-height:1; }
+.compute-timer,.compute-time-row td { color:var(--color-ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .method-progress { margin-right:auto; font-size:12px; color:var(--color-ink-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .map-name { max-width:100%; margin:0; font-size:15px; color:var(--color-accent); }
 .baseline-name { color:var(--color-baseline); }
