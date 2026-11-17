@@ -14,7 +14,7 @@ import { echoProtocol } from './echo-comparison.mjs?v=20261117-spline-gpu';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-spline-gpu';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-plot-edge';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-spline-fields';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
@@ -125,7 +125,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261117-spline-gpu';
+  const revision = '20261117-spline-fields';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -371,9 +371,7 @@ async function receiveRunMessage(data, generation) {
       const list=state.methodFrames[data.side];
       if(!list || data.t!==list.length+1)throw new Error('Out-of-order method result');
       list.push({...data,totalMs:(list.at(-1)?.totalMs??0)+data.result.ms});
-      if(!document.hidden && !state.livePaint){
-        state.livePaint=requestAnimationFrame(()=>{state.livePaint=0;renderSelected();});
-      }
+      scheduleLivePaint();
       return;
     }
     if (data.type === 'frame') {
@@ -382,6 +380,7 @@ async function receiveRunMessage(data, generation) {
       if(state.methodFrames){
         const pair=Object.entries(state.methodFrames).map(([side,list])=>{
           const sample=list[data.next-1];
+          delete sample.field;
           sample.result=data.frame.methods[side];sample.evaluation=data.evaluation.methods[side];
           return sample.at;
         });
@@ -397,7 +396,8 @@ async function receiveRunMessage(data, generation) {
       state.lastFrameAt = now;
       state.frames.push(data.frame); state.evaluations.push(data.evaluation); state.next = data.next;
       if (state.followLive || !state.selected) state.selected = state.frames.length;
-      if(!state.methodFrames)renderSelected();
+      if(state.methodFrames)scheduleLivePaint();
+      else renderSelected();
       controls();
       notice(`Comparing methods ${data.frame.t} / ${state.scenario.input.snapshots}`);
       return;
@@ -415,6 +415,11 @@ async function receiveRunMessage(data, generation) {
       }
     }
   } catch (error) { if (generation === state.generation) fail(error); }
+}
+function scheduleLivePaint() {
+  if (!document.hidden && !state.livePaint) {
+    state.livePaint = requestAnimationFrame(() => { state.livePaint = 0; renderSelected(); });
+  }
 }
 function commandRun(type) {
   if (!runWorker || !state.scenario || !['running', 'paused'].includes(state.mode) || state.pendingCommand) return;
@@ -435,9 +440,9 @@ async function hashField(frame) {
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
-const inspect = point => {
+const inspect = (point, t) => {
   clearTimeout(hoverTimer); const generation = ++hoverGeneration;
-  const frame = state.frames[state.selected - 1];
+  const frame = state.frames[t - 1] ?? state.methodFrames?.echoSpline[t - 1]?.field;
   if (!frame || point.index < 0 || !hoverWorker) { $('inspector').textContent = ''; return; }
   const grid = state.grid, ix = point.index % grid.nx, iy = Math.floor(point.index / grid.nx), x = grid.x[ix], y = grid.y[iy];
   hoverTimer = setTimeout(async () => {
@@ -521,10 +526,14 @@ function renderSelected() {
     return (kind === 'extended' || kind === 'checked') && map?.extendedBridges?.length ? [...map.bridges, ...map.extendedBridges] : map?.bridges ?? [];
   };
   const walls = scenario?.walls ?? previewWalls();
-  const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: scenario?.domain ?? previewDomain ?? LAYERED_DOMAIN, frame, truth: scenario?.truth[state.selected - 1], wire: scenario?.wire[state.selected - 1], walls,cameraBounds:scenario?.cameraBounds ?? previewBounds,
+  // Older saved runs only carry fields on paired frames.
+  const fieldFrame = records.echoSpline?.field ?? (independently
+    ? state.frames[Math.min(methodT(first), state.frames.length) - 1] : frame);
+  const fieldT = fieldFrame?.t ?? 0;
+  const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: scenario?.domain ?? previewDomain ?? LAYERED_DOMAIN, frame:fieldFrame, truth: scenario?.truth[fieldT - 1], wire: scenario?.wire[fieldT - 1], walls,cameraBounds:scenario?.cameraBounds ?? previewBounds,
     bridges: visibleBridges(selected),
     candidates: frame?.methods?.[selected]?.candidates ?? frame?.candidates ?? [], observed: evaluation?.observed, layers, heatField: $('heatField').value, scaleMode: $('scaleMode').value,
-    history: scenario?.wire.slice(0, state.selected),aspectMode:$('aspectMode').value };
+    history: scenario?.wire.slice(0, fieldT),aspectMode:$('aspectMode').value };
   $('mapPair').dataset.mode=state.method;
   $('baselinePane').hidden=state.method!=='compare';
   const longName=k=>!legacy && k===second && rightId!=='wmp' ? (rightId==='wmf'?'WM-F (Wall Mapping with Fixed Segments)':right.name) : ({echoSpline:'EchoSpline',guarded:'WM-P (Wall Mapping with Pair Tracking)',baseline:'WM-F (Wall Mapping with Fixed Segments)'})[k];
@@ -935,21 +944,6 @@ history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialI
 controls(); renderSelected();
 const serverPage = location.protocol !== 'file:' && document.querySelector('meta[name="echomap-compute"]')?.content === 'server';
 const useComputeServer = serverPage && new URLSearchParams(location.search).get('compute') !== 'browser';
-if (serverPage) {
-  const link = $('computeRoute');
-  link.textContent = useComputeServer ? 'Open browser computation' : 'Open background server computation';
-  link.title = 'Open the same scene in a new tab';
-  const updateLink = () => {
-    const url = new URL(location.href);
-    if (useComputeServer) url.searchParams.set('compute', 'browser');
-    else url.searchParams.delete('compute');
-    link.href = url.href;
-  };
-  updateLink();
-  window.addEventListener('hashchange', updateLink);
-  link.addEventListener('click', updateLink);
-  link.hidden = false;
-}
 if (useComputeServer) {
   state.connecting = true; controls(); notice('Connecting to the compute server.');
   connectComputeServer().then(config => {

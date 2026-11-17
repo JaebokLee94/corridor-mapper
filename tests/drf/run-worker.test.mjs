@@ -162,6 +162,15 @@ for(const blockedSide of ['echoSpline','guarded']){
       await waitUntil(()=>messages.some(m=>m.type==='method-frame'&&m.t===input.snapshots),'fast side must progress independently');
       assert.deepEqual(messages.filter(m=>m.type==='method-frame').map(m=>[m.side,m.t]),[1,2,3].map(t=>[blockedSide==='echoSpline'?'guarded':'echoSpline',t]));
       assert.equal(messages.some(m=>m.type==='frame'||m.mode==='done'),false);
+      const early = messages.filter(m => m.field);
+      assert.deepEqual(early.map(m => m.field.t), blockedSide === 'guarded' ? [1,2,3] : []);
+      const {scenario,grid} = messages.find(m => m.type === 'prepared');
+      const field = createField(grid, {band:scenario.input.band, perimeter:scenario.input.perimeter});
+      for (const m of early) {
+        const expected = field.step(scenario.wire[m.t-1]);
+        assert.deepEqual(m.field.Dbar, expected.Dbar);
+        assert.deepEqual(m.field.betaHat, expected.betaHat);
+      }
     }finally{release.resolve();await finished;}
     assert.deepEqual(messages.filter(m=>m.type==='frame').map(m=>m.next),[1,2,3]);
     assert.equal(messages.at(-1).mode,'done');

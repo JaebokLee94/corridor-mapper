@@ -76,7 +76,7 @@ test('bare visits select every bank seed uniformly while explicit seeds and relo
   }
 });
 
-test('local computation links preserve the scene and query, and leave public and offline viewers alone',async()=>{
+test('local computation defaults to the server and respects direct browser-mode URLs',async()=>{
   const {JSDOM}=await import('jsdom');
   const html=readFileSync(new URL('../../drf.html',import.meta.url),'utf8');
   for (const [base,server,usesServer] of [
@@ -87,18 +87,10 @@ test('local computation links preserve the scene and query, and leave public and
   ]) {
     const dom=new JSDOM(html,{url:base+'#first',runScripts:'outside-only'});
     try {
-      const w=dom.window,doc=w.document,link=doc.getElementById('computeRoute');
+      const w=dom.window,doc=w.document;
       if(server)doc.querySelector('meta[name="echomap-compute"]').content='server';
-      const actual=w.eval('const $=id=>document.getElementById(id);'+section('const serverPage =','if (useComputeServer) {')+'useComputeServer');
+      const actual=w.eval(section('const serverPage =','if (useComputeServer) {')+'useComputeServer');
       assert.equal(actual,usesServer);
-      assert.equal(link.hidden,!server || base.startsWith('file:'));
-      if(link.hidden){assert.equal(link.hasAttribute('href'),false);continue;}
-      w.location.hash='changed';w.dispatchEvent(new w.HashChangeEvent('hashchange'));
-      const next=new URL(link.href);
-      assert.equal(next.origin,w.location.origin);assert.equal(next.pathname,w.location.pathname);
-      assert.equal(next.hash,'#changed');assert.equal(next.searchParams.get('interpolation'),'off');
-      assert.equal(next.searchParams.get('compute'),usesServer?'browser':null);
-      assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener');
     } finally { dom.window.close(); }
   }
 });
@@ -576,6 +568,42 @@ test('timeline and replay stay locked until the run ends, including paused and p
   }
   state.frames=[];state.mode='cancelled';context.controls();
   assert.equal($('timeSlider').disabled,true);assert.equal($('replayButton').disabled,true);
+});
+
+test('both fields and their vehicle tracks follow EchoSpline live, in replay and when scrubbing',async()=>{
+  const {JSDOM}=await import('jsdom');
+  const dom=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{pretendToBeVisual:true});
+  try {
+    const document=dom.window.document, $=id=>document.getElementById(id);
+    const snapshots=[1,2,3].map(t=>({t})), joined={t:1}, early={t:2};
+    const sample=(t,at,field)=>({t,at,field,result:{ms:1},evaluation:{}});
+    const state={method:'compare',mode:'running',followLive:true,selected:1,frames:[joined],evaluations:[],
+      scenario:{input:{snapshots:3},domain:LAYERED_DOMAIN,cameraBounds:LAYERED_DOMAIN,walls:[],wire:snapshots,truth:snapshots},
+      methodFrames:{echoSpline:[sample(1,5),sample(2,10,early)],guarded:[sample(1,15)]}};
+    const maps={};
+    for(const name of ['map','baselineMap','densityMap','contrastMap'])maps[name]={set(value){this.state=value;}};
+    const context=vm.createContext({$,document,form:$('settings'),state,rightMethods,setMethodLabel,
+      ...maps,hoverGeneration:0,LAYERED_DOMAIN,interpolationResult,fmt:String,
+      percentile(){},renderInterpolationPanel(){},drawComparisonHistory(){},renderDiagnostics(){}});
+    vm.runInContext(section('function renderSelected()','// Sweep diagnostics'),context);
+    function check(t,field) {
+      context.renderSelected();
+      for(const view of [maps.densityMap,maps.contrastMap]){
+        assert.equal(view.state.frame,field);
+        assert.equal(view.state.wire,snapshots[t-1]);assert.equal(view.state.truth,snapshots[t-1]);
+        assert.deepEqual(view.state.history,snapshots.slice(0,t));
+      }
+    }
+    check(2,early);
+    state.method='guarded';check(2,early);
+    state.mode='done';state.replay=true;
+    state.replayPosition=0;check(0,undefined);
+    state.replayPosition=8;check(1,joined);
+    state.replayPosition=12;check(2,early);
+    state.replay=false;state.followLive=false;check(1,joined);
+    state.mode='running';state.followLive=true;
+    delete state.methodFrames.echoSpline[1].field;check(1,joined); // Older server recording.
+  } finally {dom.window.close();}
 });
 
 test('map and table timers follow each estimator through completion and retain totals on replay',async()=>{

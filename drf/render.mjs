@@ -123,7 +123,7 @@ export class DrfMap {
       if (!g) return;
       const d=g.domain ?? [g.xmin,g.xmax,g.ymin,g.ymax], dx=(d[1]-d[0])/g.nx, dy=(d[3]-d[2])/g.ny;
       const ix=Math.floor((x-d[0])/dx), iy=Math.floor((y-d[2])/dy);
-      this.onInspect?.({ x,y,index:ix>=0 && ix<g.nx && iy>=0 && iy<g.ny ? iy*g.nx+ix : -1 });
+      this.onInspect?.({ x,y,index:ix>=0 && ix<g.nx && iy>=0 && iy<g.ny ? iy*g.nx+ix : -1 }, this.state.frame?.t);
     });
     for (const name of ["pointerup","pointercancel","lostpointercapture"]) canvas.addEventListener(name,() => { this.pointer=null; });
   }

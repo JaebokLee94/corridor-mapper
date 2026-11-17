@@ -1,6 +1,6 @@
 import { workerMethod } from './method-client.mjs?v=20261117-spline-gpu';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { createRunEngine } from './run-engine.mjs?v=20261117-spline-gpu';
+import { createRunEngine } from './run-engine.mjs?v=20261117-spline-fields';
 import { warmTruthCache } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 import { truthCacheKey } from './truth-cache.mjs';

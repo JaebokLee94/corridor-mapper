@@ -26,7 +26,7 @@ function localMethod(side,input,domain){
 }
 
 /** Each estimator consumes the same ordered wires on its own worker and clock.
- * Emit its result immediately. Joined frames remain ordered for fields, exports and old clients.
+ * Emit its result immediately. EchoSpline advances the display field. Joined frames stay ordered for exports and older clients.
  */
 export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generateScenario,createMethod=localMethod}={}) {
   if(typeof emit!=='function')throw new TypeError('A result emitter is required');
@@ -44,7 +44,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
     const t=run.next+1,left=run.lanes.echoSpline.pending.get(t),right=run.lanes.guarded.pending.get(t);
     if(!left||!right)return;
     for(const lane of Object.values(run.lanes))lane.pending.delete(t);
-    const frame=run.field.step(run.scenario.wire[run.next]);
+    const frame={...left.field};
     frame.methods={echoSpline:left.result,guarded:right.result};
     frame.candidates=right.result.candidates;frame.psptMs=right.result.ms;frame.method=run.method;
     left.evaluation.diagnostics=right.evaluation.diagnostics;
@@ -60,9 +60,12 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       const t=++lane.next,at=run.elapsed+performance.now()-run.started;
       const evaluation=lane.evaluator.step({t,...result,method:run.method,curveMethod:side==='echoSpline'?side:run.input.rightMethod},
         side==='echoSpline'?{diagnostics:{}}:null,result.bridges,result.extendedBridges,result.checkedChains);
-      lane.pending.set(t,{result,evaluation});
+      const field=side==='echoSpline' ? run.field.step(wire) : undefined;
+      lane.pending.set(t,{result,evaluation,field});
       const {diagnostics,...metrics}=evaluation;
-      send(run,'method-frame',{side,t,at,result,evaluation:metrics});
+      // A ready right-hand result delivers the field in the immediately following joined frame.
+      const earlyField=field && !run.lanes.guarded.pending.has(t) ? field : undefined;
+      send(run,'method-frame',{side,t,at,result,evaluation:metrics,field:earlyField});
       if(!current(run))return;
       join(run);
       if(current(run)&&lane.next<lane.limit)await yieldTask();
