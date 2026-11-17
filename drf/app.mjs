@@ -558,9 +558,7 @@ function renderSelected() {
       if(Number.isFinite(result?.ms)){
         label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
         if(result.backend){
-          if(method==='echoSpline'){
-            label.title+=` Estimator: ${result.backend}. GPU stationary-path searches: ${result.gpuCallsThisStep??0} this update, ${result.gpuCalls??0} total.`;
-          }else label.title+=` Inference: ${result.backend}. WebGPU convolutions completed: ${result.gpuCalls}.`;
+          label.title+=` Inference: ${result.backend}. WebGPU convolutions completed: ${result.gpuCalls}.`;
           if(result.gpuMode==='resident')label.title+=` Group normalization and SiLU: GPU. Wall-logit readbacks: ${result.gpuReadbacks}.`;
           if(result.gpuAdapter)label.title+=` Adapter: ${result.gpuAdapter}.`;
         }
