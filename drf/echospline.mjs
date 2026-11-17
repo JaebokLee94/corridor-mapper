@@ -51,14 +51,14 @@ function mul(h,x){
     for(let d=1;d<4&&d<=i;d++){const k=h[i*4+d];y[i]+=k*x[i-d];y[i-d]+=k*x[i];}
   }return y;
 }
-function basis(u,knots,n,spacing){
+function basis(u,knots,n,spacing,out={idx:0,w:[1,0,0,0]},left=[],right=[]){
   let span=Math.min(n-1,3+Math.floor((u-knots[0])/spacing));span=Math.max(3,span);
-  const w=[1,0,0,0],left=[],right=[];
+  const w=out.w;w[0]=1;
   for(let j=1;j<=3;j++){
     left[j]=u-knots[span+1-j];right[j]=knots[span+j]-u;let saved=0;
     for(let r=0;r<j;r++){const v=w[r]/(right[r+1]+left[j-r]);w[r]=saved+right[r+1]*v;saved=left[j-r]*v;}
     w[j]=saved;
-  }return {idx:span-3,w};
+  }out.idx=span-3;return out;
 }
 const value=(c,{idx,w})=>0+w[0]*c[idx]+w[1]*c[idx+1]+w[2]*c[idx+2]+w[3]*c[idx+3];
 const sgCache=new Map();
@@ -121,7 +121,7 @@ function rayDistances(ray,heights){
   }
   return ray.d;
 }
-function fit(observations,points,sign,grid,details){
+function* fit(observations,points,sign,grid,details,stationaryCandidates){
   const {x,knots,n,B,spacing,support}=grid,{y,near}=initialise(points,x),prior=zeros(n*4),rhs=zeros(n);
   for(let j=0;j<x.length;j++){
     const {idx,w}=B[j],weight=1/(1+(near[j]/2)**2);outer(prior,idx,w,weight);
@@ -131,20 +131,38 @@ function fit(observations,points,sign,grid,details){
   for(let j=0;j<n;j++){prior[j*4]+=1e-8;reg[j*4]=strength;}
   for(let j=0;j<n-2;j++){outer(prior,j,[1,-2,1],.1);outer(reg,j,[1,-2,1],strength*.5);}
   const pin=solve(prior,rhs,n);let coef=pin;
-  const candidates=grid.stationaryCandidates?.(x,observations,sign),words=Math.ceil(x.length/32);
-  function evaluate(c){
-    const heights=Float64Array.from(B,b=>value(c,b)),matches=[];
-    let dataLoss=0;
-    const bits=candidates?.(heights);
+  const hitGrid=new Int32Array(x.length),hitOffset=zeros(x.length),hitRange=zeros(x.length),order=[];
+  const usedHit=new Uint8Array(x.length),usedEcho=new Uint8Array(observations.reduce((m,o)=>Math.max(m,o.rs.length),0));
+  const unmatchedLoss=Math.sqrt(37)-1;
+  const pairIds=[],pairE=[],pairI=[],pairK=[];
+  const samples=()=>({oi:new Uint32Array(nr),j:new Uint32Array(nr),h:zeros(nr),e:zeros(nr),weight:zeros(nr)});
+  const rows=[samples(),samples()];
+  function geometry(oi,j,h,heights){
+    const {a,b,rayA,rayB}=observations[oi],k=j+(h>0?1:-1);
+    const aj=heights[j]-a[1],bj=heights[j]-b[1],ak=heights[k]-a[1],bk=heights[k]-b[1];
+    const g=aj/Math.max(1e-8,Math.sqrt(rayA.xx[j]+aj**2))+bj/Math.max(1e-8,Math.sqrt(rayB.xx[j]+bj**2));
+    const next=ak/Math.max(1e-8,Math.sqrt(rayA.xx[k]+ak**2))+bk/Math.max(1e-8,Math.sqrt(rayB.xx[k]+bk**2));
+    return g+Math.abs(h)*(next-g);
+  }
+  const scratch={idx:0,w:[1,0,0,0]},left=[],right=[];
+  const candidates=stationaryCandidates?.(x,observations,sign),words=Math.ceil(x.length/32);
+  function sample(c){
+    const heights=zeros(B.length);
+    for(let i=0;i<B.length;i++)heights[i]=value(c,B[i]);
+    return heights;
+  }
+  function* evaluate(c,slot,heights=sample(c),prefetched){
+    const matchedRows=rows[slot];
+    let dataLoss=0,count=0;
+    const bits=prefetched!==undefined?prefetched:candidates?yield candidates(heights):null;
     for(let oi=0;oi<observations.length;oi++){
       const {a,b,rs,rayA,rayB}=observations[oi],xxA=rayA.xx,xxB=rayB.xx;
-      const minY=Math.max(sign*a[1],sign*b[1]),hits=[];
+      const minY=Math.max(sign*a[1],sign*b[1]);let nHits=0;
       function refine(j,center,d0,d1){
         if(Math.abs(d1-d0)<1e-12||sign*heights[j]<minY)return;
         const h=clip(-.5*(d0+d1)/(d1-d0),-.5,.5);
-        const deriv=k=>(heights[k]-a[1])/Math.max(1e-8,Math.sqrt(xxA[k]+(heights[k]-a[1])**2))+(heights[k]-b[1])/Math.max(1e-8,Math.sqrt(xxB[k]+(heights[k]-b[1])**2));
-        const g=deriv(j);
-        hits.push({x:x[j]+h*.2,r:center+.25*(d0+d1)*h,g:g+Math.abs(h)*(deriv(j+(h>0?1:-1))-g)});
+        const at=nHits++;
+        hitGrid[at]=j;hitOffset[at]=h;hitRange[at]=center+.25*(d0+d1)*h;order[at]=at;
       }
       if(bits){
         const lengthAt=j=>Math.sqrt(xxA[j]+(heights[j]-a[1])**2)+Math.sqrt(xxB[j]+(heights[j]-b[1])**2);
@@ -167,38 +185,79 @@ function fit(observations,points,sign,grid,details){
           center=right;d0=d1;
         }
       }
-      hits.sort((a,b)=>a.r-b.r);const resolved=[];for(const h of hits)if(!resolved.length||h.r-resolved.at(-1).r>=.6)resolved.push(h);
-      const pairs=[];
-      rs.forEach((r,i)=>resolved.forEach((h,k)=>{const e=h.r-r;if(Math.abs(e)<1.5)pairs.push({i,k,e});}));
-      pairs.sort((a,b)=>Math.abs(a.e)-Math.abs(b.e)||a.i-b.i||a.k-b.k);
-      const used=new Set(),usedHit=new Set();
-      for(const {i,k,e} of pairs){if(used.has(i)||usedHit.has(k))continue;used.add(i);usedHit.add(k);const h=resolved[k];
-        matches.push({e,g:h.g,x:h.x});dataLoss+=.0625*(Math.hypot(1,e/.25)-1);}
-      dataLoss+=(rs.length-used.size)*.0625*(Math.sqrt(37)-1);
+      order.length=nHits;
+      order.sort((a,b)=>hitRange[a]-hitRange[b]);
+      let resolved=0;
+      for(const id of order){
+        if(!resolved||hitRange[id]-hitRange[order[resolved-1]]>=.6)order[resolved++]=id;
+      }
+      let numPairs=0;
+      for(let i=0;i<rs.length;i++){
+        for(let k=0;k<resolved;k++){
+          const e=hitRange[order[k]]-rs[i];
+          if(e>=1.5)break;
+          if(e> -1.5){
+            pairIds[numPairs]=numPairs;pairE[numPairs]=e;pairI[numPairs]=i;pairK[numPairs]=k;numPairs++;
+          }
+        }
+      }
+      pairIds.length=numPairs;
+      // Ties use the original enumeration order: measured echo first, then resolved hit.
+      if(numPairs>1)pairIds.sort((a,b)=>Math.abs(pairE[a])-Math.abs(pairE[b])||a-b);
+      usedEcho.fill(0,0,rs.length);usedHit.fill(0,0,resolved);
+      let matched=0;
+      for(const p of pairIds){
+        const i=pairI[p],k=pairK[p],e=pairE[p];
+        if(usedEcho[i]||usedHit[k])continue;
+        usedEcho[i]=1;usedHit[k]=1;matched++;
+        const id=order[k], j=hitGrid[id],h=hitOffset[id];
+        const divisor=Math.hypot(1,e/.25);
+        matchedRows.oi[count]=oi;matchedRows.j[count]=j;matchedRows.h[count]=h;
+        matchedRows.e[count]=e;matchedRows.weight[count]=1/divisor;count++;
+        dataLoss+=.0625*(divisor-1);
+      }
+      dataLoss+=(rs.length-matched)*.0625*unmatchedLoss;
+
     }
     const diff=c.map((v,j)=>v-pin[j]),rd=mul(reg,diff);
-    return {heights,matches,dataLoss,rd,loss:dataLoss+.5*diff.reduce((s,v,i)=>s+v*rd[i],0)};
+    return {heights,slot,count,dataLoss,rd,loss:dataLoss+.5*diff.reduce((s,v,i)=>s+v*rd[i],0)};
   }
-  let state=evaluate(coef);
-  for(let it=0;it<10&&state.matches.length;it++){
+  let state=yield* evaluate(coef,0);
+  for(let it=0;it<10&&state.count;it++){
     const H=reg.slice(),h=state.rd.map(v=>-v);
-    for(const {e,g,x:at} of state.matches){
-      const {idx,w}=basis(at,knots,n,spacing);
-      const weight=1/Math.hypot(1,e/.25);outer(H,idx,w,weight*g*g);
+    const selected=rows[state.slot];
+    for(let m=0;m<state.count;m++){
+      const j=selected.j[m],offset=selected.h[m],e=selected.e[m];
+      const g=geometry(selected.oi[m],j,offset,state.heights),at=x[j]+offset*.2;
+      const {idx,w}=basis(at,knots,n,spacing,scratch,left,right);
+      const weight=selected.weight[m];outer(H,idx,w,weight*g*g);
       for(let k=0;k<4;k++)h[idx+k]-=weight*g*w[k]*e;
     }
     const delta=solve(H,h,n);let accepted=false,move=0;
-    for(const step of [1,.5,.25,.125]){
-      const c=coef.map((v,j)=>pin[j]+clip(v+step*delta[j]-pin[j],-2,2)),next=evaluate(c);
+    const steps=[1,.5,.25,.125];
+    const trial=step=>coef.map((v,j)=>pin[j]+clip(v+step*delta[j]-pin[j],-2,2));
+    const proposals=candidates?.batch?steps.map(trial):null;
+    const heights=proposals?.map(sample);
+    const masks=proposals?yield candidates.batch(heights):null;
+    // Submit independent line-search candidates together but accept in the original order.
+    for(let i=0;i<steps.length;i++){
+      const c=proposals?.[i]??trial(steps[i]),next=yield* evaluate(c,1-state.slot,heights?.[i],masks?.[i]);
       if(next.loss<=state.loss+1e-12){move=Math.max(...c.map((v,i)=>Math.abs(v-coef[i])));coef=c;state=next;accepted=true;break;}
     }if(!accepted||move<.002)break;
   }
-  if(details)for(const m of state.matches)m.b=basis(m.x,knots,n,spacing);
+  let matches;
+  if(details){
+    const selected=rows[state.slot];
+    matches=Array.from({length:state.count},(_,i)=>{
+      const j=selected.j[i],h=selected.h[i],at=x[j]+h*.2;
+      return {e:selected.e[i],g:geometry(selected.oi[i],j,h,state.heights),x:at,b:basis(at,knots,n,spacing)};
+    });
+  }
   const curves=[];let run=[];
   for(let j=0;j<x.length;j++){if(near[j]<=support)run.push([x[j],state.heights[j]]);else{if(run.length>=2)curves.push(run);run=[];}}
   if(run.length>=2)curves.push(run);
-  return {curves,cost:state.dataLoss/nr,matched:state.matches.length,
-    ...(details?{fit:{points,x,prior:y,heights:state.heights,near,matches:state.matches}}:{})};
+  return {curves,cost:state.dataLoss/nr,matched:state.count,
+    ...(details?{fit:{points,x,prior:y,heights:state.heights,near,matches}}:{})};
 }
 export class EchoSpline {
   constructor({domain,upper=false,spacing=2,support=8,stationaryCandidates}={}){
@@ -239,6 +298,18 @@ export class EchoSpline {
   }
   step(wire,details=false){this.observe(wire);return this.estimate(details); }
   estimate(details=false){
+    const fit=this.estimateMaps(details,this.grid.stationaryCandidates);
+    let step=fit.next();
+    while(!step.done)step=fit.next(step.value);
+    return step.value;
+  }
+  async estimateAsync(details,gpu){
+    const fit=this.estimateMaps(details,(x,obs,sign)=>gpu.bind(x,obs,sign));
+    let step=fit.next();
+    while(!step.done)step=fit.next(await step.value);
+    return step.value;
+  }
+  *estimateMaps(details,stationaryCandidates){
     let best=null,ambiguous=false;
     const signs=this.upper?[1]:[1,-1],sides=signs.map(()=>[]);
     for(const tr of this.tracks)if(tr.length>=5)for(let j=0;j<tr.length;j++){
@@ -255,7 +326,7 @@ export class EchoSpline {
     for(let i=0;i<signs.length;i++){
       const sign=signs[i],pts=sides[i];
       if(pts.length<5)continue;
-      const candidate=fit(this.obs,pts,sign,this.grid,details);
+      const candidate=yield* fit(this.obs,pts,sign,this.grid,details,stationaryCandidates);
       if(!best||candidate.cost<best.cost-1e-10){best=candidate;ambiguous=false;}
       else if(Math.abs(candidate.cost-best.cost)<=1e-10)ambiguous=true;
     }

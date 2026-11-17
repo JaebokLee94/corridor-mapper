@@ -69,6 +69,7 @@
           <label class="field"><span>Merge <span data-tex="\varepsilon_{\mathrm{res}}">εres</span> <small>m</small></span><input name="resolution" type="number" min="0" max="2" step="0.01" value="0.6" required /></label>
         </div></details>
         <details class="sidebar-section" id="echoSettings"><summary>EchoSpline</summary><div class="prop-grid">
+          <label class="field span-2"><span>Computation device</span><select name="echoBackend"><option value="cpu" selected>CPU</option><option value="gpu">WebGPU + CPU</option></select></label>
           <label class="field"><span>Knot spacing <small>m</small></span><select name="echoKnotM" title="Distance between spline knots"><option value="2" selected>2</option><option value="4">4</option></select></label>
           <label class="field"><span>Support reach <small>m</small></span><input name="echoSupportM" type="number" value="8" min="1" max="12" step="0.5" required title="Maximum horizontal distance from an estimated reflection point for drawing the fitted wall" /></label>
         </div></details>
@@ -186,8 +187,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261117-arc-resident&timer=3';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261117-arc-resident&timer=3';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261117-spline-gpu&timer=3';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261117-spline-gpu&timer=3';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

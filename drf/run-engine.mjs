@@ -1,7 +1,7 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-four-methods';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261117-spline-gpu';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid, createField } from './field.mjs';
-import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261117-arc-resident';
+import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261117-spline-gpu';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
@@ -21,7 +21,7 @@ const sides=['echoSpline','guarded'];
 
 function localMethod(side,input,domain){
   const estimator=new EchoComparison(input,domain,side);
-  return {ready:side==='guarded'?estimator.loadModel({useGpu:true}):Promise.resolve(),
+  return {ready:estimator.loadModel({useGpu:true}),
     step:wire=>estimator.stepSide(side,wire),close:()=>estimator.close()};
 }
 

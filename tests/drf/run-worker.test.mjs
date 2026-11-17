@@ -194,3 +194,61 @@ test('independent learned estimators produce the same prefix outputs as a joint 
     right.close();
   }
 });
+
+test('asynchronous EchoSpline screening preserves each prefix and recovers from device loss',async()=>{
+  const scene=await generateScenario({...input,scene:'paper-upper',seed:3296639392,snapshots:16});
+  const reference=new EchoComparison(scene.input,scene.domain,'echoSpline');
+  const tested=new EchoComparison(scene.input,scene.domain,'echoSpline');
+  let fail=false,destroyed=false,batches=0;
+  tested.splineGpu={
+    completedCalls:0,adapterInfo:{vendor:'test'},
+    bind(x,observations){
+      const mask=new Uint32Array(observations.length*Math.ceil(x.length/32)).fill(0xffffffff);
+      const scan=async ()=>{
+        if(fail)throw Error('Device lost');
+        this.completedCalls++;return mask;
+      };
+      scan.batch=async heights=>{
+        assert.equal(heights.length,4);
+        await scan();batches++;return heights.map(()=>mask);
+      };
+      return scan;
+    },
+    destroy(){destroyed=true;}
+  };
+  let previous=0;
+  for(const wire of scene.wire){
+    if(wire.t===12)fail=true;
+    const {ms,backend,gpuAdapter,gpuCallsThisStep,gpuCalls,...actual}=await tested.stepLeft(wire,true);
+    const {ms:originalMs,...expected}=reference.stepLeft(wire,true);
+    assert.deepEqual(actual,expected);
+    assert.equal(gpuCallsThisStep,gpuCalls-previous);
+    assert.equal(backend,gpuCallsThisStep?'WebGPU + CPU':'CPU');
+    previous=gpuCalls;
+  }
+  assert.ok(previous>0 && batches>0 && destroyed);
+  assert.equal(tested.spline.obs.length,reference.spline.obs.length);
+});
+
+test('EchoSpline requests an adapter only for WebGPU selection and reports a CPU fallback',async()=>{
+  let requests=0;
+  const previous=Object.getOwnPropertyDescriptor(navigator,'gpu');
+  Object.defineProperty(navigator,'gpu',{configurable:true,value:{async requestAdapter(){requests++;return null;}}});
+  try{
+    const scene=await generateScenario(input),wire=scene.wire[0];
+    const make=echoBackend=>new EchoComparison({...scene.input,echoBackend},scene.domain,'echoSpline');
+    for(const choice of [undefined,'cpu']){
+      const cpu=make(choice);
+      await cpu.loadModel({useGpu:true});cpu.stepLeft(wire);cpu.close();
+    }
+    assert.equal(requests,0);
+    const fallback=make('gpu');await fallback.loadModel({useGpu:true});
+    assert.equal(requests,1);
+    const result=await fallback.stepLeft(wire);
+    assert.equal(result.backend,'CPU');assert.equal(result.gpuCalls,0);assert.equal(result.gpuCallsThisStep,0);
+    fallback.close();assert.throws(()=>make('invalid'),/compute device/);
+  }finally{
+    if(previous)Object.defineProperty(navigator,'gpu',previous);
+    else delete navigator.gpu;
+  }
+});

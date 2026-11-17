@@ -1,5 +1,5 @@
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { runExperiment } from './sweep.mjs?v=20261117-arc-resident';
+import { runExperiment } from './sweep.mjs?v=20261117-spline-gpu';
 self.onmessage = async ({ data }) => {
   if (data.type !== 'run') return;
   try {

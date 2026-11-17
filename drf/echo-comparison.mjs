@@ -3,7 +3,8 @@ import { modelData, neuralRuntime } from './model-runtime.mjs';
 import { correctFit } from './echospline-gbdt.mjs';
 import { GatGpr } from './gat-gpr.mjs';
 import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261117-arc-resident';
-import { EchoSpline } from './echospline.mjs?v=20261115-four-methods';
+import { createSplineGpu } from './spline-gpu.mjs?v=20261117-spline-gpu';
+import { EchoSpline } from './echospline.mjs?v=20261117-spline-gpu';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
 import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
@@ -34,7 +35,9 @@ export function echoProtocol(input={}) {
 
 export class EchoComparison {
   constructor(input,domain,side,stationaryCandidates) {
-    this.protocol=echoProtocol(input);
+    this.protocol=echoProtocol(input);this.side=side;
+    this.echoBackend=input.echoBackend??'cpu';
+    if(!['cpu','gpu'].includes(this.echoBackend))throw new RangeError('Unknown EchoSpline compute device');
     this.id=input.rightMethod??'wmp'; this.vehicles=input.vehicles; this.lastT=0;this.leftT=0;
     const bounds=input.scene==='paper-upper'?domain:undefined;
     const splineOptions={domain,upper:input.scene==='paper-upper',spacing:input.echoKnotM,support:input.echoSupportM,stationaryCandidates};
@@ -49,6 +52,13 @@ export class EchoComparison {
     }
   }
   async loadModel({useGpu=false}={}){
+    if(useGpu && this.echoBackend==='gpu' && this.spline && !this.spline.grid.stationaryCandidates && !this.closed){
+      this.splineGpuRequested=true;
+      const gpu=await createSplineGpu();
+      if(this.closed)gpu?.destroy();
+      else this.splineGpu=gpu;
+    }
+    if(this.side==='echoSpline' || this.closed)return;
     if(this.id==='gbdt')this.tree=await modelData('gbdt');
     else if(this.id==='gat')this.model=new GatGpr(await neuralRuntime('gat'),this.vehicles);
     else if(this.id==='arc'){
@@ -60,14 +70,36 @@ export class EchoComparison {
   close(){
     this.closed=true;
     this.model?.close?.();
+    this.splineGpu?.destroy();
+  }
+  async fitOnGpu(details){
+    const gpu=this.splineGpu;
+    try{return await this.spline.estimateAsync(details,gpu);}
+    catch(error){
+      if(this.closed)throw error;
+      this.gpuCallsBeforeLoss=gpu.completedCalls;gpu.destroy();this.splineGpu=null;
+      // The observation has already been recorded. Refit this same prefix on the CPU.
+      return this.spline.estimate(details);
+    }
   }
   stepLeft(wire,details=false) {
     const start=performance.now();
     wire=validateMeasuredSnapshot(wire);
     if(wire.t!==this.leftT+1)throw new RangeError('Snapshots must be consecutive from t=1');
-    const fit=this.spline.step(wire,details);
-    this.leftT=wire.t;
-    return {...fit,candidates:[],ms:performance.now()-start};
+    const gpu=this.splineGpu;
+    this.spline.observe(wire);this.leftT=wire.t;
+    if(gpu){
+      const before=gpu.completedCalls;
+      return this.fitOnGpu(details).then(fit=>{
+        const gpuCalls=gpu.completedCalls,gpuCallsThisStep=gpuCalls-before;
+        return {...fit,candidates:[],ms:performance.now()-start,
+          backend:this.splineGpu && gpuCallsThisStep?'WebGPU + CPU':'CPU',gpuCalls,gpuCallsThisStep,
+          gpuAdapter:Object.values(gpu.adapterInfo).filter(Boolean).join(' ')};
+      });
+    }
+    const fit=this.spline.estimate(details);
+    return {...fit,candidates:[],ms:performance.now()-start,
+      ...(this.splineGpuRequested||this.gpuCallsBeforeLoss!=null?{backend:'CPU',gpuCalls:this.gpuCallsBeforeLoss??0,gpuCallsThisStep:0}:{})};
   }
   stepRight(wire,sharedFit) {
     const start=performance.now();
@@ -108,11 +140,14 @@ export class EchoComparison {
   }
   step(wire) {
     const shared=this.fixedSpline===this.spline;
-    const echoSpline=this.stepLeft(wire,shared);
-    const guarded=this.stepRight(wire,shared?echoSpline:undefined);
-    if(shared)delete echoSpline.fit;
-    if(this.useGpu)return guarded.then(result=>({echoSpline,guarded:result}));
-    return {echoSpline,guarded};
+    const finish=echoSpline=>{
+      const guarded=this.stepRight(wire,shared?echoSpline:undefined);
+      if(shared)delete echoSpline.fit;
+      if(this.useGpu)return guarded.then(result=>({echoSpline,guarded:result}));
+      return {echoSpline,guarded};
+    };
+    const left=this.stepLeft(wire,shared);
+    return left instanceof Promise?left.then(finish):finish(left);
   }
 }
 
@@ -134,7 +169,7 @@ export async function estimateFinalMaps(input,domain,wires,stationaryCandidates)
         if(!shared)estimator.fixedSpline.observe(wire);
       }else estimator.model.observe(wire);
     }
-    const fit=estimator.spline.estimate(shared);
+    const fit=estimator.splineGpu?await estimator.fitOnGpu(shared):estimator.spline.estimate(shared);
     let guarded;
     if(estimator.wmp){
       const rows=selectGuarded(estimator.wmp,estimator.wmp.report(),estimator.protocol.guarded.threshold);

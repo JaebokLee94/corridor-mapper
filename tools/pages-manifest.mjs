@@ -6,7 +6,7 @@ originalCacheFiles.push(...truthBank.entries.map(entry => `assets/truth-cache/${
 // Only public viewer dependencies belong in the shared-site artifact.
 const originalDiagnosticFiles = ['diagnostic-ui.mjs', 'diagnostic-profile.mjs', 'sweep-export.mjs'].map(path => `drf/${path}`);
 const originalMathFiles = ['latex-LICENSE.txt', 'latex.mjs', 'latex-assets.mjs', 'dom-math.mjs', 'render-math.mjs'].map(path => `drf/${path}`);
-const originalComputeFiles = ['drf/experiment-settings.mjs','drf/echospline.mjs','drf/echo-comparison.mjs','drf/paper-preset.mjs','drf/public-measure.mjs','drf/field-reuse.mjs', 'drf/pspt-curvature.mjs', 'drf/pspt-recovery.mjs'];
+const originalComputeFiles = ['drf/experiment-settings.mjs','drf/echospline.mjs','drf/spline-gpu.mjs','drf/echo-comparison.mjs','drf/paper-preset.mjs','drf/public-measure.mjs','drf/field-reuse.mjs', 'drf/pspt-curvature.mjs', 'drf/pspt-recovery.mjs'];
 export const runtimeFiles = [
   ...['right-methods','method-label','range-assignment','order-statistic','model-runtime','echoarc-cnn','arc-gpu','arc-gpu-norm','arc-gpu-math','gat-gpr','echospline-gbdt','models/arc','models/gbdt','models/gat','models/kernels'].map(f=>'drf/'+f+'.mjs'),
   'drf/models/LICENSE.txt',

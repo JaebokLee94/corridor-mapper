@@ -1,4 +1,4 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-four-methods';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261117-spline-gpu';
 import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-compact-gbdt';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
@@ -10,10 +10,10 @@ import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
 import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
-import { echoProtocol } from './echo-comparison.mjs?v=20261117-arc-resident';
+import { echoProtocol } from './echo-comparison.mjs?v=20261117-spline-gpu';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-arc-resident';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-spline-gpu';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-plot-edge';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -109,7 +109,7 @@ function installSidebarControls() {
   }, true);
 }
 function fillSettings(input) {
-  for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,rightMethod:'wmp',...input})) {
+  for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,echoBackend:'cpu',rightMethod:'wmp',...input})) {
     const field = form.elements.namedItem(key);
     if(key==='rightMethod' && value==='wmf'){field.value='wmp';continue;}
     if (field) field.type === 'checkbox' ? field.checked = value : field.value = String(value);
@@ -125,7 +125,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261117-map-metrics';
+  const revision = '20261117-spline-gpu';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -558,7 +558,9 @@ function renderSelected() {
       if(Number.isFinite(result?.ms)){
         label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
         if(result.backend){
-          label.title+=` Inference: ${result.backend}. WebGPU convolutions completed: ${result.gpuCalls}.`;
+          if(method==='echoSpline'){
+            label.title+=` Estimator: ${result.backend}. GPU stationary-path searches: ${result.gpuCallsThisStep??0} this update, ${result.gpuCalls??0} total.`;
+          }else label.title+=` Inference: ${result.backend}. WebGPU convolutions completed: ${result.gpuCalls}.`;
           if(result.gpuMode==='resident')label.title+=` Group normalization and SiLU: GPU. Wall-logit readbacks: ${result.gpuReadbacks}.`;
           if(result.gpuAdapter)label.title+=` Adapter: ${result.gpuAdapter}.`;
         }

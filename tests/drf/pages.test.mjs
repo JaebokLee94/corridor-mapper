@@ -38,17 +38,17 @@ test('Pages ships the original simulator with all dependencies and no design pre
   }
 });
 
-test('published online and sweep workers request one version of each EchoArc GPU dependency', () => {
+test('published online and sweep workers request one version of each wall estimator GPU dependency', () => {
   const root=new URL('../../',import.meta.url),read=path=>readFileSync(new URL(path,root),'utf8');
   const entries={
     'drf.html':['app.mjs','offline.bundle.js'],
-    'drf/app.mjs':['echo-comparison.mjs','sweep.mjs'],
-    'drf/run.worker.mjs':['run-engine.mjs','compare.worker.mjs'],
-    'drf/run-engine.mjs':['echo-comparison.mjs'],
+    'drf/app.mjs':['experiment-settings.mjs','echo-comparison.mjs','sweep.mjs'],
+    'drf/run.worker.mjs':['method-client.mjs','run-engine.mjs','compare.worker.mjs'],
+    'drf/run-engine.mjs':['experiment-settings.mjs','echo-comparison.mjs'],
     'drf/compare.worker.mjs':['echo-comparison.mjs'],
-    'drf/sweep.mjs':['echo-comparison.mjs','sweep.worker.mjs'],
+    'drf/sweep.mjs':['experiment-settings.mjs','echo-comparison.mjs','sweep.worker.mjs'],
     'drf/sweep.worker.mjs':['sweep.mjs'],
-    'drf/echo-comparison.mjs':['echoarc-cnn.mjs'],
+    'drf/echo-comparison.mjs':['echospline.mjs','spline-gpu.mjs','echoarc-cnn.mjs'],
     'drf/echoarc-cnn.mjs':['arc-gpu.mjs'],
     'drf/arc-gpu.mjs':['arc-gpu-norm.mjs'],
     'drf/arc-gpu-norm.mjs':['arc-gpu-math.mjs'],

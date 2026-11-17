@@ -19,7 +19,7 @@ export function workerMethod(worker,side,input,domain) {
     return new Promise((resolve,reject)=>{pending={resolve,reject};worker.postMessage(message);});
   }
   const {vehicles,scene,rightMethod,echoKnotM,echoSupportM,sigmaD}=input;
-  return {ready:request({type:'init',side,vehicles,scene,rightMethod,domain,echoKnotM,echoSupportM,sigmaR:sigmaD}),
+  return {ready:request({type:'init',side,vehicles,scene,rightMethod,domain,echoKnotM,echoSupportM,...(input.echoBackend?{echoBackend:input.echoBackend}:{}),sigmaR:sigmaD}),
     step:snapshot=>request({type:'step',snapshot}),
     close(){closed=true;reject(new Error('Cancelled'));worker.terminate();}};
 }

@@ -23,6 +23,11 @@ test('support reach changes output extent; input and parameter validation preser
     for(let t=1;t<=10;t++)method.observe(flat(t,8));return method.estimate().curves.flat().length;});
   assert.ok(lengths[1]>lengths[0]);assert.equal(experimentSettings({echoKnotM:'4',echoSupportM:5}).echoKnotM,4);assert.throws(()=>experimentSettings({echoKnotM:0}));
 });
+test('existing scene links use CPU and explicit WebGPU survives settings round trips',()=>{
+  assert.deepEqual(experimentSettings({echoBackend:'cpu'}),experimentSettings({}));
+  assert.equal(experimentSettings(experimentSettings({echoBackend:'gpu'})).echoBackend,'gpu');
+  assert.throws(()=>experimentSettings({echoBackend:'other'}),/device/);
+});
 test('fitted curve uses whole-map geometry, without fabricated fragment decisions or bridges',()=>{
   const s={walls:[[[0,8],[10,8]]],input:{},truth:[{t:1,configs:[]}]};
   const e=createPSPTEvaluator(s,{}).step({t:1,candidates:[],curves:[[[0,8],[10,8]]]}, {diagnostics:{}});
