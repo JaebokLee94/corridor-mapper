@@ -8,12 +8,13 @@ globalThis.onmessage=async ({data})=>{
     if (data.type==='init') {
       side=data.side;
       if(side && !['echoSpline','guarded'].includes(side))throw new Error('Unknown estimator side');
+      estimator?.close();
       estimator=new EchoComparison({...data,sigmaD:data.sigmaR},data.domain,side);
-      if(side!=='echoSpline' && data.rightMethod)await estimator.loadModel();
+      if(side!=='echoSpline' && data.rightMethod)await estimator.loadModel({useGpu:true});
       globalThis.postMessage({type:'initialized',requestId:data.requestId});
     } else if (data.type==='step') {
       if (!estimator) throw new Error('Comparison worker must be initialized');
-      const methods=side?estimator.stepSide(side,data.snapshot):estimator.step(data.snapshot);
+      const methods=await (side?estimator.stepSide(side,data.snapshot):estimator.step(data.snapshot));
       globalThis.postMessage({type:'candidates',requestId:data.requestId,t:data.snapshot.t,methods});
     } else throw new Error('Unknown comparison message');
   } catch(error) {globalThis.postMessage({type:'error',requestId:data.requestId,message:error.message});}

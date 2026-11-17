@@ -173,16 +173,23 @@ test('independent learned estimators produce the same prefix outputs as a joint 
   for(const rightMethod of ['gbdt','gat','arc']){
     const settings={...scene.input,rightMethod},joint=new EchoComparison(settings,scene.domain),
       left=new EchoComparison(settings,scene.domain,'echoSpline'),right=new EchoComparison(settings,scene.domain,'guarded');
-    await Promise.all([joint.loadModel(),right.loadModel()]);
+    await Promise.all([joint.loadModel(),right.loadModel({useGpu:rightMethod==='arc'})]);
     for(const wire of scene.wire){
       const reference=joint.step(wire);
       assert.deepEqual(numerical(left.stepLeft(wire)),numerical(reference.echoSpline));
-      const {stageTotalsMs,...single}=right.stepSide('guarded',wire);
+      const {stageTotalsMs,backend,gpuCalls,gpuAdapter,...single}=await right.stepSide('guarded',wire);
+      if(rightMethod==='arc'){
+        assert.ok(backend==='CPU WASM'||backend==='WebGPU');
+        assert.equal(typeof gpuAdapter,'string');
+        if(backend==='WebGPU')assert.ok(gpuCalls>0);
+        else assert.equal(gpuCalls,0);
+      }
       assert.deepEqual(numerical(single),numerical(reference.guarded));
       if(rightMethod==='gat'){
         assert.ok(stageTotalsMs.gat>=0 && stageTotalsMs.gpr>=0);
         if(wire.t===scene.wire.length)assert.ok(stageTotalsMs.gat>0 && stageTotalsMs.gpr>0);
       }else assert.equal(stageTotalsMs,undefined);
     }
+    right.close();
   }
 });

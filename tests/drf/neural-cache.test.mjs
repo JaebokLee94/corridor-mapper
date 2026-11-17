@@ -38,3 +38,34 @@ test('an empty frame with a changed pair count rescales existing CNN votes',()=>
   assert.ok(one>two&&two>0);
   assert.equal(model.step({configs:[empty]}).curves[0][0][1],one);
 });
+
+test('Arc awaits convolution results and recovers the current measured prefix after GPU loss',async()=>{
+  const rt=await neuralRuntime('arc'),model=new EchoArcCNN(rt),reference=new EchoArcCNN(rt);
+  const link={pHat_i:[4,2],pHat_j:[8,3],paths:[{dHat:12}]};
+  let fail=false,destroyed=0;
+  const gpu=model.gpu={
+    completedCalls:0,
+    async convolution(...args){
+      if(fail)throw new Error('Device lost');
+      this.completedCalls++;
+      return model.convolution(...args);
+    },
+    destroy(){destroyed++;}
+  };
+  async function compare(config){
+    const wire={configs:[config]};
+    model.observe(wire);
+    assert.deepEqual(await model.estimateAsync(),reference.step(wire));
+    assert.deepEqual(model.input,reference.input);
+  }
+  await compare(link);
+  assert.equal(gpu.completedCalls,11);
+  await compare({...link,paths:[]});
+  assert.equal(gpu.completedCalls,11);
+  fail=true;
+  await compare(link);
+  assert.equal(destroyed,1);
+  assert.equal(model.gpu,null);
+  assert.equal(model.gpuCallsBeforeLoss,11);
+  await compare(link);
+});

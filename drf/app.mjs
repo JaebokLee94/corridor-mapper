@@ -547,6 +547,14 @@ function renderSelected() {
       const ms=sample?.totalMs??0;
       label.textContent=`Snapshot ${t}/${scenario.input.snapshots} · ${ms<1000?Math.round(ms)+' ms':(ms/1000).toFixed(2)+' s'} total`;
       label.title='Cumulative estimator compute time through the displayed snapshot. Excludes measurement generation, evaluation and drawing.';
+      if(Number.isFinite(result?.ms)){
+        label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
+        if(result.backend){
+          label.textContent+=` · ${result.backend}`;
+          label.title+=` Inference: ${result.backend}. WebGPU convolutions completed: ${result.gpuCalls}.`;
+          if(result.gpuAdapter)label.title+=` Adapter: ${result.gpuAdapter}.`;
+        }
+      }
       const stages=result?.stageTotalsMs;
       if(stages)label.title+=` GAT inference: ${(stages.gat/1000).toFixed(3)} s. GPR fit and prediction: ${(stages.gpr/1000).toFixed(3)} s. Other processing: ${(Math.max(0,ms-stages.gat-stages.gpr)/1000).toFixed(3)} s.`;
     }

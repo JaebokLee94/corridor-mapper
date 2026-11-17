@@ -31,27 +31,29 @@ export async function runExperiment(raw, progress = () => {}, prepare = generate
     field = createField(grid, { band: input.band, perimeter: input.perimeter }),
     evaluators = Object.fromEntries(['echoSpline', 'guarded'].map(key => [key, createPSPTEvaluator(scenario, grid)])),
     estimator = new EchoComparison(input,scenario.domain,undefined,stationaryCandidates), timings = [];
-  await estimator.loadModel();
-  let frame, evaluations, fieldMs = 0, evaluationMs = 0;
-  const estimatorMs = { echoSpline: 0, guarded: 0 };
-  for (const wire of scenario.wire) {
-    frame = field.step(wire); fieldMs += frame.ms;
-    const methods = estimator.step(wire);
-    for (const key of Object.keys(methods)) estimatorMs[key] += methods[key].ms;
-    timings.push(frame.ms + methods.guarded.ms + methods.echoSpline.ms);
-    const start = performance.now();
-    const guarded = evaluators.guarded.step({ ...frame, method: estimator.id, curveMethod:estimator.id, ...methods.guarded }, null, methods.guarded.bridges, methods.guarded.extendedBridges, methods.guarded.checkedChains);
-    const echoSpline = evaluators.echoSpline.step({...frame,...methods.echoSpline},guarded);
-    evaluations = { echoSpline, guarded }; evaluationMs += performance.now() - start;
-    progress(frame.t, input.snapshots);
-  }
-  return { input, wallGeneration: scenario.wallGeneration, method: 'paired-comparison', protocol: estimator.protocol,
-    methods: Object.fromEntries(Object.entries(evaluations).map(([key, evaluation]) => [key, { summary: summarize(frame, evaluation) }])),
-    diagnostics: evaluations.guarded.diagnostics,
-    timing: { ...(scenario.measurementBackend ? { measurementBackend:scenario.measurementBackend } : {}), simulatorMs: scenario.simulatorMs, fieldMs, estimatorMs, evaluationMs,
-      frameP50: percentile(timings, .5), frameP95: percentile(timings, .95) },
-    final: { t: frame.t, Dbar: frame.Dbar, betaHat: frame.betaHat, Q: frame.Q, admitted: frame.admitted, rejected: frame.rejected },
-  };
+  try {
+    await estimator.loadModel({useGpu:!!globalThis.navigator?.gpu});
+    let frame, evaluations, fieldMs = 0, evaluationMs = 0;
+    const estimatorMs = { echoSpline: 0, guarded: 0 };
+    for (const wire of scenario.wire) {
+      frame = field.step(wire); fieldMs += frame.ms;
+      const methods = await estimator.step(wire);
+      for (const key of Object.keys(methods)) estimatorMs[key] += methods[key].ms;
+      timings.push(frame.ms + methods.guarded.ms + methods.echoSpline.ms);
+      const start = performance.now();
+      const guarded = evaluators.guarded.step({ ...frame, method: estimator.id, curveMethod:estimator.id, ...methods.guarded }, null, methods.guarded.bridges, methods.guarded.extendedBridges, methods.guarded.checkedChains);
+      const echoSpline = evaluators.echoSpline.step({...frame,...methods.echoSpline},guarded);
+      evaluations = { echoSpline, guarded }; evaluationMs += performance.now() - start;
+      progress(frame.t, input.snapshots);
+    }
+    return { input, wallGeneration: scenario.wallGeneration, method: 'paired-comparison', protocol: estimator.protocol,
+      methods: Object.fromEntries(Object.entries(evaluations).map(([key, evaluation]) => [key, { summary: summarize(frame, evaluation) }])),
+      diagnostics: evaluations.guarded.diagnostics,
+      timing: { ...(scenario.measurementBackend ? { measurementBackend:scenario.measurementBackend } : {}), simulatorMs: scenario.simulatorMs, fieldMs, estimatorMs, evaluationMs,
+        frameP50: percentile(timings, .5), frameP95: percentile(timings, .95) },
+      final: { t: frame.t, Dbar: frame.Dbar, betaHat: frame.betaHat, Q: frame.Q, admitted: frame.admitted, rejected: frame.rejected },
+    };
+  } finally { estimator.close(); }
 }
 export function parseValues(text, integer = false) {
   const values = String(text).split(/[\s,]+/).filter(Boolean).map(Number);

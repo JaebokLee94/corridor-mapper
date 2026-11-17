@@ -21,8 +21,8 @@ const sides=['echoSpline','guarded'];
 
 function localMethod(side,input,domain){
   const estimator=new EchoComparison(input,domain,side);
-  return {ready:side==='guarded'?estimator.loadModel():Promise.resolve(),
-    step:wire=>estimator.stepSide(side,wire),close(){}};
+  return {ready:side==='guarded'?estimator.loadModel({useGpu:true}):Promise.resolve(),
+    step:wire=>estimator.stepSide(side,wire),close:()=>estimator.close()};
 }
 
 /** Each estimator consumes the same ordered wires on its own worker and clock.

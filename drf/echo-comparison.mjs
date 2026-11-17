@@ -48,10 +48,18 @@ export class EchoComparison {
       this.evidence=new GapRangeEvidence(input.sigmaD);
     }
   }
-  async loadModel(){
+  async loadModel({useGpu=false}={}){
     if(this.id==='gbdt')this.tree=await modelData('gbdt');
     else if(this.id==='gat')this.model=new GatGpr(await neuralRuntime('gat'),this.vehicles);
-    else if(this.id==='arc')this.model=new EchoArcCNN(await neuralRuntime('arc'));
+    else if(this.id==='arc'){
+      this.model=new EchoArcCNN(await neuralRuntime('arc'));
+      this.useGpu=useGpu;
+      if(useGpu&&!this.closed)await this.model.enableGpu();
+    }
+  }
+  close(){
+    this.closed=true;
+    this.model?.close?.();
   }
   stepLeft(wire,details=false) {
     const start=performance.now();
@@ -74,6 +82,15 @@ export class EchoComparison {
       if(this.id==='gbdt'){
         const f=sharedFit??this.fixedSpline.step(wire,true);
         result=this.correctedMap(f,wire.configs.length);
+      }else if(this.useGpu){
+        this.model.observe(wire);
+        this.lastT=wire.t;
+        return this.model.estimateAsync().then(map=>{
+          const gpu=this.model.gpu;
+          return {...map,ms:performance.now()-start,backend:gpu?'WebGPU':'CPU WASM',
+            gpuCalls:gpu?.completedCalls??this.model.gpuCallsBeforeLoss??0,
+            gpuAdapter:gpu?Object.values(gpu.adapterInfo).filter(Boolean).join(' '):''};
+        });
       }else result=this.model.step(wire);
     }
     this.lastT=wire.t;
@@ -93,6 +110,7 @@ export class EchoComparison {
     const echoSpline=this.stepLeft(wire,shared);
     const guarded=this.stepRight(wire,shared?echoSpline:undefined);
     if(shared)delete echoSpline.fit;
+    if(this.useGpu)return guarded.then(result=>({echoSpline,guarded:result}));
     return {echoSpline,guarded};
   }
 }
@@ -102,27 +120,29 @@ export async function estimateFinalMaps(input,domain,wires,stationaryCandidates)
   if(!Array.isArray(wires) || !wires.length || wires.some((wire,i)=>wire.t!==i+1))
     throw new RangeError('Expected nonempty consecutive snapshots from t=1');
   const estimator=new EchoComparison(input,domain,undefined,stationaryCandidates);
-  await estimator.loadModel();
-  const shared=estimator.fixedSpline===estimator.spline;
-  for(const snapshot of wires){
-    const wire=validateMeasuredSnapshot(snapshot);
-    estimator.spline.observe(wire);
+  try{
+    await estimator.loadModel({useGpu:!!globalThis.navigator?.gpu});
+    const shared=estimator.fixedSpline===estimator.spline;
+    for(const snapshot of wires){
+      const wire=validateMeasuredSnapshot(snapshot);
+      estimator.spline.observe(wire);
+      if(estimator.wmp){
+        estimator.wmp.observe(wire);
+        estimator.evidence.add(wire);
+      }else if(estimator.fixedSpline){
+        if(!shared)estimator.fixedSpline.observe(wire);
+      }else estimator.model.observe(wire);
+    }
+    const fit=estimator.spline.estimate(shared);
+    let guarded;
     if(estimator.wmp){
-      estimator.wmp.observe(wire);
-      estimator.evidence.add(wire);
+      const rows=selectGuarded(estimator.wmp,estimator.wmp.report(),estimator.protocol.guarded.threshold);
+      guarded=wmpFrame(rows,performance.now(),true,estimator.evidence);
+      delete guarded.ms;
     }else if(estimator.fixedSpline){
-      if(!shared)estimator.fixedSpline.observe(wire);
-    }else estimator.model.observe(wire);
-  }
-  const fit=estimator.spline.estimate(shared);
-  let guarded;
-  if(estimator.wmp){
-    const rows=selectGuarded(estimator.wmp,estimator.wmp.report(),estimator.protocol.guarded.threshold);
-    guarded=wmpFrame(rows,performance.now(),true,estimator.evidence);
-    delete guarded.ms;
-  }else if(estimator.fixedSpline){
-    guarded=estimator.correctedMap(shared?fit:estimator.fixedSpline.estimate(true),wires.at(-1).configs.length);
-  }else guarded=estimator.model.estimate();
-  const {fit:details,...echoSpline}=fit;
-  return {echoSpline:{...echoSpline,candidates:[]},guarded};
+      guarded=estimator.correctedMap(shared?fit:estimator.fixedSpline.estimate(true),wires.at(-1).configs.length);
+    }else guarded=estimator.useGpu?await estimator.model.estimateAsync():estimator.model.estimate();
+    const {fit:details,...echoSpline}=fit;
+    return {echoSpline:{...echoSpline,candidates:[]},guarded};
+  }finally{estimator.close();}
 }

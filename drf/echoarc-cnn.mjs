@@ -1,5 +1,7 @@
 // Input is the current measured Tx/Rx packet. Accumulate 64 upper-arc normal directions
 // per ellipse on the training grid (0.5 m). Output curves use the checkpoint's fixed cutoff.
+import { createArcGpu } from './arc-gpu.mjs';
+
 const NX=201, NY=144, STEP=.5, Y0=-20;
 const normals=Array.from({length:64},(_,i)=>{
   const a=-63+2*i,r=a*Math.PI/180;
@@ -85,7 +87,7 @@ export class EchoArcCNN{
       }
     }
   }
-  estimate(){
+  updateInput(){
     const input=this.input,scaleChanged=this.pairs!==this.scalePairs;
     const n=scaleChanged?NX*NY:this.changedCells.length;
     let dirty=!this.curves;
@@ -100,28 +102,76 @@ export class EchoArcCNN{
       if(!Object.is(value,input[i])){input.fill(value,i,i+9);dirty=true;}
     }
     this.scalePairs=this.pairs;this.changedCells.length=0;
-    if(dirty){
-      this.curves=undefined;
-      this.curves=this.network(input);
-    }
+    return dirty;
+  }
+  map(){
     return {curves:this.curves.map(line=>line.map(p=>[...p])),candidates:[]};
+  }
+  estimate(){
+    if(this.updateInput()){
+      this.curves=undefined;
+      this.curves=this.network(this.input);
+    }
+    return this.map();
+  }
+  async enableGpu(){
+    const gpu=await createArcGpu(this.rt);
+    if(this.closed)gpu?.destroy();
+    else this.gpu=gpu;
+  }
+  close(){
+    this.closed=true;
+    this.gpu?.destroy();
+  }
+  async estimateAsync(){
+    if(!this.gpu)return this.estimate();
+    if(this.updateInput()){
+      this.curves=undefined;
+      const layers=this.layers(this.input);
+      try{
+        let layer=layers.next();
+        while(!layer.done)layer=layers.next(await this.gpu.convolution(...layer.value));
+        this.curves=layer.value;
+      }catch(error){
+        if(this.closed)throw error;
+        this.gpuCallsBeforeLoss=this.gpu.completedCalls;
+        this.gpu.destroy();this.gpu=null;
+        // Recover this same prefix from its already normalized input without casting a vote twice.
+        this.curves=this.network(this.input);
+      }
+    }
+    return this.map();
   }
   step(wire){
     this.observe(wire);return this.estimate();
   }
-  network(input){
+  convolution(v,name,dilation=1){
     const {weights,call}=this.rt;
-    const conv=(v,name,dilation=1)=>{
-      const {shape,values}=weights[name+'.weight'],[kernel,,inc,c]=shape;
-      const data=call('convolution',[v.data,values,weights[name+'.bias'].values],v.h*v.w*c,[v.h,v.w,inc,c,kernel,dilation]);
-      return {...v,data,c};
-    };
-    const block=(v,name,d=1)=>{
-      for(const i of [0,3]){v=conv(v,name+'.'+i,i===0?d:1);normalizeSiLU(v.data,weights[name+'.'+(i+1)+'.weight'].values,weights[name+'.'+(i+1)+'.bias'].values,v.c);}
+    const {shape,values}=weights[name+'.weight'],[kernel,,inc,c]=shape;
+    const data=call('convolution',[v.data,values,weights[name+'.bias'].values],v.h*v.w*c,[v.h,v.w,inc,c,kernel,dilation]);
+    return {...v,data,c};
+  }
+  network(input){
+    const layers=this.layers(input);
+    let layer=layers.next();
+    while(!layer.done)layer=layers.next(this.convolution(...layer.value));
+    return layer.value;
+  }
+  *layers(input){
+    const {weights}=this.rt;
+    function* block(v,name,d=1){
+      for(const i of [0,3]){
+        v=yield [v,name+'.'+i,i===0?d:1];
+        normalizeSiLU(v.data,weights[name+'.'+(i+1)+'.weight'].values,weights[name+'.'+(i+1)+'.bias'].values,v.c);
+      }
       return v;
-    };
-    const a=block({data:input,h:NY,w:NX,c:9},'e0'),b=block(pool(a),'e1'),c=block(pool(b),'b',2);
-    const d=block(concatenate(b,c),'d1'),e=block(concatenate(a,d),'d0');
-    return decodeArc(conv(e,'out').data,this.rt.data.threshold);
+    }
+    const a=yield* block({data:input,h:NY,w:NX,c:9},'e0');
+    const b=yield* block(pool(a),'e1');
+    const c=yield* block(pool(b),'b',2);
+    const d=yield* block(concatenate(b,c),'d1');
+    const e=yield* block(concatenate(a,d),'d0');
+    const logits=yield [e,'out',1];
+    return decodeArc(logits.data,this.rt.data.threshold);
   }
 }
