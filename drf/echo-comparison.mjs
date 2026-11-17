@@ -2,7 +2,7 @@ import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
 import { modelData, neuralRuntime } from './model-runtime.mjs';
 import { correctFit } from './echospline-gbdt.mjs';
 import { GatGpr } from './gat-gpr.mjs';
-import { EchoArcCNN } from './echoarc-cnn.mjs';
+import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261117-arc-webgpu';
 import { EchoSpline } from './echospline.mjs?v=20261115-four-methods';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
 import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';

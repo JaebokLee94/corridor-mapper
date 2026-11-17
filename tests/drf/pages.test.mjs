@@ -37,3 +37,36 @@ test('Pages ships the original simulator with all dependencies and no design pre
       assert.ok(existsSync(new URL(match[1].split('?')[0], new URL(path, output))), `${path}: ${match[1]}`);
   }
 });
+
+test('published online and sweep workers request one version of each EchoArc GPU dependency', () => {
+  const root=new URL('../../',import.meta.url),read=path=>readFileSync(new URL(path,root),'utf8');
+  const entries={
+    'drf.html':['app.mjs','offline.bundle.js'],
+    'drf/app.mjs':['echo-comparison.mjs','sweep.mjs'],
+    'drf/run.worker.mjs':['run-engine.mjs','compare.worker.mjs'],
+    'drf/run-engine.mjs':['echo-comparison.mjs'],
+    'drf/compare.worker.mjs':['echo-comparison.mjs'],
+    'drf/sweep.mjs':['echo-comparison.mjs','sweep.worker.mjs'],
+    'drf/sweep.worker.mjs':['sweep.mjs'],
+    'drf/echo-comparison.mjs':['echoarc-cnn.mjs'],
+    'drf/echoarc-cnn.mjs':['arc-gpu.mjs'],
+  };
+  const versions=new Map();
+  for(const [path,targets] of Object.entries(entries)){
+    const source=read(path);
+    for(const target of targets){
+      const specifiers=[...source.matchAll(/['"](?:drf|\.)\/([^'"]+)['"]/g)].map(match=>match[1]);
+      const references=specifiers.filter(ref=>ref.split('?')[0]===target);
+      assert.ok(references.length,`${path} must load ${target}`);
+      for(const ref of references){
+        const version=new URL(ref,root).searchParams.get('v');
+        assert.ok(version,`${path} must version ${target}`);
+        assert.equal(version,versions.get(target)??version,`${target} is loaded with conflicting versions`);
+        versions.set(target,version);
+      }
+    }
+  }
+  const app=read('drf/app.mjs');
+  assert.match(app,/const revision = '[\w-]+';/);
+  assert.ok(app.includes('./${name}.worker.mjs?v=${revision}'), 'dynamic worker entry is versioned');
+});

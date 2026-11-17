@@ -11,7 +11,7 @@ function read(path) {
   return inputs.get(key);
 }
 read('build-drf-offline.mjs');
-const workerConstructor = "new Worker(new URL('./sweep.worker.mjs?v=20261115-four-methods', import.meta.url), { type: 'module' })";
+const workerConstructor = "new Worker(new URL('./sweep.worker.mjs?v=20261117-arc-webgpu', import.meta.url), { type: 'module' })";
 const options = {
   absWorkingDir: root, bundle: true, platform: 'browser', format: 'iife', target: 'es2022',
   write: false, minify: true, define: { 'import.meta.url': 'globalThis.__drfOffline.moduleUrl' },

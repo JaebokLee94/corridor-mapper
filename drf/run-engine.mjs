@@ -1,7 +1,7 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261115-four-methods';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid, createField } from './field.mjs';
-import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261115-independent';
+import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261117-arc-webgpu';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-four-methods';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
