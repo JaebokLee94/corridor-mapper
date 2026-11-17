@@ -402,8 +402,6 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .compute-timer b,.compute-time-row td { color:var(--color-ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .method-progress { margin-right:auto; font-size:12px; color:var(--color-ink-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .map-name { max-width:100%; margin:0; font-size:15px; color:var(--color-accent); }
-.map-units { white-space:nowrap; font-size:12px; }
-.map-pair[data-mode="compare"] > .map-pane:first-child .map-units { display:none; }
 .baseline-name { color:var(--color-baseline); }
 #baselineCanvas { height:clamp(290px,24vw,430px); }
 .workbench-footer { display:flex; align-items:center; flex-wrap:wrap; gap:8px 24px; min-width:0; }
