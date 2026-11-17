@@ -1,4 +1,4 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261117-spline-cnn';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261117-cnn-path';
 import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-compact-gbdt';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
@@ -9,11 +9,11 @@ import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.m
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
-import { rightMethods } from './right-methods.mjs?v=20261117-spline-cnn';
-import { echoProtocol } from './echo-comparison.mjs?v=20261117-spline-cnn';
+import { rightMethods } from './right-methods.mjs?v=20261117-cnn-path';
+import { echoProtocol } from './echo-comparison.mjs?v=20261117-cnn-path';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-spline-cnn';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-cnn-path';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-spline-fields';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -30,7 +30,7 @@ function renderThresholdProtocol(protocol = echoProtocol()) {
   if(protocol.echoSpline){
     const wmp=protocol.guarded, p=protocol.echoSpline.parameters;
     if(wmp.id){
-      const info=rightMethods[wmp.id]??wmp;
+      const info=wmp.description?wmp:rightMethods[wmp.id]??wmp;
       $('thresholdSummary').textContent=wmp.threshold==null ? info.description : info.name+' threshold: '+wmp.threshold;
       $('thresholdDetails').textContent=(info.description??info.name)+(wmp.training?' '+wmp.training+'.':'');
       return;
@@ -125,7 +125,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261117-spline-cnn';
+  const revision = '20261117-cnn-path';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -276,6 +276,35 @@ function replaceSeed() {
   field.value = String(seed);
   return seed;
 }
+function randomizeWallGeometry(input) {
+  const ruggedBands = { sigmaM:[9,12], deltaM:[4,10], sigmaDGeometry:[2.4,3], deltaD:[1,2] };
+  const mix = input.rightMethod === 'spline-cnn' && ['paper-upper','layered'].includes(input.scene);
+  const rugged = mix && Math.random() < .5;
+  let withinRuggedBands = true;
+  for (const [name, [low, high]] of Object.entries(ruggedBands)) {
+    const field = form.elements.namedItem(name), step = Number(field.step);
+    let min = Number(field.min), max = Number(field.max), draw = Math.random();
+    if (rugged) {
+      min = low; max = high;
+    } else {
+      // Keep the two classes disjoint when all three preceding draws fall in the rugged bands.
+      if (mix && withinRuggedBands && name === 'deltaD') min = high + step;
+      if (name === 'sigmaM') draw = Math.max(draw, Math.random());
+      if (name === 'deltaM') {
+        // A single 80 m wall needs shorter spacing to show as many bends as the 100 m preset.
+        const samples = input.scene === 'layered' && input.wallSide !== 'both' ? 7 : 5;
+        for (let i = 1; i < samples; i++) draw = Math.min(draw, Math.random());
+      }
+    }
+    const count = Math.round((max - min) / step) + 1, previous = Math.round((field.valueAsNumber - min) / step);
+    const skip = previous >= 0 && previous < count;
+    const pick = Math.floor(draw * (count - Number(skip)));
+    field.value = String(min);
+    field.stepUp(skip && pick >= previous ? pick + 1 : pick);
+    input[name] = field.valueAsNumber;
+    withinRuggedBands &&= input[name] >= low && input[name] <= high;
+  }
+}
 async function prepare({single = false, newMap = false} = {}) {
   if (state.connecting || state.sweep || ['running', 'paused'].includes(state.mode)) return;
   let resumeId;
@@ -292,23 +321,7 @@ async function prepare({single = false, newMap = false} = {}) {
     const input = settings();
     if (newMap) {
       input.seed = replaceSeed();
-      for (const field of form.querySelectorAll('.geometry-fields input')) {
-        const min = Number(field.min), step = Number(field.step);
-        const last = Math.round((Number(field.max) - min) / step);
-        const previous = Math.round((field.valueAsNumber - min) / step);
-        // Favor larger, more frequent bends while leaving fine roughness uniformly sampled.
-        let draw = Math.random();
-        if (field.name === 'sigmaM') draw = Math.max(draw, Math.random());
-        if (field.name === 'deltaM') {
-          // A single 80 m wall needs shorter spacing to show as many bends as the 100 m preset.
-          const samples = input.scene === 'layered' && input.wallSide !== 'both' ? 7 : 5;
-          for (let i = 1; i < samples; i++) draw = Math.min(draw, Math.random());
-        }
-        const pick = Math.floor(draw * last);
-        field.value = field.min;
-        field.stepUp(pick >= previous ? pick + 1 : pick);
-        input[field.name] = field.valueAsNumber;
-      }
+      randomizeWallGeometry(input);
     }
     cancel(true); state.pendingInput=input; state.mode = 'running'; state.busy = true;
     const generation = state.generation; controls();

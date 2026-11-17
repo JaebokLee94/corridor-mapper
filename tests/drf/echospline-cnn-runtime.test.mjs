@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rerankEchoSplineCNN } from '../../drf/spline-rerank.mjs';
 import { neuralRuntime } from '../../drf/model-runtime.mjs';
 import { splineCnnProposal, decodeSplineCnn } from '../../drf/echospline-cnn.mjs';
 
@@ -28,15 +27,4 @@ test('a separated modal path is selected independently after the support gap',()
   const y=decodeSplineCnn(logits,anchor);
   assert.ok(Number.isNaN(y[5]));
   for(let j=0;j<n;j++)if(j!==5)assert.ok(Math.abs(y[j]-(j<5?-5:13))<1e-9);
-});
-
-test('an unsupported second height mode preserves the CNN wall and its coverage gap',()=>{
-  const x=Array.from({length:81},(_,i)=>i*.2),anchor=x.map(q=>q<1?NaN:10);
-  const logits=new Float32Array(81*x.length);
-  const points=Array.from({length:8},(_,i)=>[8+i*.02,14,0]);
-  // Seven returns at the flat wall range provide too few independent configurations for a change.
-  const wires=x.slice(0,7).map(q=>({configs:[{pHat_i:[q,0],pHat_j:[q+2,0],paths:[{dHat:2*Math.hypot(10,1)}]}]}));
-  const output=rerankEchoSplineCNN({x,base:anchor,anchor,logits,points,wires});
-  assert.equal(output.accepted,0);
-  assert.deepEqual(output.heights,anchor.map(h=>Number.isFinite(h)?h:null));
 });

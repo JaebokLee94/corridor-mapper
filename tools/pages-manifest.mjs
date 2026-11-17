@@ -8,7 +8,7 @@ const originalDiagnosticFiles = ['diagnostic-ui.mjs', 'diagnostic-profile.mjs', 
 const originalMathFiles = ['latex-LICENSE.txt', 'latex.mjs', 'latex-assets.mjs', 'dom-math.mjs', 'render-math.mjs'].map(path => `drf/${path}`);
 const originalComputeFiles = ['drf/experiment-settings.mjs','drf/echospline.mjs','drf/spline-gpu.mjs','drf/echo-comparison.mjs','drf/paper-preset.mjs','drf/public-measure.mjs','drf/field-reuse.mjs', 'drf/pspt-curvature.mjs', 'drf/pspt-recovery.mjs'];
 export const runtimeFiles = [
-  ...['right-methods','method-label','range-assignment','order-statistic','model-runtime','echospline-cnn','spline-rerank','models/spline-cnn','echoarc-cnn','arc-gpu','arc-gpu-norm','arc-gpu-math','gat-gpr','echospline-gbdt','models/arc','models/gbdt','models/gat','models/kernels'].map(f=>'drf/'+f+'.mjs'),
+  ...['right-methods','method-label','range-assignment','order-statistic','model-runtime','echospline-cnn','models/spline-cnn','echoarc-cnn','arc-gpu','arc-gpu-norm','arc-gpu-math','gat-gpr','echospline-gbdt','models/arc','models/gbdt','models/gat','models/kernels'].map(f=>'drf/'+f+'.mjs'),
   'drf/models/LICENSE.txt',
   ...originalMathFiles, ...originalDiagnosticFiles, ...originalCacheFiles, ...originalComputeFiles,
   'drf.html', 'wall_metrics.js', 'surf/map.mjs', 'surf/exports.mjs',

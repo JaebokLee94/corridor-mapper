@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EchoComparison, estimateFinalMaps } from '../../drf/echo-comparison.mjs';
-import { createSceneGeometry, generateSnapshot } from '../../drf/scenario.mjs';
+import { createSceneGeometry, generateSnapshot, generateScenario } from '../../drf/scenario.mjs';
 import { experimentSettings } from '../../drf/experiment-settings.mjs';
 
 test('final maps equal the last causal outputs for every right-hand method', async () => {
@@ -30,12 +30,22 @@ test('EchoSpline-CNN mirrors wall heights when the measured fit selects the lowe
   await model.loadModel();
   for(const w of wires)model.fixedSpline.observe(w);
   const {fit}=model.fixedSpline.estimate(true);
-  model.cnnWires=wires;
   const upper=model.correctedMap({fit},wires[0].configs.length).curves;
   assert.ok(upper.flat().length>0);
   const mirror=([x,y])=>[x,-y];
-  model.cnnWires=wires.map(w=>({...w,configs:w.configs.map(c=>({...c,pHat_i:mirror(c.pHat_i),pHat_j:mirror(c.pHat_j)}))}));
   const lower=model.correctedMap({fit:{...fit,sign:-1,heights:fit.heights.map(y=>-y),prior:fit.prior.map(y=>-y),
     points:fit.points.map(([x,y,s])=>[x,-y,-s]),matches:fit.matches.map(m=>({...m,g:-m.g}))}},wires[0].configs.length).curves;
   assert.deepEqual(lower,upper.map(line=>line.map(mirror)));
+});
+
+test('the spline-cnn method returns the frozen single CNN path on a separated peak',async()=>{
+  const input=experimentSettings({scene:'paper-upper',wallSide:'upper',seed:3566396965,vehicles:3,snapshots:100,
+    sigmaP:0,sigmaD:.4,sigmaM:10.6,deltaM:16,sigmaDGeometry:2.77,deltaD:2,roughness:0,lambda0:0,
+    cellStep:.02,resolution:.6,specular:true,grid:150,band:4,perimeter:'exact',rightMethod:'spline-cnn'});
+  const scene=await generateScenario(input);
+  const {guarded}=await estimateFinalMaps(input,scene.domain,scene.wire);
+  const peak=guarded.curves.flat().find(([x])=>Math.abs(x-79.8)<1e-8);
+  assert.ok(peak);
+  // The frozen PyTorch path is 39.92031 m here; range rescoring instead returned 50.079 m.
+  assert.ok(Math.abs(peak[1]-39.92031)<.002, String(peak));
 });

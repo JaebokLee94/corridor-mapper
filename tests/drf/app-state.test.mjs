@@ -192,6 +192,35 @@ test('New map & run draws a different seed and four valid wall settings, preserv
   } finally {window.close();}
 });
 
+test('EchoSpline-CNN new wall draw assigns exactly half of its probability to the rugged geometry bands',async()=>{
+  const {JSDOM}=await import('jsdom');
+  const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{runScripts:'outside-only'});
+  try {
+    const form=window.document.getElementById('settings');window.form=form;
+    window.eval(section('function randomizeWallGeometry(', 'async function prepare('));
+    const fields=['sigmaM','deltaM','sigmaDGeometry','deltaD'];
+    for(const [scene,wallSide] of [['paper-upper','upper'],['layered','lower'],['layered','upper'],['layered','both']]){
+      function drawGeometry(previous,draws) {
+        const input={scene,wallSide,rightMethod:'spline-cnn'};
+        fields.forEach((key,i)=>{form.elements[key].value=String(previous[i]);});
+        window.Math.random=()=>{assert.ok(draws.length);return draws.shift();};
+        window.randomizeWallGeometry(input);
+        assert.equal(draws.length,0);
+        return fields.map(key=>{
+          assert.ok(form.elements[key].validity.valid);assert.equal(input[key],form.elements[key].valueAsNumber);
+          return input[key];
+        });
+      }
+      const almostOne=1-Number.EPSILON;
+      assert.deepEqual(drawGeometry([6,20,.33,4],[.5-Number.EPSILON,0,0,0,0]),[9,4,2.4,1]);
+      assert.deepEqual(drawGeometry([9,4,2.4,1],[0,...Array(4).fill(almostOne)]),[12,10,3,2]);
+      // Even the most rugged ordinary draw cannot overlap the four-dimensional rugged class.
+      const samples=scene==='layered' && wallSide!=='both' ? 7 : 5;
+      assert.deepEqual(drawGeometry([6,20,.33,4],[.5,almostOne,almostOne,...Array(samples).fill(0),almostOne,0]),[12,4,3,3]);
+    }
+  }finally{window.close();}
+});
+
 test('an explicit Run cannot duplicate or cancel a different active server job',async()=>{
   const state={server:{},mode:'idle'},notices=[];
   const context=vm.createContext({state,controls(){},notice:message=>notices.push(message),
