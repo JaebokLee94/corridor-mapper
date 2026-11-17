@@ -144,7 +144,9 @@ body[data-state="paused"] .run-state::before { background:var(--color-baseline);
 .main-grid { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:18px; align-items:start; }
 .view { min-width:0; background:var(--color-surface-1); border:1px solid var(--color-line); border-radius:var(--radius); overflow:hidden; }
 .map-heading,.vlabel { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; }
-.map-heading { padding-bottom:12px; flex-wrap:wrap; }
+/* Match the map names to the first button's text, including its 1px border. */
+.map-panel { --heading-inset:18px; --method-button-inset:12px; }
+.map-heading { padding-inline:var(--heading-inset); padding-bottom:12px; flex-wrap:wrap; }
 .map-heading-main { display:flex; align-items:center; flex-wrap:wrap; gap:4px 16px; min-width:0; }
 .map-heading-main h2 { flex:none; }
 .map-heading .map-toolbar { margin-left:auto; }
@@ -152,7 +154,7 @@ body[data-state="paused"] .run-state::before { background:var(--color-baseline);
 .map-toolbar { display:flex; flex-shrink:0; gap:4px; }
 .map-toolbar button { min-width:32px; min-height:32px; padding:4px 8px; background:transparent; }
 .method-switch { display:flex; gap:4px; align-items:center; flex-wrap:wrap; padding:0 18px 12px; }
-.method-switch button { color:var(--color-ink-muted); border-color:transparent; min-height:36px; font-weight:500; }
+.method-switch button { padding-inline:var(--method-button-inset); color:var(--color-ink-muted); border-color:transparent; min-height:36px; font-weight:500; }
 .method-switch button[aria-pressed="true"] { color:var(--color-accent); background:var(--color-surface-3); border-color:var(--color-surface-3); }
 .method-switch .view-meta { margin-left:auto; }
 .view-body { min-width:0; position:relative; }
@@ -353,10 +355,11 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .workspace[data-sidebar="collapsed"] .workbench-title { flex-wrap:wrap; gap:8px; }
   .workspace[data-sidebar="collapsed"] .workbench-title > .sidebar-controls + div { flex-basis:100%; }
   .workbench-title p { max-width:42ch; }
-  .map-heading { padding:14px; flex-wrap:wrap; gap:10px; }
+  .map-panel { --heading-inset:14px; --method-button-inset:9px; }
+  .map-heading { padding:14px var(--heading-inset); flex-wrap:wrap; gap:10px; }
   .map-toolbar button { min-height:34px; }
   .method-switch { padding:0 14px 12px; gap:4px; }
-  .method-switch button { padding:7px 9px; }
+  .method-switch button { padding:7px var(--method-button-inset); }
   .method-switch .view-meta { width:100%; margin:4px 0 0; }
   #mapCanvas { height:300px; }
   .legend-row { padding:10px 14px 6px; }
@@ -395,7 +398,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .map-pair:not([data-mode="compare"]) { grid-template-columns:minmax(0,1fr); }
 .map-pane { min-width:0; min-height:0; display:grid; grid-template-rows:minmax(28px,auto) minmax(0,1fr); }
 .map-pane+.map-pane { border-left:1px solid var(--color-line); }
-.map-pane-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; min-width:0; padding:3px var(--plot-right-inset,16px) 3px 10px; }
+.map-pane-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; min-width:0; padding:3px var(--plot-right-inset,16px) 3px calc(var(--heading-inset) + var(--method-button-inset) + 1px); }
 .map-heading-details { display:flex; flex-wrap:wrap; align-items:center; gap:0 8px; min-width:0; }
 /* Move the readout into the empty margin above the map's top gridline. */
 .compute-timer { align-self:end; position:relative; top:13px; z-index:1; font-size:15px; line-height:1; }
@@ -456,10 +459,11 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .dashboard .inspector { grid-column:1/-1; grid-row:4; }
   .main-grid { min-height:0; grid-template-columns:minmax(0,1fr) 300px; gap:12px; align-items:stretch; }
   #viewMain { display:grid; min-height:0; grid-template-rows:auto minmax(0,1fr) auto; }
-  .map-heading { padding:8px 12px 4px; flex-wrap:wrap; gap:4px 12px; }
+  .map-panel { --heading-inset:12px; --method-button-inset:8px; }
+  .map-heading { padding:8px var(--heading-inset) 4px; flex-wrap:wrap; gap:4px 12px; }
   .map-heading h2 { font-size:15px; }
   .method-switch { padding:0 12px 6px; gap:2px; }
-  .method-switch button { min-height:30px; padding:5px 8px; }
+  .method-switch button { min-height:30px; padding:5px var(--method-button-inset); }
   .method-switch .view-meta { width:auto; margin:0 0 0 auto; }
   .map-pane .view-body,.field-grid .view-body { min-height:0; }
   #mapCanvas,#baselineCanvas,.field-grid .dashboard-canvas,#metricChart { position:absolute; inset:0; height:100%; }
