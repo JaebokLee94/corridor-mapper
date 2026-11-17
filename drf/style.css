@@ -189,7 +189,7 @@ body:has(#showProxy:not(:checked)) [data-layer="proxy"],body:has(#showTruth:not(
 .results-panel { padding:18px 18px 12px; }
 .results-heading h2 { margin-bottom:4px; }
 .results-heading>span { display:block; font-size:14px; }
-#evaluationNote { margin:12px 0; }
+#evaluationNote { margin:12px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
 .comparison-table th { text-align:left; font-weight:400; }
 .comparison-table thead th { color:var(--color-ink-muted); font-weight:600; padding:7px 0; border-bottom:1px solid var(--color-line); }

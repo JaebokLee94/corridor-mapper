@@ -579,7 +579,7 @@ function renderSelected() {
   const visibleEvaluation=independently?{methods:{[first]:methodEvaluation(first),[second]:methodEvaluation(second)}}:evaluation;
   renderInterpolationPanel($, state.method, kind, visibleEvaluation, fmt, legacy, right.name, rightSolo);
   if(state.method==='compare' && independently && methodT(first)!==methodT(second))
-    $('evaluationNote').textContent='0.4 m tolerance · methods updating independently';
+    $('evaluationNote').textContent='0.4 m tolerance · different snapshots';
   for (const [method,prefix] of [[first,''],[second,'b']]) {
     const e=methodEvaluation(method) ?? (!independently && method==='guarded' ? evaluation : null);
     const node=(name)=>$(prefix ? prefix+name[0].toUpperCase()+name.slice(1) : name);
