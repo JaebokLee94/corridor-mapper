@@ -2,7 +2,8 @@ import { createArcNormalization } from './arc-gpu-norm.mjs?v=20261117-arc-reside
 
 // Eigen multiplies a row of spatial positions by [input channel, output channel]
 // weights at each kernel offset. Preserve its separate FP32 reductions before adding the bias.
-function convolutionShader(inChannels, outChannels, kernel, dilation) {
+function convolutionShader(inChannels, outChannels, kernel, dilation, broadcast = false) {
+  const sample=c=>broadcast?'cellValue':`image[base + ${c}]`;
   const packed = outChannels !== 1;
   const value = packed ? 'vec4f' : 'f32', bits = packed ? 'vec4u' : 'u32';
   return `
@@ -32,20 +33,21 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     for (var kx = 0; kx < ${kernel}; kx++) {
       let dx = (kx - ${kernel >> 1}) * ${dilation}; let sx = x + dx;
       if (sx < 0 || sx >= i32(cfg.width)) { continue; }
-      let base = (u32(sy) * cfg.width + u32(sx)) * ${inChannels}u;
+      ${broadcast?'let cellValue = image[u32(sy) * cfg.width + u32(sx)];':
+        `let base = (u32(sy) * cfg.width + u32(sx)) * ${inChannels}u;`}
       let weight = u32(ky * ${kernel} + kx) * ${inChannels}u * groups + channel;
       var even = ${value}(0); var c = 0u;
       ${packed ? `// Eigen uses two accumulators over complete groups of four spatial positions.
       if (x - max(0, -dx) < ((i32(cfg.width) - abs(dx)) / 4) * 4) {
         var odd = ${value}(0);
         for (; c < ${inChannels - inChannels % 8}u; c += 2u) {
-          even = rounded(even + rounded(image[base + c] * weights[weight + c * groups]));
-          odd = rounded(odd + rounded(image[base + c + 1u] * weights[weight + (c + 1u) * groups]));
+          even = rounded(even + rounded(${sample('c')} * weights[weight + c * groups]));
+          odd = rounded(odd + rounded(${sample('c + 1u')} * weights[weight + (c + 1u) * groups]));
         }
         even = rounded(even + odd);
       }` : ''}
       for (; c < ${inChannels}u; c++) {
-        even = rounded(even + rounded(image[base + c] * weights[weight + c * groups]));
+        even = rounded(even + rounded(${sample('c')} * weights[weight + c * groups]));
       }
       outputValue = rounded(outputValue + even);
     }
@@ -64,10 +66,38 @@ fn addValue(acc: vec2f, v: f32) -> vec2f {
   return vec2f(sum,roundValue(acc.y + error));
 }`;
 
-// Input [NY,NX,9] is the current prefix's votes. Keep the fixed encoder/decoder
-// tensors on the GPU, recording one compute pass per dirty prefix; only its
-// [NY,NX] wall logits cross back to the worker.
-async function residentNetwork(device,runtime,layers,layout,input,readback) {
+// Each GPU column stores its count followed by (row, lower, centre, upper) in row order.
+// A column with more peaks triggers a full-logit readback, including every tied plateau.
+export const arcPeakCapacity=4;
+function peakShader(w,h,threshold){
+  const limit=Math.log(threshold/(1-threshold)),f32=new Float32Array([limit]),bits=new Uint32Array(f32.buffer);
+  // The original threshold comparison promotes the binary32 logit to binary64.
+  if(f32[0]<limit)bits[0]+=f32[0]<0?-1:1;
+  return `
+@group(0) @binding(0) var<storage,read> image: array<f32>;
+@group(0) @binding(1) var<storage,read_write> peaks: array<f32>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) gid: vec3u) {
+  let x=gid.x;
+  if(x>=${w}u){return;}
+  let start=x*${1+4*arcPeakCapacity}u;
+  var n=0u;
+  for(var y=1u;y<${h-1}u;y++){
+    let i=y*${w}u+x;
+    let z=image[i]; let lo=image[i-${w}u]; let hi=image[i+${w}u];
+    if(z<bitcast<f32>(0x${bits[0].toString(16)}u)||z<lo||z<hi){continue;}
+    if(y>=2u && z<image[i-${2*w}u]){continue;}
+    if(y+2u<${h}u && z<image[i+${2*w}u]){continue;}
+    if(n==${arcPeakCapacity}u){n++;break;}
+    let base=start+1u+4u*n;
+    peaks[base]=f32(y); peaks[base+1u]=lo; peaks[base+2u]=z; peaks[base+3u]=hi;
+    n++;
+  }
+  peaks[start]=f32(n);
+}`;
+}
+
+// The training transform produces one normalized scalar repeated across the nine channels.
+async function residentNetwork(device,runtime,layers,layout,pipelineLayout,input,readback) {
   const usage=GPUBufferUsage,commands=[];
   const tensor=(h,w,c)=>({h,w,c,buffer:device.createBuffer({size:h*w*c*4,usage:usage.STORAGE|usage.COPY_SRC})});
   const bind=(layout,buffers)=>device.createBindGroup({layout,entries:buffers.map((buffer,binding)=>({binding,resource:{buffer}}))});
@@ -79,9 +109,12 @@ async function residentNetwork(device,runtime,layers,layout,input,readback) {
   function dispatch(pipeline,group,n) {
     commands.push(pass=>{pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(n/64));});
   }
+  const first=layers.get('e0.0');
+  const firstModule=device.createShaderModule({label:'EchoArc broadcast input',code:convolutionShader(first.inc,first.out,first.k,first.dilation,true)});
+  const firstPipeline=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:firstModule,entryPoint:'main'}});
   function conv(v,name){
     const layer=layers.get(name), out=tensor(v.h,v.w,layer.out);
-    dispatch(layer.pipeline,bind(layout,[v.buffer,layer.weights,layer.bias,out.buffer,params(v.w,v.h)]),
+    dispatch(name==='e0.0'?firstPipeline:layer.pipeline,bind(layout,[v.buffer,layer.weights,layer.bias,out.buffer,params(v.w,v.h)]),
       out.h*out.w*(layer.out===1?1:layer.out/4));
     return out;
   }
@@ -126,16 +159,29 @@ ${pool?strictPoolSum:''}
   const d=await block(await reshape(c,b),'d1');
   const e=await block(await reshape(d,a),'d0');
   const logits=conv(e,'out'),size=logits.h*logits.w*4;
-  return async values=>{
-    device.queue.writeBuffer(input,0,values);
-    const encoder=device.createCommandEncoder(), pass=encoder.beginComputePass();
-    for(const encode of commands)encode(pass);
-    pass.end();
-    encoder.copyBufferToBuffer(logits.buffer,0,readback,0,size);
+  const stride=1+4*arcPeakCapacity,peaks=tensor(1,logits.w,stride),peakBytes=logits.w*stride*4;
+  const module=device.createShaderModule({label:'EchoArc wall peaks',code:peakShader(logits.w,logits.h,runtime.data.threshold)});
+  const peakPipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'main'}});
+  const peakGroup=bind(peakPipeline.getBindGroupLayout(0),[logits.buffer,peaks.buffer]);
+  async function read(encoder,src,n){
+    encoder.copyBufferToBuffer(src,0,readback,0,n);
     device.queue.submit([encoder.finish()]);
-    await readback.mapAsync(GPUMapMode.READ,0,size);
-    try { return new Float32Array(readback.getMappedRange(0,size)).slice(); }
-    finally {readback.unmap();}
+    await readback.mapAsync(GPUMapMode.READ,0,n);
+    try{return new Float32Array(readback.getMappedRange(0,n)).slice();}
+    finally{readback.unmap();}
+  }
+  return async (values,full=false)=>{
+    device.queue.writeBuffer(input,0,values);
+    const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();
+    for(const encode of commands)encode(pass);
+    if(!full){
+      pass.setPipeline(peakPipeline);pass.setBindGroup(0,peakGroup);pass.dispatchWorkgroups(Math.ceil(logits.w/64));
+    }
+    pass.end();
+    if(full)return read(encoder,logits.buffer,size);
+    const packet=await read(encoder,peaks.buffer,peakBytes);
+    for(let x=0;x<logits.w;x++)if(packet[x*stride]>arcPeakCapacity)return read(device.createCommandEncoder(),logits.buffer,size);
+    return packet;
   };
 }
 
@@ -160,7 +206,7 @@ export async function createArcGpu(runtime, referenceLogits) {
         .map((type,binding) => ({binding,visibility: GPUShaderStage.COMPUTE,buffer:{type}}))});
     const pipelineLayout = device.createPipelineLayout({bindGroupLayouts:[layout]});
     const pipelines = new Map(), layers = new Map();
-    let completedCalls = 0, completedNetworks = 0, lost = false;
+    let completedCalls = 0, completedNetworks = 0, overflowReadbacks = 0, inputBytes = 0, outputBytes = 0, lost = false;
     device.lost.then(() => { lost = true; });
     function frozen(array) {
       const b = buffer(array.byteLength, usage.STORAGE | usage.COPY_DST);
@@ -177,13 +223,16 @@ export async function createArcGpu(runtime, referenceLogits) {
       }
       const buffers = [input,frozen(w.values),frozen(runtime.weights[name+'.bias'].values),output,params];
       const bindGroup = device.createBindGroup({layout,entries: buffers.map((b,binding) => ({binding,resource:{buffer:b}}))});
-      layers.set(name,{inc,out,dilation,weights:buffers[1],bias:buffers[2],bindGroup,pipeline: await pipelines.get(code)});
+      layers.set(name,{inc,out,k,dilation,weights:buffers[1],bias:buffers[2],bindGroup,pipeline: await pipelines.get(code)});
     }));
     const {vendor='',architecture='',device: id='',description=''} = adapter.info ?? {};
     const backend = {
       adapterInfo: {vendor,architecture,device:id,description},
       get completedCalls() { return completedCalls; },
-      get completedReadbacks() { return completedCalls-10*completedNetworks; },
+      get completedReadbacks() { return completedCalls-10*completedNetworks+overflowReadbacks; },
+      get overflowReadbacks() { return overflowReadbacks; },
+      get inputBytes() { return inputBytes; },
+      get outputBytes() { return outputBytes; },
       get completedNetworks() { return completedNetworks; },
       destroy() { device.destroy(); },
       async convolution(v,name,dilation=1) {
@@ -221,21 +270,25 @@ export async function createArcGpu(runtime, referenceLogits) {
     completedCalls = 0;
     try {
       if (!referenceLogits) return backend;
-      const run = await residentNetwork(device,runtime,layers,layout,input,readback);
+      const run = await residentNetwork(device,runtime,layers,layout,pipelineLayout,input,readback);
       // Every shipping backend must reproduce the frozen model on a nonzero, sparse
       // input before accepting live snapshots. Calibration is outside estimator timing.
-      const probe = new Float32Array(144*201*9);
+      const plane=new Float32Array(144*201), probe = new Float32Array(plane.length*9);
       for (let x=0;x<201;x++) {
         const y=60+Math.floor(15*Math.sin(x*.08)), i=(y*201+x)*9;
-        probe.fill(Math.fround(.25+(x%23)/31),i,i+9);
+        plane[i/9]=Math.fround(.25+(x%23)/31);probe.fill(plane[i/9],i,i+9);
       }
-      const expected=referenceLogits(probe), actual=await run(probe);
+      const expected=referenceLogits(probe), actual=await run(plane,true);
       if (!expected.every((value,i)=>Object.is(value,actual[i]))) return backend;
+      backend.compact = true;
       backend.network = async values=>{
         if(lost)throw new Error('EchoArc GPU device lost');
-        const logits=await run(values);
+        const packet=await run(values);
         completedCalls+=11;completedNetworks++;
-        return logits;
+        inputBytes+=values.byteLength;
+        outputBytes+=201*(1+4*arcPeakCapacity)*4;
+        if(packet.length===144*201){overflowReadbacks++;outputBytes+=packet.byteLength;}
+        return packet;
       };
     } catch {
       // Keep the calibrated per-layer backend when a resident pipeline is unsupported.

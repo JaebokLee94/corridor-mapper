@@ -10,10 +10,10 @@ import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
 import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
-import { echoProtocol } from './echo-comparison.mjs?v=20261117-spline-gpu';
+import { echoProtocol } from './echo-comparison.mjs?v=20261117-arc-compact';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-spline-gpu';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-arc-compact';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-spline-fields';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -125,7 +125,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261117-spline-fields';
+  const revision = '20261117-arc-compact';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -570,7 +570,11 @@ function renderSelected() {
           if(method==='echoSpline'){
             label.title+=` Estimator: ${result.backend}. GPU stationary-path searches: ${result.gpuCallsThisStep??0} this update, ${result.gpuCalls??0} total.`;
           }else label.title+=` Inference: ${result.backend}. WebGPU convolutions completed: ${result.gpuCalls}.`;
-          if(result.gpuMode==='resident')label.title+=` Group normalization and SiLU: GPU. Wall-logit readbacks: ${result.gpuReadbacks}.`;
+          if(result.gpuMode==='resident'){
+            label.title+=' Group normalization and SiLU: GPU.';
+            if(result.gpuCompact)label.title+=` Wall-candidate readbacks: ${result.gpuReadbacks-result.gpuOverflowReadbacks}. Full-map fallbacks: ${result.gpuOverflowReadbacks}. Input/output bytes: ${result.gpuInputBytes}/${result.gpuOutputBytes}.`;
+            else label.title+=` Wall-logit readbacks: ${result.gpuReadbacks}.`;
+          }
           if(result.gpuAdapter)label.title+=` Adapter: ${result.gpuAdapter}.`;
         }
       }

@@ -2,7 +2,7 @@ import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
 import { modelData, neuralRuntime } from './model-runtime.mjs';
 import { correctFit } from './echospline-gbdt.mjs';
 import { GatGpr } from './gat-gpr.mjs';
-import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261117-arc-resident';
+import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261117-arc-compact';
 import { createSplineGpu } from './spline-gpu.mjs?v=20261117-spline-gpu';
 import { EchoSpline } from './echospline.mjs?v=20261117-spline-gpu';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
@@ -122,6 +122,8 @@ export class EchoComparison {
           return {...map,ms:performance.now()-start,backend:gpu?'WebGPU':'CPU WASM',
             gpuCalls:gpu?.completedCalls??this.model.gpuCallsBeforeLoss??0,
             ...(gpu?.network?{gpuMode:'resident',gpuReadbacks:gpu.completedReadbacks}:{}),
+            ...(gpu?.compact?{gpuCompact:true,gpuInputBytes:gpu.inputBytes,gpuOutputBytes:gpu.outputBytes,
+              gpuOverflowReadbacks:gpu.overflowReadbacks}:{}),
             gpuAdapter:gpu?Object.values(gpu.adapterInfo).filter(Boolean).join(' '):''};
         });
       }else result=this.model.step(wire);

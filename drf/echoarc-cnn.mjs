@@ -1,6 +1,6 @@
 // Input is the current measured Tx/Rx packet. Accumulate 64 upper-arc normal directions
 // per ellipse on the training grid (0.5 m). Output curves use the checkpoint's fixed cutoff.
-import { createArcGpu } from './arc-gpu.mjs?v=20261117-arc-resident';
+import { arcPeakCapacity, createArcGpu } from './arc-gpu.mjs?v=20261117-arc-compact';
 
 const NX=201, NY=144, STEP=.5, Y0=-20;
 const normals=Array.from({length:64},(_,i)=>{
@@ -38,15 +38,46 @@ function concatenate(a,b){
   }
   return {data,h:a.h,w:a.w,c};
 }
+function peakY(y,lo,z,hi){
+  const d=Math.min(.5,Math.max(-.5,.5*(lo-hi)/Math.min(-1e-7,lo-2*z+hi)));
+  return Y0+STEP*(y+d);
+}
 export function decodeArc(logits,cut){
-  let active=[];const done=[],limit=Math.log(cut/(1-cut));
-  for(let x=0;x<NX;x++){
+  const limit=Math.log(cut/(1-cut));
+  return linkColumns(x=>{
     const ys=[];
     for(let y=1;y<NY-1;y++){
       const i=y*NX+x,z=logits[i],lo=logits[i-NX],hi=logits[i+NX];
       if(z<limit||z<lo||z<hi||y>=2&&z<logits[i-2*NX]||y+2<NY&&z<logits[i+2*NX])continue;
-      const d=Math.min(.5,Math.max(-.5,.5*(lo-hi)/Math.min(-1e-7,lo-2*z+hi)));
-      ys.push(Y0+STEP*(y+d));
+      ys.push(peakY(y,lo,z,hi));
+    }
+    return ys;
+  });
+}
+export function decodeArcPeaks(packet,cut){
+  if(packet.length===NX*NY)return decodeArc(packet,cut);
+  const stride=1+4*arcPeakCapacity;
+  return linkColumns(x=>{
+    const start=x*stride,ys=[];
+    for(let k=0;k<packet[start];k++){
+      const i=start+1+4*k;
+      ys.push(peakY(packet[i],packet[i+1],packet[i+2],packet[i+3]));
+    }
+    return ys;
+  });
+}
+function linkColumns(column){
+  let active=[];const done=[];
+  for(let x=0;x<NX;x++){
+    const ys=column(x);
+    if(active.length<=1&&ys.length<=1){
+      const line=active[0];
+      if(line&&ys.length&&Math.abs(line.at(-1)[1]-ys[0])<=1.25)line.push([x*STEP,ys[0]]);
+      else{
+        if(line?.length>=3)done.push(line);
+        active=ys.length?[[[x*STEP,ys[0]]]]:[];
+      }
+      continue;
     }
     const pairs=[];
     active.forEach((line,i)=>ys.forEach((v,j)=>{const d=Math.abs(line.at(-1)[1]-v);if(d<=1.25)pairs.push([d,i,j]);}));
@@ -66,8 +97,15 @@ const half=Math.f16round??(v=>{
 });
 export class EchoArcCNN{
   constructor(runtime){
-    this.rt=runtime;this.votes=new Float32Array(9*NX*NY);this.input=new Float32Array(this.votes.length);
+    this.rt=runtime;this.votes=new Float32Array(9*NX*NY);this.plane=new Float32Array(NX*NY);
     this.changed=new Uint8Array(NX*NY);this.changedCells=[];this.pairs=0;this.scalePairs=0;
+  }
+  get input(){
+    if(!this.denseInput){
+      const dense=this.denseInput=new Float32Array(this.votes.length);
+      for(let i=0;i<this.plane.length;i++)if(this.plane[i]!==0)dense.fill(this.plane[i],9*i,9*i+9);
+    }
+    return this.denseInput;
   }
   observe(wire){
     this.pairs=wire.configs.length;
@@ -88,7 +126,7 @@ export class EchoArcCNN{
     }
   }
   updateInput(){
-    const input=this.input,scaleChanged=this.pairs!==this.scalePairs;
+    const plane=this.plane,scaleChanged=this.pairs!==this.scalePairs;
     const n=scaleChanged?NX*NY:this.changedCells.length;
     let dirty=!this.curves;
     for(let j=0;j<n;j++){
@@ -99,7 +137,11 @@ export class EchoArcCNN{
       const gain=Math.log1p(mass*27/this.pairs)/mass;let total=0;
       for(let k=0;k<9;k++)total+=half(this.votes[i+k]*gain);
       const value=this.pairs?Math.fround(total/9):NaN;
-      if(!Object.is(value,input[i])){input.fill(value,i,i+9);dirty=true;}
+      if(!Object.is(value,plane[cell])){
+        plane[cell]=value;
+        this.denseInput?.fill(value,i,i+9);
+        dirty=true;
+      }
     }
     this.scalePairs=this.pairs;this.changedCells.length=0;
     return dirty;
@@ -129,7 +171,9 @@ export class EchoArcCNN{
       this.curves=undefined;
       try{
         if(this.gpu.network){
-          this.curves=decodeArc(await this.gpu.network(this.input),this.rt.data.threshold);
+          const cut=this.rt.data.threshold;
+          this.curves=this.gpu.compact?decodeArcPeaks(await this.gpu.network(this.plane),cut):
+            decodeArc(await this.gpu.network(this.input),cut);
         }else{
           const layers=this.layers(this.input);
           let layer=layers.next();

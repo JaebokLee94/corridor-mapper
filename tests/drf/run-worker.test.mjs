@@ -186,13 +186,17 @@ test('independent learned estimators produce the same prefix outputs as a joint 
     for(const wire of scene.wire){
       const reference=joint.step(wire);
       assert.deepEqual(numerical(left.stepLeft(wire)),numerical(reference.echoSpline));
-      const {stageTotalsMs,backend,gpuCalls,gpuAdapter,gpuMode,gpuReadbacks,...single}=await right.stepSide('guarded',wire);
+      const {stageTotalsMs,backend,gpuCalls,gpuAdapter,gpuMode,gpuReadbacks,gpuCompact,gpuInputBytes,gpuOutputBytes,gpuOverflowReadbacks,...single}=await right.stepSide('guarded',wire);
       if(rightMethod==='arc'){
         assert.ok(backend==='CPU WASM'||backend==='WebGPU');
         assert.equal(typeof gpuAdapter,'string');
         if(backend==='WebGPU')assert.ok(gpuCalls>0);
         else assert.equal(gpuCalls,0);
-        if(gpuMode==='resident')assert.equal(gpuCalls,11*gpuReadbacks);
+        if(gpuMode==='resident')assert.equal(gpuCalls,11*(gpuReadbacks-(gpuOverflowReadbacks??0)));
+        if(gpuCompact){
+          assert.ok(gpuInputBytes>0 && gpuOutputBytes>0);
+          assert.ok(Number.isInteger(gpuOverflowReadbacks) && gpuOverflowReadbacks>=0);
+        }
       }
       assert.deepEqual(numerical(single),numerical(reference.guarded));
       if(rightMethod==='gat'){

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { experimentSettings } from '../../drf/experiment-settings.mjs';
 import { createSceneGeometry,generateSnapshot } from '../../drf/scenario.mjs';
 import { neuralRuntime } from '../../drf/model-runtime.mjs';
+import { arcPeakCapacity } from '../../drf/arc-gpu.mjs';
 import { GatGpr } from '../../drf/gat-gpr.mjs';
-import { EchoArcCNN } from '../../drf/echoarc-cnn.mjs';
+import { EchoArcCNN, decodeArc, decodeArcPeaks } from '../../drf/echoarc-cnn.mjs';
 
 test('learned maps preserve their prefix and reuse a map across an empty measurement',async()=>{
   const input=experimentSettings({scene:'paper-upper',vehicles:3,snapshots:16,seed:3296639392,sigmaDGeometry:3});
@@ -84,4 +85,44 @@ test('Arc awaits convolution results and recovers the current measured prefix af
   assert.equal(model.gpu,null);
   assert.equal(model.gpuCallsBeforeLoss,11);
   await compare(link);
+});
+
+test('compact peak packets preserve boundary rows, sub-cell positions, and equal-height ties',()=>{
+  const w=201,logits=new Float32Array(w*144).fill(-8);
+  const stride=1+4*arcPeakCapacity,packet=new Float32Array(w*stride);
+  // Both plateau cells are peaks. After interpolation they have the same y.
+  // Keep both curves and their original column/link order.
+  for(let x=0;x<4;x++){
+    logits[w+x]=1;
+    logits[40*w+x]=logits[41*w+x]=2;
+    logits[141*w+x]=0;logits[142*w+x]=3;
+    packet.set([4,1,-8,1,-8,40,-8,2,2,41,2,2,-8,142,0,3,-8],stride*x);
+  }
+  const curves=decodeArcPeaks(packet,.7);
+  assert.deepEqual(curves,decodeArc(logits,.7));
+  assert.equal(curves.length,4);
+  assert.deepEqual(curves[1],curves[2]);
+  assert.deepEqual(curves[3][3],[1.5,-20+.5*(142-2/7)]);
+  const plateau=new Float32Array(w*144).fill(1);
+  assert.equal(decodeArcPeaks(plateau,.7).length,142);
+});
+
+test('compact input broadcasts the normalized scalar exactly and recovers after GPU loss',async()=>{
+  const rt=await neuralRuntime('arc'),model=new EchoArcCNN(rt),reference=new EchoArcCNN(rt);
+  const wire={configs:[{pHat_i:[4,2],pHat_j:[8,3],paths:[{dHat:12}]}]};
+  const expected=reference.step(wire);
+  let checked=false;
+  model.gpu={compact:true,completedCalls:0,network(plane){
+    assert.equal(plane.length,201*144);
+    assert.equal(model.denseInput,undefined);
+    for(let i=0;i<plane.length;i++){
+      for(let c=0;c<9;c++)assert.equal(plane[i],reference.input[i*9+c]);
+    }
+    checked=true;throw new Error('GPU lost');
+  },destroy(){}};
+  model.observe(wire);
+  assert.deepEqual(await model.estimateAsync(),expected);
+  assert.ok(checked);
+  assert.deepEqual(model.input,reference.input);
+  assert.deepEqual(model.step(wire),reference.step(wire));
 });
