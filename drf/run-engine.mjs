@@ -22,7 +22,7 @@ const sides=['echoSpline','guarded'];
 function localMethod(side,input,domain){
   const estimator=new EchoComparison(input,domain,side);
   return {ready:side==='guarded'?estimator.loadModel():Promise.resolve(),
-    step:wire=>side==='echoSpline'?estimator.stepLeft(wire):estimator.stepRight(wire),close(){}};
+    step:wire=>estimator.stepSide(side,wire),close(){}};
 }
 
 /** Each estimator consumes the same ordered wires on its own worker and clock.

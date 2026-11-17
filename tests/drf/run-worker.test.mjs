@@ -177,7 +177,12 @@ test('independent learned estimators produce the same prefix outputs as a joint 
     for(const wire of scene.wire){
       const reference=joint.step(wire);
       assert.deepEqual(numerical(left.stepLeft(wire)),numerical(reference.echoSpline));
-      assert.deepEqual(numerical(right.stepRight(wire)),numerical(reference.guarded));
+      const {stageTotalsMs,...single}=right.stepSide('guarded',wire);
+      assert.deepEqual(numerical(single),numerical(reference.guarded));
+      if(rightMethod==='gat'){
+        assert.ok(stageTotalsMs.gat>=0 && stageTotalsMs.gpr>=0);
+        if(wire.t===scene.wire.length)assert.ok(stageTotalsMs.gat>0 && stageTotalsMs.gpr>0);
+      }else assert.equal(stageTotalsMs,undefined);
     }
   }
 });

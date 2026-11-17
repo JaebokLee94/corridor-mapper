@@ -547,6 +547,8 @@ function renderSelected() {
       const ms=sample?.totalMs??0;
       label.textContent=`Snapshot ${t}/${scenario.input.snapshots} · ${ms<1000?Math.round(ms)+' ms':(ms/1000).toFixed(2)+' s'} total`;
       label.title='Cumulative estimator compute time through the displayed snapshot. Excludes measurement generation, evaluation and drawing.';
+      const stages=result?.stageTotalsMs;
+      if(stages)label.title+=` GAT inference: ${(stages.gat/1000).toFixed(3)} s. GPR fit and prediction: ${(stages.gpr/1000).toFixed(3)} s. Other processing: ${(Math.max(0,ms-stages.gat-stages.gpr)/1000).toFixed(3)} s.`;
     }
     view.set({...display,frame:independently?sample:frame,truth:scenario?.truth[t-1],wire:scenario?.wire[t-1],
       history:scenario?.wire.slice(0,t),observed:methodEvaluation(method)?.observed,bridges:visibleBridges(method),

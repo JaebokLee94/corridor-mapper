@@ -84,6 +84,7 @@ function nearby(point,bins,minimum,core){
 export class GatGpr{
   constructor(rt,vehicles){
     this.rt=rt;this.vehicles=vehicles;this.pairs=new Map();
+    this.gatMs=0;this.gprMs=0;
     this.bins=new Map();this.core=new Set();this.inliers=new Set();this.changed=false;
     this.previousPoints=[];this.curve=[];
     const nodes=Array.from({length:12},(_,i)=>i);
@@ -106,7 +107,9 @@ export class GatGpr{
       pair.ranges=ranges;pair.tracks=tracks;
     }
     if(graphs.length){
+      const start=performance.now();
       const pr=predict(graphs,this.rt,this.neighbors);
+      this.gatMs+=performance.now()-start;
       owners.forEach((o,i)=>{
         const k=i*8;for(let j=2;j<8;j+=2)if(Math.hypot(pr[k+j]-pr[k+j-2],pr[k+j+1]-pr[k+j-1])>2)return;
         const point=[pr[k],pr[k+1]],key=Math.floor(point[0]/.9)+','+Math.floor(point[1]/.9);
@@ -130,7 +133,9 @@ export class GatGpr{
     if(this.vehicles>=10&&points.length>1500)points=gpSubset(points.length).map(i=>points[i]);
     if(lo===this.lo&&hi===this.hi&&points.length===this.previousPoints.length&&points.every((p,i)=>p===this.previousPoints[i]))return;
     const q=Float64Array.from({length:1200},(_,i)=>lo+(hi-lo)*i/1199);
+    const start=performance.now();
     const y=this.rt.call('gaussianProcess',[points.map(p=>p[0]),points.map(p=>p[1]),q],q.length,[points.length],Float64Array);
+    this.gprMs+=performance.now()-start;
     this.curve=Array.from(q,(x,i)=>[x,y[i]]);
     this.previousPoints=points;this.lo=lo;this.hi=hi;
   }

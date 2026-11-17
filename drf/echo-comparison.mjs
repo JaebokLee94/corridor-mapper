@@ -82,6 +82,12 @@ export class EchoComparison {
   correctedMap(result,pairCount) {
     return {curves:result.fit?correctFit(result.fit,this.tree,pairCount,8):[],candidates:[]};
   }
+  stepSide(side,wire) {
+    if(side==='echoSpline')return this.stepLeft(wire);
+    const result=this.stepRight(wire);
+    if(this.id==='gat')result.stageTotalsMs={gat:this.model.gatMs,gpr:this.model.gprMs};
+    return result;
+  }
   step(wire) {
     const shared=this.fixedSpline===this.spline;
     const echoSpline=this.stepLeft(wire,shared);
