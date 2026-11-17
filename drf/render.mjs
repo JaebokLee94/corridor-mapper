@@ -210,6 +210,8 @@ export class DrfMap {
     // Fixed world grid: zoom changes its pixel spacing, never its 10 m interval.
     const xs=metreTicks(lo[0],hi[0]),ys=metreTicks(lo[1],hi[1]);
     if (target===this.canvas) {
+      // Keep the header timer flush with the plotted frame when equal-scale fitting narrows it.
+      if(geometry)this.canvas.closest?.('.map-pane')?.style?.setProperty?.('--plot-right-inset',(width-box.x-box.w)+'px');
       this.box=box;
       this.canvas.dataset.view=JSON.stringify({xmin:lo[0],xmax:hi[0],ymin:lo[1],ymax:hi[1],pixelsPerMetreX:c.scaleX,pixelsPerMetreY:c.scaleY,aspectMode:this.state.aspectMode ?? 'fill',plotWidth:box.w,plotHeight:box.h,auto:this.auto});
     }

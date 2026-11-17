@@ -143,11 +143,13 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
     map.fit(true);map.paint(canvas,2);assert.equal(map.camera.cx,30,'full view returns to the public domain');
     map.fit();canvas.clientWidth=1700;canvas.clientHeight=350;
     const card={style:{},parentElement:{clientWidth:1702},firstElementChild:{offsetHeight:68}},body={style:{}};
-    canvas.closest=()=>card;canvas.parentElement=body;
+    const insets=new Map(),pane={style:{setProperty:(key,value)=>insets.set(key,value)}};
+    canvas.closest=selector=>selector==='.map-pane'?pane:card;canvas.parentElement=body;
     gridSegments.length=0;
     map.set({...display,mode:'geometry',aspectMode:'fill',layers:{showTruth:true}});map.paint(canvas,2);
     assert.deepEqual([card.style,body.style],[{},{}],'RAW fitting must leave CSS frame and plot-body dimensions unchanged');
     const wideView=JSON.parse(canvas.dataset.view);
+    assert.equal(insets.get('--plot-right-inset'),'16px','Timer aligns with the right plot border');
     assert.equal(wideView.plotWidth,1632,'the graph must use the full available panel width');
     assert.equal(wideView.plotHeight,288,'the graph must use the full available panel height');
     assert.equal(wideView.pixelsPerMetreX,wideView.pixelsPerMetreY,'RAW must remain isometric even when fill is requested');

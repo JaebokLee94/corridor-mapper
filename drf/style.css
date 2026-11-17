@@ -395,9 +395,9 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .map-pair:not([data-mode="compare"]) { grid-template-columns:minmax(0,1fr); }
 .map-pane { min-width:0; min-height:0; display:grid; grid-template-rows:minmax(28px,auto) minmax(0,1fr); }
 .map-pane+.map-pane { border-left:1px solid var(--color-line); }
-.map-pane-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; min-width:0; padding:3px 10px; }
+.map-pane-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; min-width:0; padding:3px var(--plot-right-inset,16px) 3px 10px; }
 .map-heading-details { display:flex; flex-wrap:wrap; align-items:center; gap:0 8px; min-width:0; }
-.compute-timer { align-self:start; white-space:nowrap; padding:2px 7px; border:1px solid var(--color-line); border-radius:4px; background:var(--color-surface-2); color:var(--color-ink-muted); font-size:13px; }
+.compute-timer { align-self:start; white-space:nowrap; color:var(--color-ink-muted); font-size:13px; }
 .compute-timer b { margin-left:2px; font-size:15px; }
 .compute-timer b,.compute-time-row td { color:var(--color-ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .method-progress { margin-right:auto; font-size:12px; color:var(--color-ink-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
