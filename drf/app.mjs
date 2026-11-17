@@ -244,7 +244,7 @@ function cancel(clear = false) {
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
   if (clear) {
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
-    state.frameTimes = []; state.methodFrames=null;
+    state.frameTimes = []; state.methodFrames=null; state.joinedComputeMs=null;
     state.measurementLabel=''; state.generatedSnapshots = 0; state.measurementTotal = 0;
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
@@ -386,7 +386,14 @@ async function receiveRunMessage(data, generation) {
           return sample.at;
         });
         state.frameTimes.push(Math.max(...pair));
-      }else state.frameTimes.push(state.next ? state.frameTimes.at(-1) + (now - state.lastFrameAt) : 0);
+      }else {
+        state.frameTimes.push(state.next ? state.frameTimes.at(-1) + (now - state.lastFrameAt) : 0);
+        // Older workers only report estimator durations in the joined frame.
+        state.joinedComputeMs??={};
+        for(const [side,result] of Object.entries(data.frame.methods??{})){
+          state.joinedComputeMs[side]=(state.joinedComputeMs[side]??0)+(result?.ms??NaN);
+        }
+      }
       state.lastFrameAt = now;
       state.frames.push(data.frame); state.evaluations.push(data.evaluation); state.next = data.next;
       if (state.followLive || !state.selected) state.selected = state.frames.length;
@@ -540,13 +547,14 @@ function renderSelected() {
   $('historySecond').parentElement.hidden=echoOnly;
   for(const opt of $('historyMetric').options)opt.disabled=curveView&&!['mapF1','recall','surfacePrecision'].includes(opt.value);
   if($('historyMetric').selectedOptions[0]?.disabled)$('historyMetric').value='mapF1';
+  renderComputeTimes(first,second,selected,independently);
   for(const [view,method,labelId] of [[map,selected,'primaryProgress'],[baselineMap,second,'secondaryProgress']]){
     const t=methodT(method),sample=records[method],result=methodResult(method),label=$(labelId);
     label.hidden=!independently;
     if(independently){
       const ms=sample?.totalMs??0;
-      label.textContent=`Snapshot ${t}/${scenario.input.snapshots} · ${ms<1000?Math.round(ms)+' ms':(ms/1000).toFixed(2)+' s'} total`;
-      label.title='Cumulative estimator compute time through the displayed snapshot. Excludes measurement generation, evaluation and drawing.';
+      label.textContent=`Snapshot ${t}/${scenario.input.snapshots}`;
+      label.title=`Estimator compute time through snapshot ${t}: ${(ms/1000).toFixed(3)} s.`;
       if(Number.isFinite(result?.ms)){
         label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
         if(result.backend){
@@ -604,6 +612,19 @@ function renderSelected() {
   drawComparisonHistory($('metricChart'),history,historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind,legacy,rightSolo);
   renderDiagnostics();
 }
+function renderComputeTimes(first,second,selected,independently){
+  const computeTimes={};
+  for(const method of [first,second]){
+    const ms=independently ? state.methodFrames[method].at(-1)?.totalMs??0
+      : state.frames.length ? state.joinedComputeMs?.[method] : 0;
+    computeTimes[method]=Number.isFinite(ms) ? (ms/1000).toFixed(3)+' s' : '—';
+  }
+  $('primaryTimer').textContent=computeTimes[selected];
+  $('secondaryTimer').textContent=computeTimes[second];
+  $('computeTimeValue').textContent=computeTimes[first];
+  $('bComputeTimeValue').textContent=computeTimes[second];
+}
+
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
 function sweepDiagnosticWorker() {
   return diagnosticWorker ??= makeWorker('eval');

@@ -397,6 +397,8 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .map-pane+.map-pane { border-left:1px solid var(--color-line); }
 .map-pane-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; padding:2px 18px; }
 .map-pane-heading:has(.method-progress:not([hidden])) { flex-wrap:wrap; column-gap:10px; row-gap:0; }
+.compute-timer { position:absolute; top:4px; right:8px; padding:1px 5px; border-radius:3px; background:var(--color-plot-bg); color:var(--color-ink-muted); font-size:12px; pointer-events:none; }
+.compute-timer b,.compute-time-row td { color:var(--color-ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .method-progress { margin-right:auto; font-size:12px; color:var(--color-ink-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .map-name { margin:0; font-size:15px; color:var(--color-accent); }
 .map-units { white-space:nowrap; font-size:12px; }

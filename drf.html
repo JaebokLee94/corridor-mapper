@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261115-independent" />
+  <link rel="stylesheet" href="drf/style.css?v=20261117-compute-time" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -104,12 +104,12 @@
         <div class="main-grid">
           <figure class="view map-panel" id="viewMain" aria-label="Wall reconstruction">
             <figcaption class="map-heading"><div class="map-heading-main"><div class="method-switch" role="group" aria-label="Displayed estimator"><button id="methodCompare" type="button" aria-pressed="true" data-method="compare">Compare both</button><button id="methodGuarded" title="EchoSpline · Multi-echo B-spline fit" type="button" aria-pressed="false" data-method="echoSpline">EchoSpline</button><button id="methodBaseline" title="WM-P · Wall mapping with pair tracking" type="button" aria-pressed="false" data-method="guarded">WM-P</button></div></div><div class="map-toolbar" aria-label="Map controls"><button id="fitView" type="button">Fit domain</button><button id="zoomOut" type="button" aria-label="Zoom map out">−</button><button id="zoomIn" type="button" aria-label="Zoom map in">+</button><button id="firstSnapshot" type="button">Reset view</button></div></figcaption>
-            <div class="map-pair" id="mapPair" data-mode="compare"><div class="map-pane"><div class="map-pane-heading"><h3 class="map-name"><span id="primaryMapName">EchoSpline</span></h3><span id="primaryProgress" class="method-progress" hidden></span><span class="view-meta map-units"><span data-tex="x,\,y">x, y</span> in metres · 1:1</span></div><div class="view-body"><canvas id="mapCanvas" class="dashboard-canvas" role="img" aria-label="Candidate map. The results panel shows metrics for the selected view.">Canvas support is required to display the map. Numerical results are available in the comparison table.</canvas></div></div><div class="map-pane" id="baselinePane"><div class="map-pane-heading"><h3 class="map-name baseline-name"><span id="secondaryMapName" hidden>WM-P</span><select id="rightMethod" name="rightMethod" form="settings" aria-label="Right-hand method" autocomplete="off">
+            <div class="map-pair" id="mapPair" data-mode="compare"><div class="map-pane"><div class="map-pane-heading"><h3 class="map-name"><span id="primaryMapName">EchoSpline</span></h3><span id="primaryProgress" class="method-progress" hidden></span><span class="view-meta map-units"><span data-tex="x,\,y">x, y</span> in metres · 1:1</span></div><div class="view-body"><span class="compute-timer" role="timer" aria-label="Estimator compute time" title="Cumulative wall estimation time for this run">Compute <b id="primaryTimer">0.000 s</b></span><canvas id="mapCanvas" class="dashboard-canvas" role="img" aria-label="Candidate map. The results panel shows metrics for the selected view.">Canvas support is required to display the map. Numerical results are available in the comparison table.</canvas></div></div><div class="map-pane" id="baselinePane"><div class="map-pane-heading"><h3 class="map-name baseline-name"><span id="secondaryMapName" hidden>WM-P</span><select id="rightMethod" name="rightMethod" form="settings" aria-label="Right-hand method" autocomplete="off">
             <option value="gbdt">EchoSpline + GBDT</option>
             <option value="gat">GAT + GPR</option>
             <option value="wmp" selected>WM-P</option>
             <option value="arc">EchoArc-CNN</option>
-          </select></h3><span id="secondaryProgress" class="method-progress" hidden></span><span class="view-meta map-units"><span data-tex="x,\,y">x, y</span> in metres · 1:1</span></div><div class="view-body"><canvas id="baselineCanvas" class="dashboard-canvas" role="img" aria-label="WM-P candidate map, sharing the EchoSpline camera"></canvas></div></div></div>
+          </select></h3><span id="secondaryProgress" class="method-progress" hidden></span><span class="view-meta map-units"><span data-tex="x,\,y">x, y</span> in metres · 1:1</span></div><div class="view-body"><span class="compute-timer" role="timer" aria-label="Estimator compute time" title="Cumulative wall estimation time for this run">Compute <b id="secondaryTimer">0.000 s</b></span><canvas id="baselineCanvas" class="dashboard-canvas" role="img" aria-label="WM-P candidate map, sharing the EchoSpline camera"></canvas></div></div></div>
             <div class="legend-row" aria-label="Map legend"><ul class="legend"><li data-layer="proxy"><span class="swatch swatch-supported" aria-hidden="true"></span>Fitted / supported</li><li id="centreLegend" data-layer="proxy" hidden><span class="swatch swatch-centre" aria-hidden="true"></span>Linked centre</li><li data-layer="proxy" title="Dotted lines show inferred connections. Extended centre spline checks new curve sections against measured ranges. Extended linear can span wider gaps and cross real openings."><span class="swatch swatch-interpolated" aria-hidden="true"></span>Interpolated</li><li data-layer="proxy"><span class="swatch swatch-pending" aria-hidden="true"></span>Held</li><li data-layer="proxy"><span class="swatch swatch-contradicted" aria-hidden="true"></span>Rejected</li><li data-layer="truth"><span class="swatch swatch-truth" aria-hidden="true"></span>True wall</li><li data-layer="vehicles"><span class="swatch swatch-track" aria-hidden="true"></span>Trajectory</li><li data-layer="ellipses"><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipse</li></ul><span id="ellipseStats" class="view-meta">No measurements yet</span></div>
           </figure>
           <section class="view results-panel" aria-labelledby="resultsTitle">
@@ -133,6 +133,7 @@
               <tr><th scope="row">P95 distance <small>m</small></th><td id="p95Value">—</td><td id="bP95Value">—</td></tr>
               <tr><th scope="row">Off-wall centres <small>%</small></th><td id="offwallValue">—</td><td id="bOffwallValue">—</td></tr>
               <tr><th scope="row" title="Centre precision when each candidate was first supported, including subsequently corrected decisions.">First support <small>%</small></th><td id="firstPrecisionValue">—</td><td id="bFirstPrecisionValue">—</td></tr>
+              <tr class="compute-time-row"><th scope="row" title="Sum of this estimator’s snapshot update times for the current run. Excludes measurement generation, evaluation and drawing.">Compute time</th><td id="computeTimeValue">0.000 s</td><td id="bComputeTimeValue">0.000 s</td></tr>
               <tr class="count-row"><th scope="row">Supported</th><td id="supportedValue">0</td><td id="bSupportedValue">0</td></tr>
               <tr><th scope="row">Held / unselected</th><td id="pendingValue">0</td><td id="bPendingValue">0</td></tr>
               <tr><th scope="row">Rejected</th><td id="contradictedValue">0</td><td id="bContradictedValue">—</td></tr>
@@ -181,8 +182,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261117-arc-webgpu';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261117-arc-webgpu';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261117-arc-webgpu&timer=1';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261117-arc-webgpu&timer=1';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>
