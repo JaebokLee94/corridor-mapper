@@ -131,7 +131,7 @@ function createLocalWorker(name) {
 function warmSelectedInput(input) {
   // Download/decode one selected raw bank record, never generate measurements or
   // start a run. Local Node computation already reads this bank from disk.
-  if (globalThis.__drfOffline || document.querySelector('meta[name="echomap-compute"]')?.content === 'server'
+  if (globalThis.__drfOffline || useComputeServer
     || ['running', 'paused'].includes(state.mode) || state.sweep) return;
   if (!form.checkValidity()) { runPreloader.dispose(); return; }
   try { runPreloader.schedule(input ?? settings()); } catch { runPreloader.dispose(); }
@@ -933,7 +933,24 @@ history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialI
     $('provenanceCore').textContent = `${p.coreHash.slice(0, 12)}`; renderSweep(); })
   .catch(error => notice(`Could not load validation metadata: ${error.message}`));
 controls(); renderSelected();
-if (document.querySelector('meta[name="echomap-compute"]')?.content === 'server') {
+const serverPage = location.protocol !== 'file:' && document.querySelector('meta[name="echomap-compute"]')?.content === 'server';
+const useComputeServer = serverPage && new URLSearchParams(location.search).get('compute') !== 'browser';
+if (serverPage) {
+  const link = $('computeRoute');
+  link.textContent = useComputeServer ? 'Open browser computation' : 'Open background server computation';
+  link.title = 'Open the same scene in a new tab';
+  const updateLink = () => {
+    const url = new URL(location.href);
+    if (useComputeServer) url.searchParams.set('compute', 'browser');
+    else url.searchParams.delete('compute');
+    link.href = url.href;
+  };
+  updateLink();
+  window.addEventListener('hashchange', updateLink);
+  link.addEventListener('click', updateLink);
+  link.hidden = false;
+}
+if (useComputeServer) {
   state.connecting = true; controls(); notice('Connecting to the compute server.');
   connectComputeServer().then(config => {
     state.server = config; state.connecting = false; controls();

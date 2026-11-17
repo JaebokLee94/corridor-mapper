@@ -76,6 +76,33 @@ test('bare visits select every bank seed uniformly while explicit seeds and relo
   }
 });
 
+test('local computation links preserve the scene and query, and leave public and offline viewers alone',async()=>{
+  const {JSDOM}=await import('jsdom');
+  const html=readFileSync(new URL('../../drf.html',import.meta.url),'utf8');
+  for (const [base,server,usesServer] of [
+    ['http://127.0.0.1:9174/drf.html?interpolation=off',true,true],
+    ['http://127.0.0.1:9174/drf.html?interpolation=off&compute=browser',true,false],
+    ['https://example.org/drf.html?compute=browser',false,false],
+    ['file:///path/drf.html?compute=browser',true,false],
+  ]) {
+    const dom=new JSDOM(html,{url:base+'#first',runScripts:'outside-only'});
+    try {
+      const w=dom.window,doc=w.document,link=doc.getElementById('computeRoute');
+      if(server)doc.querySelector('meta[name="echomap-compute"]').content='server';
+      const actual=w.eval('const $=id=>document.getElementById(id);'+section('const serverPage =','if (useComputeServer) {')+'useComputeServer');
+      assert.equal(actual,usesServer);
+      assert.equal(link.hidden,!server || base.startsWith('file:'));
+      if(link.hidden){assert.equal(link.hasAttribute('href'),false);continue;}
+      w.location.hash='changed';w.dispatchEvent(new w.HashChangeEvent('hashchange'));
+      const next=new URL(link.href);
+      assert.equal(next.origin,w.location.origin);assert.equal(next.pathname,w.location.pathname);
+      assert.equal(next.hash,'#changed');assert.equal(next.searchParams.get('interpolation'),'off');
+      assert.equal(next.searchParams.get('compute'),usesServer?'browser':null);
+      assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener');
+    } finally { dom.window.close(); }
+  }
+});
+
 test('server page load remains idle for saved completed, active and paused comparisons or sweeps',async()=>{
   for (const job of [null,...['comparison','sweep'].flatMap(mode=>['done','running','paused','cancelled','failed'].map(status=>({id:'saved-job',mode,status,input:{seed:42},jobs:[{seed:42}]})))]) {
     const state={mode:'idle',frames:[],sweep:null},notices=[];
@@ -86,7 +113,8 @@ test('server page load remains idle for saved completed, active and paused compa
       fillSettings:()=>assert.fail('Saved job must not overwrite selected settings on page load'),
       $:()=>assert.fail('Page load must not open the sweep dialog'),
     });
-    vm.runInContext(section('if (document.querySelector(\'meta[name="echomap-compute"]\')','// Switching the displayed method'),context);
+    context.useComputeServer = true;
+    vm.runInContext(section('if (useComputeServer) {','// Switching the displayed method'),context);
     await new Promise(resolve=>setImmediate(resolve));
     assert.equal(state.mode,'idle');assert.equal(state.frames.length,0);assert.equal(state.sweep,null);
     assert.equal(state.connecting,false);assert.equal(state.server.job,job);
