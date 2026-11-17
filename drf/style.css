@@ -404,7 +404,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .compute-timer { align-self:end; position:relative; top:13px; z-index:1; font-size:15px; line-height:1; }
 .compute-timer,.compute-time-row td { color:var(--color-ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .method-progress { margin-right:auto; font-size:12px; color:var(--color-ink-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.map-name { max-width:100%; margin:0; font-size:15px; color:var(--color-accent); }
+.map-name { max-width:100%; margin:0; font-size:18px; color:var(--color-accent); }
 .baseline-name { color:var(--color-baseline); }
 #baselineCanvas { height:clamp(290px,24vw,430px); }
 .workbench-footer { display:flex; align-items:center; flex-wrap:wrap; gap:8px 24px; min-width:0; }
@@ -552,7 +552,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 
 #rightMethod {
   font:inherit; color:var(--color-baseline); field-sizing:content; width:auto; max-width:100%;
-  height:24px; padding:2px 4px; border:1px solid transparent; border-radius:4px;
+  height:auto; line-height:1.25; padding:2px 4px; border:1px solid transparent; border-radius:4px;
   background-color:transparent; cursor:pointer;
 }
 #rightMethod:hover, #rightMethod:focus-visible { border-color:currentColor; }
