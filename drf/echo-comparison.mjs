@@ -1,10 +1,12 @@
-import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
-import { modelData, neuralRuntime } from './model-runtime.mjs';
+import { rightMethods } from './right-methods.mjs?v=20261117-spline-cnn';
+import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261117-spline-cnn';
+import { splineCnnProposal } from './echospline-cnn.mjs?v=20261117-spline-cnn';
+import { rerankEchoSplineCNN } from './spline-rerank.mjs?v=20261117-spline-cnn';
 import { correctFit } from './echospline-gbdt.mjs';
 import { GatGpr } from './gat-gpr.mjs';
 import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261117-arc-compact';
 import { createSplineGpu } from './spline-gpu.mjs?v=20261117-spline-gpu';
-import { EchoSpline } from './echospline.mjs?v=20261117-spline-gpu';
+import { EchoSpline } from './echospline.mjs?v=20261117-spline-cnn';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
 import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
@@ -30,7 +32,9 @@ export function echoProtocol(input={}) {
     score:'robust one-to-one multi-echo range fit',tuning:{id:'single-wall-multiecho',certified:false}},
     guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded
       : {...rightMethods[input.rightMethod],id:input.rightMethod,threshold:input.rightMethod==='arc'?0.7:null,
-        training:'Frozen three-vehicle upper-wall checkpoint',revision:'20261115'}};
+        ...(input.rightMethod==='spline-cnn'
+          ? {training:'Upper-wall CNN with three vehicles. Candidate selector trained with three and ten vehicles at 0.4 m range noise.',revision:'20261117-range-rerank'}
+          : {training:'Frozen three-vehicle upper-wall checkpoint',revision:'20261115'})}};
 }
 
 export class EchoComparison {
@@ -43,7 +47,8 @@ export class EchoComparison {
     const splineOptions={domain,upper:input.scene==='paper-upper',spacing:input.echoKnotM,support:input.echoSupportM,stationaryCandidates};
     if(side!=='guarded')this.spline=new EchoSpline(splineOptions);
     if(side==='echoSpline')return;
-    if(this.id==='gbdt')this.fixedSpline=this.spline && (input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
+    if(this.id==='spline-cnn')this.cnnWires=[];
+    if(this.id==='gbdt'||this.cnnWires)this.fixedSpline=this.spline && (input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
       ? this.spline : new EchoSpline({...splineOptions,spacing:2,support:8});
     if(this.id==='wmp'){
       const {parameters,refinement,clustering}=this.protocol.guarded;
@@ -59,7 +64,8 @@ export class EchoComparison {
       else this.splineGpu=gpu;
     }
     if(this.side==='echoSpline' || this.closed)return;
-    if(this.id==='gbdt')this.tree=await modelData('gbdt');
+    if(this.cnnWires)[this.tree,this.cnn]=await Promise.all([modelData('gbdt'),neuralRuntime('spline-cnn')]);
+    else if(this.id==='gbdt')this.tree=await modelData('gbdt');
     else if(this.id==='gat')this.model=new GatGpr(await neuralRuntime('gat'),this.vehicles);
     else if(this.id==='arc'){
       this.model=new EchoArcCNN(await neuralRuntime('arc'));
@@ -111,7 +117,8 @@ export class EchoComparison {
       this.evidence.add(wire);result=wmpFrame(rows,start,true,this.evidence);
     }else{
       wire=validateMeasuredSnapshot(wire);
-      if(this.id==='gbdt'){
+      if(this.fixedSpline){
+        this.cnnWires?.push(wire);
         const f=sharedFit??this.fixedSpline.step(wire,true);
         result=this.correctedMap(f,wire.configs.length);
       }else if(this.useGpu){
@@ -132,7 +139,25 @@ export class EchoComparison {
     return {...result,ms:performance.now()-start};
   }
   correctedMap(result,pairCount) {
-    return {curves:result.fit?correctFit(result.fit,this.tree,pairCount,8):[],candidates:[]};
+    if(!result.fit)return {curves:[],candidates:[]};
+    let fit=result.fit,wires=this.cnnWires;
+    const flip=wires && fit.sign<0;
+    if(flip){
+      // Express the selected lower wall in the upper-wall coordinates used in training.
+      fit={...fit,heights:fit.heights.map(y=>-y),prior:fit.prior.map(y=>-y),
+        points:fit.points.map(([x,y,slope])=>[x,-y,-slope]),matches:fit.matches.map(m=>({...m,g:-m.g}))};
+      wires=wires.map(w=>({configs:w.configs.map(c=>({...c,pHat_i:[c.pHat_i[0],-c.pHat_i[1]],pHat_j:[c.pHat_j[0],-c.pHat_j[1]]}))}));
+    }
+    const curves=correctFit(fit,this.tree,pairCount,8);
+    if(!wires || !curves.length)return {curves,candidates:[]};
+    const {base,anchor,logits}=splineCnnProposal(this.cnn,fit,curves);
+    const {heights}=rerankEchoSplineCNN({x:fit.x,base,anchor,logits,points:fit.points,wires});
+    const mapped=curves.map(line=>line.map(([x])=>{
+      const y=heights[Math.round((x-fit.x[0])/.2)];
+      if(!Number.isFinite(y))throw new Error('EchoSpline-CNN lost a supported wall sample');
+      return [x,flip?-y:y];
+    }));
+    return {curves:mapped,candidates:[]};
   }
   stepSide(side,wire) {
     if(side==='echoSpline')return this.stepLeft(wire);
@@ -168,6 +193,7 @@ export async function estimateFinalMaps(input,domain,wires,stationaryCandidates)
         estimator.wmp.observe(wire);
         estimator.evidence.add(wire);
       }else if(estimator.fixedSpline){
+        estimator.cnnWires?.push(wire);
         if(!shared)estimator.fixedSpline.observe(wire);
       }else estimator.model.observe(wire);
     }

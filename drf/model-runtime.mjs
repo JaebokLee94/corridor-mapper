@@ -1,6 +1,9 @@
 // Each worker loads only the chosen model. The file:// build supplies the same assets in its worker blob.
 export async function modelData(name) {
-  return globalThis.__echoModelData?.[name] ?? (await import(new URL('./models/'+name+'.mjs', import.meta.url))).default;
+  if(globalThis.__echoModelData?.[name])return globalThis.__echoModelData[name];
+  const asset=new URL('./models/'+name+'.mjs',import.meta.url);
+  if(name==='kernels')asset.searchParams.set('v','20261117-convolution-xy');
+  return (await import(asset)).default;
 }
 const bytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 export async function neuralRuntime(name) {

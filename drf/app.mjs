@@ -1,4 +1,4 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261117-spline-gpu';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261117-spline-cnn';
 import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-compact-gbdt';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
@@ -9,11 +9,11 @@ import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.m
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
-import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
-import { echoProtocol } from './echo-comparison.mjs?v=20261117-arc-compact';
+import { rightMethods } from './right-methods.mjs?v=20261117-spline-cnn';
+import { echoProtocol } from './echo-comparison.mjs?v=20261117-spline-cnn';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-arc-compact';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261117-spline-cnn';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-spline-fields';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -125,7 +125,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261117-arc-compact';
+  const revision = '20261117-spline-cnn';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -137,7 +137,7 @@ function warmSelectedInput(input) {
   try { runPreloader.schedule(input ?? settings()); } catch { runPreloader.dispose(); }
 }
 function createWorker(name, options = {}) {
-  if (name === 'run' && state.server && (options.resumeId || state.server.independentMethods)) return createServerRunWorker(state.server, options);
+  if (name === 'run' && state.server && (options.resumeId || supportsServerRun(options.input))) return createServerRunWorker(state.server, options);
   if (name === 'run') return runPreloader.take(options.input) ?? createLocalWorker(name);
   return createLocalWorker(name);
 }
@@ -201,8 +201,11 @@ function controls() {
   const backend=state.scenario?.measurementBackend;
   const source={'public-dgx-cuda':'H200 paths','dgx-cuda':'H200 paths','dgx-cuda-physical':'H200 paths','local-physical-cache':'Saved paths','saved-physical-paths':'Saved paths','dgx-physical-cache':'Saved H200 paths','cpu-fallback':'CPU paths','browser-fallback':'Browser paths',browser:'Browser paths'}[backend];
   if(source) $('runState').textContent += ' · '+source;
-  else if (state.server && (!state.pendingInput || state.server.independentMethods)) $('runState').textContent += ' · Server';
+  else if (supportsServerRun(state.pendingInput)) $('runState').textContent += ' · Server';
   $('newSeed').disabled = active || sweeping;
+}
+function supportsServerRun(input) {
+  return state.server?.independentMethods && (!input?.rightMethod || state.server.rightMethods?.includes(input.rightMethod));
 }
 function renderExportControls() {
   const comparison = state.valid && state.frames.length > 0, sweep = state.sweepRuns.length > 0;
@@ -736,11 +739,6 @@ $('rightMethod').addEventListener('change', () => {
   if(rerun)void prepare();
 });
 form.addEventListener('change', () => { state.sweepRuns = []; notice('Parameters changed. Run again to compare methods.'); cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
-$('rightMethod').addEventListener('change', () => {
-  const rerun=state.frames.length>0;
-  form.dispatchEvent(new Event('change'));
-  if(rerun)void prepare();
-});
 form.addEventListener('change', () => warmSelectedInput());
 $('timeSlider').oninput = () => {
   if (['running', 'paused'].includes(state.mode)) { $('timeSlider').value = state.selected; return; }

@@ -1,4 +1,4 @@
-import { EchoComparison } from './echo-comparison.mjs?v=20261117-arc-compact';
+import { EchoComparison } from './echo-comparison.mjs?v=20261117-spline-cnn';
 // Only declared range noise and measured snapshots cross the inference boundary.
 let estimator,side;
 globalThis.onmessage=async ({data})=>{

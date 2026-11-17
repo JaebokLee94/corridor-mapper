@@ -16,19 +16,25 @@ void multiply(const float *a,const float *b,float *out,int rows,int inner,int co
 }
 
 // NHWC image; weights in [kernel row, kernel column, input channel, output channel] order.
-void convolution(const float *image,const float *weights,const float *bias,float *out,
-                 int height,int width,int in,int channels,int kernel,int dilation) {
+void convolutionXY(const float *image,const float *weights,const float *bias,float *out,
+                 int height,int width,int in,int channels,int kernel,int dilationY,int dilationX) {
     Map<RowF> result(out,height*width,channels);
     result.rowwise() = Map<const RowVectorXf>(bias,channels);
     for (int ky=0;ky<kernel;ky++) for (int kx=0;kx<kernel;kx++) {
-        int dx=(kx-kernel/2)*dilation,dy=(ky-kernel/2)*dilation;
+        int dx=(kx-kernel/2)*dilationX,dy=(ky-kernel/2)*dilationY;
         int begin=std::max(0,-dx),count=width-std::abs(dx);
+        if(count<=0) continue;
         Map<const RowF> w(weights+(ky*kernel+kx)*in*channels,in,channels);
         for (int y=std::max(0,-dy);y<std::min(height,height-dy);y++) {
             Map<const RowF> src(image+((y+dy)*width+begin+dx)*in,count,in);
             result.middleRows(y*width+begin,count).noalias() += src*w;
         }
     }
+}
+
+void convolution(const float *image,const float *weights,const float *bias,float *out,
+                 int height,int width,int in,int channels,int kernel,int dilation) {
+    convolutionXY(image,weights,bias,out,height,width,in,channels,kernel,dilation,dilation);
 }
 
 // GP on measured GAT reflection points. Maximize the zero-mean RBF log marginal

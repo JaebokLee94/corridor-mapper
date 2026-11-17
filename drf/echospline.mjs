@@ -257,7 +257,7 @@ function* fit(observations,points,sign,grid,details,stationaryCandidates){
   for(let j=0;j<x.length;j++){if(near[j]<=support)run.push([x[j],state.heights[j]]);else{if(run.length>=2)curves.push(run);run=[];}}
   if(run.length>=2)curves.push(run);
   return {curves,cost:state.dataLoss/nr,matched:state.count,
-    ...(details?{fit:{points,x,prior:y,heights:state.heights,near,matches}}:{})};
+    ...(details?{fit:{sign,points,x,prior:y,heights:state.heights,near,matches}}:{})};
 }
 export class EchoSpline {
   constructor({domain,upper=false,spacing=2,support=8,stationaryCandidates}={}){
