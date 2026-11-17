@@ -35,6 +35,18 @@ test('PSPT evaluation labels geometry only, independent of truth path classes an
     'Class-specific reflection diagnostics are intentionally separate from candidate accuracy');
 });
 
+test('full-wall metrics distinguish mapped length, off-wall length and observed coverage',()=>{
+  const estimate={...frame(1,[]),curves:[[[0,22],[60,22]],[[0,12],[20,12]]]};
+  const raw=createPSPTEvaluator(scene(),grid).step(estimate).interpolation.rawMap;
+  assert.ok(Math.abs(raw.mapLengthM-80)<1e-9);
+  assert.ok(Math.abs(raw.mapOffWallM-20)<1e-9);
+  assert.ok(Math.abs(raw.mapPrecision-.75)<1e-12);
+  assert.equal(raw.wholeWallRecall,1);
+  const partial=createPSPTEvaluator(scene(),grid).step({...frame(1,[]),curves:[[[29,22],[31,22]]]});
+  assert.equal(partial.recall,1);
+  assert.ok(partial.interpolation.rawMap.wholeWallRecall<.05);
+});
+
 test('future truth is never read and cannot expand the current observed-wall mask', () => {
   const clean = scene(), poison = scene(), f = frame(1, [candidate('1:h', [30, 22])]);
   Object.defineProperty(poison.truth, 1, { get() { throw new Error('future truth read'); } });

@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261117-compute-time" />
+  <link rel="stylesheet" href="drf/style.css?v=20261117-map-metrics" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -133,6 +133,10 @@
               <tr><th scope="row">P95 distance <small>m</small></th><td id="p95Value">—</td><td id="bP95Value">—</td></tr>
               <tr><th scope="row">Off-wall centres <small>%</small></th><td id="offwallValue">—</td><td id="bOffwallValue">—</td></tr>
               <tr><th scope="row" title="Centre precision when each candidate was first supported, including subsequently corrected decisions.">First support <small>%</small></th><td id="firstPrecisionValue">—</td><td id="bFirstPrecisionValue">—</td></tr>
+              <tr><th scope="row" title="Percentage of estimated wall length within 0.4 m of the true wall.">Map precision <small>%</small></th><td id="mapPrecisionValue">—</td><td id="bMapPrecisionValue">—</td></tr>
+              <tr><th scope="row" title="Percentage of all true wall samples within 0.4 m of the estimate, including unobserved walls.">Whole-wall recall <small>%</small></th><td id="wholeWallRecallValue">—</td><td id="bWholeWallRecallValue">—</td></tr>
+              <tr><th scope="row" title="Total length of the displayed reconstruction, counting overlapping estimates separately.">Estimated length <small>m</small></th><td id="mapLengthMValue">—</td><td id="bMapLengthMValue">—</td></tr>
+              <tr><th scope="row" title="Estimated length farther than 0.4 m from the true wall.">Off-wall length <small>m</small></th><td id="mapOffWallMValue">—</td><td id="bMapOffWallMValue">—</td></tr>
               <tr class="compute-time-row"><th scope="row" title="Sum of this estimator’s snapshot update times for the current run. Excludes measurement generation, evaluation and drawing.">Compute time</th><td id="computeTimeValue">0.000 s</td><td id="bComputeTimeValue">0.000 s</td></tr>
               <tr class="count-row"><th scope="row">Supported</th><td id="supportedValue">0</td><td id="bSupportedValue">0</td></tr>
               <tr><th scope="row">Held / unselected</th><td id="pendingValue">0</td><td id="bPendingValue">0</td></tr>
@@ -182,8 +186,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261117-arc-resident&timer=1';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261117-arc-resident&timer=1';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261117-arc-resident&timer=2';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261117-arc-resident&timer=2';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

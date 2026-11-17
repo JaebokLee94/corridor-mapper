@@ -77,10 +77,11 @@ function neighborhood(points) {
 // Use the rendered polyline, split into equal arc-length bins <=5 cm. Each
 // midpoint contributes its bin length to the off-wall total. Both raw endpoints
 // are already covered by the estimated patches. Truth is read only here.
-function mapF1(length, outside, hits, total) {
-  if (!total) return null;
-  const p=length ? Math.max(0,1-outside/length) : 0, r=hits/total;
-  return p+r ? 2*p*r/(p+r) : 0;
+function mapMetrics(length, outside, hits, total) {
+  const precision=length ? Math.max(0,1-outside/length) : null, recall=fraction(hits,total);
+  const p=precision??0, r=recall??0;
+  return {mapPrecision:precision, wholeWallRecall:recall, mapLengthM:length, mapOffWallM:outside,
+    mapF1:!total ? null : p+r ? 2*p*r/(p+r) : 0};
 }
 
 function assessBridges(bridges, shape, onWall, uncovered, observed, full) {
@@ -101,7 +102,7 @@ function assessBridges(bridges, shape, onWall, uncovered, observed, full) {
   const near = interior.length && neighborhood(interior);
   const recovered = near ? uncovered.filter(near).length : 0;
   const allHits = full.hits + recovered + (near ? full.unseenMisses.filter(near).length : 0);
-  return { mapF1:mapF1(full.length+lengthM,full.outside+offWallM,allHits,full.total), count: bridges.length, lengthM, offWallM, falseBridges, observed, recovered,
+  return { ...mapMetrics(full.length+lengthM,full.outside+offWallM,allHits,full.total), count: bridges.length, lengthM, offWallM, falseBridges, observed, recovered,
     missing: uncovered.length - recovered, recall: fraction(observed - uncovered.length + recovered, observed) };
 }
 
@@ -133,7 +134,7 @@ function assessCentres(supported,onWall,observed,raw,gt,mask,bridges,extensions)
   const near=neighborhood(samples);
   let hits=0,allHits=0;
   for(let i=0;i<gt.length;i++) if(near(gt[i])){allHits++;if(mask[i])hits++;}
-  return {mapF1:mapF1(lengthM,offWallM,allHits,gt.length),count:links.length,lengthM,offWallM,falseBridges,missing:observed.length-hits,recall:fraction(hits,observed.length)};
+  return {...mapMetrics(lengthM,offWallM,allHits,gt.length),count:links.length,lengthM,offWallM,falseBridges,missing:observed.length-hits,recall:fraction(hits,observed.length)};
 }
 
 export function createPSPTEvaluator(scenario, grid) {
@@ -175,7 +176,7 @@ export function createPSPTEvaluator(scenario, grid) {
       ? assessBridges([...bridges, ...extendedBridges], 'points', onWall, uncovered, observed.length, full)
       : {...interpolation};
     interpolation.hermite = assessBridges(bridges, 'curve', onWall, uncovered, observed.length, full);
-    const rawMap={mapF1:mapF1(rawLengthM,rawOffWallM,full.hits,full.total),count:0,lengthM:rawLengthM,offWallM:rawOffWallM,falseBridges:0,missing:uncovered.length,recall};
+    const rawMap={...mapMetrics(rawLengthM,rawOffWallM,full.hits,full.total),count:0,lengthM:rawLengthM,offWallM:rawOffWallM,falseBridges:0,missing:uncovered.length,recall};
     interpolation.centre=assessCentres(supported,onWall,observed,rawMap,gt,mask,bridges);
     if(extendedBridges) {
       const links=confirmedExtensions(bridges,extendedBridges).concat(checkedChains);

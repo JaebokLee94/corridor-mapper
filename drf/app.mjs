@@ -7,7 +7,7 @@ import { createDiagnosticView } from './diagnostic-ui.mjs?v=20261112-upper-wmp';
 import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
-import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261115-four-methods';
+import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
 import { rightMethods } from './right-methods.mjs?v=20261115-four-methods';
 import { echoProtocol } from './echo-comparison.mjs?v=20261117-arc-resident';
@@ -125,7 +125,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261117-arc-resident';
+  const revision = '20261117-map-metrics';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -550,16 +550,14 @@ function renderSelected() {
   renderComputeTimes(first,second,selected,independently);
   for(const [view,method,labelId] of [[map,selected,'primaryProgress'],[baselineMap,second,'secondaryProgress']]){
     const t=methodT(method),sample=records[method],result=methodResult(method),label=$(labelId);
-    label.hidden=!independently;
+    label.textContent=result?.backend??(result?'CPU':'');
+    label.hidden=!independently || !label.textContent;
     if(independently){
       const ms=sample?.totalMs??0;
-      label.textContent=`Snapshot ${t}/${scenario.input.snapshots}`;
-      label.title=`Estimator compute time through snapshot ${t}: ${(ms/1000).toFixed(3)} s.`;
+      label.title=`Cumulative estimator time at this point: ${(ms/1000).toFixed(3)} s.`;
       if(Number.isFinite(result?.ms)){
         label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
-        if(method==='echoSpline')label.textContent+=' · CPU';
         if(result.backend){
-          label.textContent+=` · ${result.backend}`;
           label.title+=` Inference: ${result.backend}. WebGPU convolutions completed: ${result.gpuCalls}.`;
           if(result.gpuMode==='resident')label.title+=` Group normalization and SiLU: GPU. Wall-logit readbacks: ${result.gpuReadbacks}.`;
           if(result.gpuAdapter)label.title+=` Adapter: ${result.gpuAdapter}.`;
@@ -579,8 +577,7 @@ function renderSelected() {
   const visibleEvaluation=independently?{methods:{[first]:methodEvaluation(first),[second]:methodEvaluation(second)}}:evaluation;
   renderInterpolationPanel($, state.method, kind, visibleEvaluation, fmt, legacy, right.name, rightSolo);
   if(state.method==='compare' && independently && methodT(first)!==methodT(second))
-    $('evaluationNote').textContent=`0.4 m tolerance · snapshots ${methodT(first)} / ${methodT(second)}`;
-  $('countsHeading').textContent=independently?`Counts & computation · snapshot ${frame?.t??0}`:'Counts & computation';
+    $('evaluationNote').textContent='0.4 m tolerance · methods updating independently';
   for (const [method,prefix] of [[first,''],[second,'b']]) {
     const e=methodEvaluation(method) ?? (!independently && method==='guarded' ? evaluation : null);
     const node=(name)=>$(prefix ? prefix+name[0].toUpperCase()+name.slice(1) : name);
@@ -591,7 +588,13 @@ function renderSelected() {
     for (const [id,status] of [['supportedValue','supported'],['pendingValue','pending'],['contradictedValue','contradicted']])
       node(id).textContent=method==='echoSpline' || method===second && right.curves || (method==='baseline' || method===second && rightId==='wmf') && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
     const completed = interpolationResult(e, kind);
-    const mapScore=interpolationResult(e,interpolate ? kind : 'off')?.mapF1;
+    const shownMap=interpolationResult(e,interpolate ? kind : 'off'), mapScore=shownMap?.mapF1;
+    for(const key of ['mapPrecision','wholeWallRecall']){
+      const value=shownMap?.[key];
+      node(key+'Value').textContent=value==null?'—':fmt(100*value,1);
+    }
+    for(const key of ['mapLengthM','mapOffWallM'])
+      node(key+'Value').textContent=fmt(shownMap?.[key],2);
     node('mapF1Value').textContent=mapScore==null ? '—' : fmt(100*mapScore,1);
     const mapRecall = node('mapRecallValue'), coverage = interpolate ? completed?.recall : e?.recall;
     mapRecall.textContent = coverage == null ? '—' : fmt(100 * coverage, 1);

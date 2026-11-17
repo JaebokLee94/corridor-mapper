@@ -2,7 +2,7 @@ import { experimentSettings as normalizeInput } from './experiment-settings.mjs?
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid, createField } from './field.mjs';
 import { percentile } from './statistics.mjs';
-import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261115-four-methods';
+import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { EchoComparison } from './echo-comparison.mjs?v=20261117-arc-resident';
 
 function summarize(frame, evaluation) {
