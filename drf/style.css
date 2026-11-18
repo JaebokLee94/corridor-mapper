@@ -118,7 +118,8 @@ details[open]>.prop-grid,details[open]>.toggle-list { margin-top:12px; }
 .span-2 { grid-column:1/-1; }
 .field { display:flex; flex-direction:column; min-width:0; gap:6px; }
 .run-section > label.field { flex-direction:row; align-items:center; gap:4px; margin-bottom:8px; }
-.run-section > label.field > span { flex:none; white-space:nowrap; }
+.run-section > label.field > span:first-child { flex:none; white-space:nowrap; font-size:13px; }
+.run-section #computeDevice { font-size:12px; padding-inline:3px; }
 .field>span:first-child { color:var(--color-ink-muted); font-size:14px; line-height:1.35; }
 .field>span small { white-space:nowrap; }
 .seed-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; }
@@ -421,8 +422,6 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .sidebar summary,.sidebar-section>legend,.sidebar .field>span:first-child,.sidebar .note { font-size:var(--sidebar-text); line-height:1.35; }
   .run-section { padding:8px 16px; }
   .sidebar-title { margin-bottom:2px; }
-  .run-section > label.field > span:first-child { font-size:13px; }
-  .run-section #computeDevice { font-size:12px; padding-inline:3px; }
   .sidebar-title h2 { font-size:16px; }
   .sidebar button { min-height:32px; padding-top:5px; padding-bottom:5px; }
   .run-actions { min-height:32px; }
