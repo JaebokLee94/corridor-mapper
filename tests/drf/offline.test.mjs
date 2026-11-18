@@ -41,8 +41,9 @@ test('offline bundle is current and its classic Blob workers preserve the field'
   });
   vm.runInContext(artifact.slice(0, split), context);
   const runtime = context.__drfOffline;
-  for (const path of ['drf/app.mjs', 'drf/render.mjs', 'drf/field.worker.mjs', 'drf/sweep.mjs', 'drf/pspt.mjs', 'drf/pspt.worker.mjs', 'drf/pspt-math.mjs', 'drf/pspt-ridges.mjs', 'build-drf-offline.mjs', 'drf/models/spline-cnn.mjs', 'drf/models/spline-cnn-fast.mjs'])
+  for (const path of ['drf/app.mjs', 'drf/render.mjs', 'drf/field.worker.mjs', 'drf/sweep.mjs', 'drf/pspt.mjs', 'drf/pspt.worker.mjs', 'drf/pspt-math.mjs', 'drf/pspt-ridges.mjs', 'build-drf-offline.mjs', 'drf/models/spline-cnn-fast.mjs'])
     assert.ok(runtime.sourceHashes[path], `Recorded source: ${path}`);
+  assert.equal(runtime.sourceHashes['drf/models/spline-cnn.mjs'],undefined,'Historical teacher weights are not bundled');
   for (const [path, hash] of Object.entries(runtime.sourceHashes))
     assert.equal(createHash('sha256').update(read(path)).digest('hex'), hash, `${path}: run npm run build:drf-offline`);
   assert.deepEqual(JSON.parse(JSON.stringify(runtime.metadata)),
@@ -55,9 +56,11 @@ test('offline bundle is current and its classic Blob workers preserve the field'
     const source = await blobs.get(worker.url).text();
     assert.ok(!source.includes('import.meta'), `${name}: no module metadata dependency`);
     assert.doesNotThrow(() => new vm.Script(source), `${name}: parses as a classic script`);
-    if(['compare','sweep'].includes(name))for(const id of ['spline-cnn','spline-cnn-fast']){
-      const model=JSON.parse(read(`drf/models/${id}.mjs`).toString().slice('export default '.length).trim().replace(/;$/,''));
-      assert.ok(source.includes(JSON.stringify(id)+':'+JSON.stringify(model)),`${name}: embedded ${id} matches its frozen asset`);
+    if(['compare','sweep'].includes(name)){
+      const model=JSON.parse(read('drf/models/spline-cnn-fast.mjs').toString().slice('export default '.length).trim().replace(/;$/,''));
+      assert.ok(source.includes('"spline-cnn-fast":'+JSON.stringify(model)),`${name}: current CNN matches its frozen asset`);
+      const historical=JSON.parse(read('tests/drf/fixtures/echospline-cnn.json')).checkpointSha256;
+      assert.equal(source.includes(historical),false,`${name}: no historical CNN checkpoint`);
     }
   }
   assert.equal(blobs.size, 7);

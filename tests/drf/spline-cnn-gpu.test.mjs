@@ -181,7 +181,8 @@ for(const rightMethod of ['spline-cnn','spline-cnn-fast'])test(`${rightMethod} r
   const first=await model.stepRight(wire(1)),second=await model.stepRight(wire(2));
   assert.equal(first.backend,'WebGPU + CPU');assert.equal(first.gpuCallsThisStep,1);assert.equal(first.gpuCalls,1);
   assert.equal(second.gpuCallsThisStep,1);assert.equal(second.gpuCalls,2);
-  assert.equal(model.cnnConfigs?.length,rightMethod==='spline-cnn'?6:undefined);assert.equal(model.lastT,2);
-  assert.throws(()=>model.stepRight(wire(2)),/consecutive/);assert.equal(model.cnnConfigs?.length,rightMethod==='spline-cnn'?6:undefined);
+  assert.equal(model.id,'spline-cnn-fast');assert.equal(model.protocol.guarded.id,'spline-cnn-fast');
+  assert.equal(model.cnnConfigs,undefined);assert.equal(model.lastT,2);
+  assert.throws(()=>model.stepRight(wire(2)),/consecutive/);assert.equal(model.cnnConfigs,undefined);
   model.close();
 });

@@ -1,4 +1,4 @@
-import {ellipsePerimeter} from './field.mjs?v=20261118-cnn-integrated';
+import {ellipsePerimeter} from './field.mjs?v=20261118-cnn-current';
 
 // Measured configurations only; no scene geometry or evaluation labels.
 // Reflection in y preserves range and horizontal normals for lower walls.

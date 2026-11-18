@@ -1,7 +1,7 @@
 import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 
-import { rightMethods } from './right-methods.mjs?v=20261118-cnn-integrated';
-import { computationDevice } from './compute-device.mjs?v=20261118-cnn-integrated';
+import { rightMethods, canonicalRightMethod } from './right-methods.mjs?v=20261118-cnn-current';
+import { computationDevice } from './compute-device.mjs?v=20261118-cnn-current';
 
 // Keep estimator settings out of the hash, request and cache key of physical measurements.
 export function experimentSettings(raw={}) {
@@ -12,7 +12,7 @@ export function experimentSettings(raw={}) {
   if(raw.computeDevice && raw.computeDevice!=='auto')input.computeDevice=raw.computeDevice;
   if(spacing!==2)input.echoKnotM=spacing;
   if(support!==8)input.echoSupportM=support;
-  const method=raw.rightMethod==='wmf'?'wmp':raw.rightMethod??'wmp';
+  const method=canonicalRightMethod(raw.rightMethod);
   if(!Object.hasOwn(rightMethods,method))throw new RangeError('Unknown right-hand comparison method');
   if(method!=='wmp')input.rightMethod=method;
   return input;

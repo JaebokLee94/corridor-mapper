@@ -1,5 +1,5 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-cnn-integrated';
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-cnn-integrated';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-cnn-current';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-cnn-current';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
@@ -8,16 +8,16 @@ import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
-import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-cnn-integrated';
-import { rightMethods } from './right-methods.mjs?v=20261118-cnn-integrated';
-import { echoProtocol } from './echo-comparison.mjs?v=20261118-cnn-integrated';
+import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-cnn-current';
+import { rightMethods, activeRightMethods, canonicalRightMethod } from './right-methods.mjs?v=20261118-cnn-current';
+import { echoProtocol } from './echo-comparison.mjs?v=20261118-cnn-current';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-cnn-integrated';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261118-cnn-integrated';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-cnn-current';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261118-cnn-current';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
-import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261118-cnn-integrated';
+import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261118-cnn-current';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 
 renderMath();
@@ -109,12 +109,12 @@ function installSidebarControls() {
 function fillSettings(input) {
   for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,echoBackend:'auto',computeDevice:'auto',rightMethod:'wmp',...input})) {
     const field = form.elements.namedItem(key);
-    if(key==='rightMethod' && value==='wmf'){field.value='wmp';continue;}
+    if(key==='rightMethod'){field.value=canonicalRightMethod(value);continue;}
     if (field) field.type === 'checkbox' ? field.checked = value : field.value = String(value);
   }
   $('wallConfiguration').value = input.scene === PAPER_SETTINGS.scene ? input.scene : input.wallSide;
   $('wallGapNote').hidden = input.wallSide !== 'both';
-  if (!state.protocol) renderThresholdProtocol(echoProtocol(input));
+  if (!state.protocol) renderThresholdProtocol(echoProtocol({...input,rightMethod:canonicalRightMethod(input.rightMethod)}));
 }
 function settings() {
   if (Number(form.elements.namedItem('sigmaD').value) === 0) throw new Error('Both methods require a range standard deviation greater than zero. Zero range noise can make the joint pose update singular.');
@@ -123,7 +123,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261118-cnn-integrated';
+  const revision = '20261118-cnn-current';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -569,13 +569,11 @@ function renderSelected() {
   $('primaryMapName').classList.toggle('baseline-name',selected===second);
   $('secondaryMapName').textContent=longName(second);
   const selector=$('rightMethod'),primaryTitle=$('primaryMapName'),secondaryTitle=$('secondaryMapName');
-  $('fastCnnNote').hidden=rightId!=='spline-cnn-fast';
-  if(rightId==='spline-cnn-fast')selector.setAttribute('aria-describedby','fastCnnNote');
-  else selector.removeAttribute('aria-describedby');
+  $('previousCnnNote').hidden=rightId!=='spline-cnn';
   const rightPrimary=state.method===second;
   const title=rightPrimary?primaryTitle:secondaryTitle;
   if(selector.parentElement!==title.parentElement)title.parentElement.append(selector);
-  selector.hidden=legacy || !Object.hasOwn(rightMethods,rightId);
+  selector.hidden=legacy || !activeRightMethods.includes(rightId);
   primaryTitle.hidden=!selector.hidden && rightPrimary;secondaryTitle.hidden=!selector.hidden && !rightPrimary;
   $('baselineCanvas').setAttribute('aria-label',names[1]+' wall estimate, sharing the '+names[0]+' camera');
   $('mapCanvas').setAttribute('aria-label',longName(selected)+' wall estimate');
@@ -828,7 +826,7 @@ for (const button of document.querySelectorAll('[data-tab]')) button.onclick = (
   renderSelected(); renderSweep();
 };
 // Device measurements use the original independent estimator workers, with one active worker.
-for (const [id, method] of Object.entries(rightMethods)) $('deviceBenchmarkMethods').add(new Option(method.name, id));
+for (const id of activeRightMethods) $('deviceBenchmarkMethods').add(new Option(rightMethods[id].name, id));
 function renderDeviceBenchmark(record) {
   const body = $('deviceBenchmarkTable').querySelector('tbody'); body.replaceChildren();
   for (const row of benchmarkDisplayRows(record)) {
@@ -886,7 +884,7 @@ function renderSweep() {
   if (document.hidden || $('sweepPanel').hidden) return;
   const aggregates = aggregateRuns(state.sweepRuns);
   for (const [method, canvas] of [[aggregates.some(row=>row.method==='baseline')?'guarded':'echoSpline','sweepChart'],[aggregates.some(row=>row.method==='baseline')?'baseline':'guarded','sweepBaselineChart']])
-    { const title=aggregates.find(r=>r.method===method)?.protocol?.name ?? ({echoSpline:'EchoSpline',guarded:'WM-P',baseline:'WM-F'})[method];$(canvas).previousElementSibling.textContent=title;$(canvas).setAttribute('aria-label',title+' observed recall');drawSweep($(canvas), aggregates.filter(row => row.method === method), [], 'recall'); }
+    { const protocol=aggregates.find(r=>r.method===method)?.protocol, title=rightMethods[protocol?.id]?.name ?? protocol?.name ?? ({echoSpline:'EchoSpline',guarded:'WM-P',baseline:'WM-F'})[method];$(canvas).previousElementSibling.textContent=title;$(canvas).setAttribute('aria-label',title+' observed recall');drawSweep($(canvas), aggregates.filter(row => row.method === method), [], 'recall'); }
   const body = $('sweepTable').querySelector('tbody'); body.replaceChildren();
   const statistic = (metric, total, scale = 1, places = 3) => {
     const counts = `valid ${metric.n}/${total}, failed ${metric.failed}, missing ${metric.missing}`;
@@ -894,7 +892,7 @@ function renderSweep() {
   };
   for (const row of aggregates) {
     const tr = document.createElement('tr');
-    for (const value of [row.protocol?.name ?? ({echoSpline:"EchoSpline",guarded:"WM-P",baseline:"WM-F"})[row.method] ?? row.method, row.roughness, row.sigmaD, row.n, statistic(row.precision, row.n, 100, 1), statistic(row.recall, row.n, 100, 1), statistic(row.p95, row.n), statistic(row.offwall, row.n, 100, 1)]) {
+    for (const value of [rightMethods[row.protocol?.id]?.name ?? row.protocol?.name ?? ({echoSpline:"EchoSpline",guarded:"WM-P",baseline:"WM-F"})[row.method] ?? row.method, row.roughness, row.sigmaD, row.n, statistic(row.precision, row.n, 100, 1), statistic(row.recall, row.n, 100, 1), statistic(row.p95, row.n), statistic(row.offwall, row.n, 100, 1)]) {
       const cell = document.createElement('td');
       const terms = String(value).split(' ± ');
       if (terms.length === 2) setMathText(cell, [terms[0] + ' ', { tex: String.raw`\pm` }, ' ' + terms[1]]);
@@ -939,7 +937,7 @@ async function runSweep(jobs, resumeId) {
       completedCount = completed;
       if (!progress || progress.type === 'sweep-result') renderSweep();
     };
-    handle = state.sweep = state.server && (!jobs[0]?.rightMethod || state.server.rightMethods?.includes(jobs[0].rightMethod)) ? startServerSweep(state.server, jobs, onProgress, { resumeId }) : startSweep(jobs, onProgress);
+    handle = state.sweep = state.server && (resumeId || !jobs[0]?.rightMethod || state.server.rightMethods?.includes(jobs[0].rightMethod)) ? startServerSweep(state.server, jobs, onProgress, { resumeId }) : startSweep(jobs, onProgress);
     controls();
     const result = await handle.promise;
     if (generation !== state.generation) return;
@@ -1017,6 +1015,7 @@ let initialInput = pageDefaults;
 try {
   const hasSharedInput=location.hash.startsWith('#v1='),raw=hasSharedInput ? JSON.parse(decodeURIComponent(location.hash.slice(4))) : pageDefaults;
   initialInput=normalizeInput({...raw,scene:raw.scene === PAPER_SETTINGS.scene ? raw.scene : 'layered'});
+  if(raw.rightMethod==='spline-cnn')notice('이전 EchoSpline-CNN 설정을 현재 EchoSpline-CNN으로 전환했습니다.');
   // Keep shared experiments reproducible. Bare visits use the precomputed bank.
   if (!hasSharedInput) {
     const draw=new Uint32Array(1);

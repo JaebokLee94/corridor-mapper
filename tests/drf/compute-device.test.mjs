@@ -6,6 +6,7 @@ import { EchoComparison } from '../../drf/echo-comparison.mjs';
 import { computationDevice } from '../../drf/compute-device.mjs';
 import { experimentSettings } from '../../drf/experiment-settings.mjs';
 import { workerMethod } from '../../drf/method-client.mjs';
+import { canonicalRightMethod } from '../../drf/right-methods.mjs';
 
 test('CPU overrides every stage; mixed CNN and old spline GPU links remain explicit',()=>{
   for(const method of ['spline-cnn','spline-cnn-fast']){
@@ -53,25 +54,27 @@ test('Auto uses the fleet policy while explicit CPU, GPU and spline overrides re
   assert.equal(computationDevice({vehicles:20},'gat').neural,true);
 });
 
-test('fast CNN initializes only the stages selected by CPU, fleet Auto and mixed GPU policies',async()=>{
+test('current and migrated CNN requests initialize only the selected CPU, fleet Auto and mixed GPU stages',async()=>{
   const source=readFileSync(new URL('../../drf/echo-comparison.mjs',import.meta.url),'utf8');
   const classSource=source.slice(source.indexOf('export class EchoComparison'),source.indexOf('// Final-only runs')).replace('export class','class');
-  for(const [choice,spline,neural] of [
+  for(const rightMethod of ['spline-cnn-fast','spline-cnn'])for(const [choice,spline,neural] of [
     [{vehicles:3},false,true], [{vehicles:10},true,true],
     [{vehicles:10,computeDevice:'cpu',echoBackend:'gpu'},false,false],
     [{vehicles:10,computeDevice:'gpu',echoBackend:'cpu'},false,true],
     [{vehicles:3,computeDevice:'gpu'},true,true],
   ]){
     const allocated={spline:0,neural:0},closed={spline:0,neural:0};
-    const context=vm.createContext({computationDevice,echoProtocol:()=>({guarded:{}}),rightMethods:{'spline-cnn-fast':{}},
+    const context=vm.createContext({computationDevice,canonicalRightMethod,echoProtocol:()=>({guarded:{}}),rightMethods:{'spline-cnn-fast':{}},
       EchoSpline:class {constructor(){this.grid={};}},modelData:async()=>({}),
       neuralRuntime:async name=>{assert.equal(name,'spline-cnn-fast');return {weights:{'start.weight':{shape:[3,3,23,64]}}};},
       createSplineGpu:async()=>{allocated.spline++;return {destroy(){closed.spline++;}};},
       createSplineCnnGpu:()=>{allocated.neural++;return {ready:Promise.resolve(),close(){closed.neural++;}};},
     });
     vm.runInContext(classSource+'\nglobalThis.Comparison=EchoComparison;',context);
-    const estimator=new context.Comparison({scene:'paper-upper',rightMethod:'spline-cnn-fast',...choice},[0,100,-20,50],'guarded');
+    const input=Object.freeze({scene:'paper-upper',rightMethod,...choice});
+    const estimator=new context.Comparison(input,[0,100,-20,50],'guarded');
     try{
+      assert.equal(estimator.id,'spline-cnn-fast');assert.equal(input.rightMethod,rightMethod);
       await estimator.loadModel({useGpu:true});
       assert.deepEqual(allocated,{spline:Number(spline),neural:Number(neural)},JSON.stringify(choice));
       assert.equal(estimator.deviceInfo().splineGpu,spline);assert.equal(estimator.deviceInfo().neuralGpu,neural);
@@ -100,7 +103,7 @@ test('combined comparisons allocate each spline stage independently and share on
     const allocations=[];
     const context=vm.createContext({
       computationDevice:(_input,method)=>({requested:'auto',neural:false,spline:method==='echoSpline'?leftGpu:rightGpu}),
-      echoProtocol:()=>({guarded:{}}),rightMethods:{gbdt:{}},
+      canonicalRightMethod,echoProtocol:()=>({guarded:{}}),rightMethods:{gbdt:{}},
       EchoSpline:class {constructor(options){this.options=options;this.grid={};}},
       modelData:async()=>({}),createSplineGpu:async()=>{const gpu={destroy(){}};allocations.push(gpu);return gpu;},
     });

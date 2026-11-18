@@ -69,7 +69,8 @@ test('local service rejects foreign origins, DNS rebinding, non-JSON and private
   const { base } = await ready(t);
   const health=await (await fetch(base + '/api/health')).json();
   assert.equal(health.schema, 'echomap-server/1');
-  for(const id of ['wmp','spline-cnn','spline-cnn-fast'])assert.ok(health.rightMethods.includes(id),`Advertised method: ${id}`);
+  for(const id of ['wmp','spline-cnn-fast'])assert.ok(health.rightMethods.includes(id),`Advertised method: ${id}`);
+  assert.equal(health.rightMethods.includes('spline-cnn'),false,'Retired CNN is not an active server method');
   const hostileHost = await new Promise((resolve, reject) => {
     http.get(base + '/api/health', { headers: { Host: 'attacker.example' } }, response => { response.resume(); resolve(response.statusCode); }).on('error', reject);
   });

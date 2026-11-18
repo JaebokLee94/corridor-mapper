@@ -4,15 +4,17 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import { PAPER_SETTINGS } from '../../drf/paper-preset.mjs';
-import { DEFAULT_INPUT, LAYERED_DOMAIN, normalizeInput } from '../../drf/scenario.mjs';
+import { DEFAULT_INPUT, LAYERED_DOMAIN } from '../../drf/scenario.mjs';
+import { experimentSettings as normalizeInput } from '../../drf/experiment-settings.mjs';
 import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
 import { interpolationResult } from '../../drf/interpolation-panel.mjs';
 import { createDiagnosticView } from '../../drf/diagnostic-ui.mjs';
 import { percentile } from '../../drf/statistics.mjs';
+import { aggregateRuns } from '../../drf/sweep.mjs';
 
 import { setMethodLabel } from '../../drf/method-label.mjs';
-import { rightMethods } from '../../drf/right-methods.mjs';
+import { rightMethods, activeRightMethods, canonicalRightMethod } from '../../drf/right-methods.mjs';
 
 const source=readFileSync(process.env.DRF_APP_SOURCE || new URL('../../drf/app.mjs',import.meta.url),'utf8');
 const section=(start,end)=>{
@@ -98,6 +100,108 @@ test('local computation defaults to the browser and uses the server only when ex
       assert.equal(actual,usesServer);
     } finally { dom.window.close(); }
   }
+});
+
+test('old CNN URLs migrate once to the current model without changing physical or device settings',async()=>{
+  const {JSDOM}=await import('jsdom');
+  const previous=Object.freeze({...DEFAULT_INPUT,...PAPER_SETTINGS,seed:0xffffffff,vehicles:7,snapshots:80,
+    sigmaD:.7,sigmaM:9.3,deltaM:7,sigmaDGeometry:2.78,deltaD:2,rightMethod:'spline-cnn',
+    computeDevice:'cpu',echoBackend:'gpu',echoKnotM:4,echoSupportM:6});
+  const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),
+    {url:'http://localhost/drf.html#v1='+encodeURIComponent(JSON.stringify(previous)),runScripts:'outside-only'});
+  try{
+    const $=id=>window.document.getElementById(id),notices=[],protocols=[];
+    Object.assign(window,{$,form:$('settings'),state:{protocol:null},DEFAULT_INPUT,PAPER_SETTINGS,normalizeInput,canonicalRightMethod,echoProtocol,
+      renderThresholdProtocol:value=>protocols.push(value),notice:message=>notices.push(message)});
+    window.crypto.getRandomValues=()=>assert.fail('A shared seed must not be replaced');
+    window.eval(section('function fillSettings(','function createLocalWorker(')+section('const pageDefaults =','(globalThis.__drfOffline ?'));
+    const restored=JSON.parse(decodeURIComponent(window.location.hash.slice(4)));
+    assert.deepEqual(restored,{...previous,rightMethod:'spline-cnn-fast'});
+    assert.deepEqual({...window.settings()},restored);
+    assert.equal($('rightMethod').selectedOptions[0].textContent,'EchoSpline-CNN');
+    assert.equal(protocols.at(-1).guarded.id,'spline-cnn-fast');
+    assert.equal(notices.length,1);assert.match(notices[0],/이전 EchoSpline-CNN.*현재 EchoSpline-CNN/);
+    window.eval(section('const pageDefaults =','(globalThis.__drfOffline ?'));
+    assert.equal(notices.length,1,'An already migrated URL needs no further migration notice');
+    assert.deepEqual(JSON.parse(decodeURIComponent(window.location.hash.slice(4))),restored);
+    assert.equal(previous.rightMethod,'spline-cnn');
+  }finally{window.close();}
+});
+
+test('method selectors expose only active methods and filling saved settings preserves the stored input and protocol',async()=>{
+  const {JSDOM}=await import('jsdom');
+  const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{runScripts:'outside-only'});
+  try{
+    const $=id=>window.document.getElementById(id),input=Object.freeze({...DEFAULT_INPUT,...PAPER_SETTINGS,rightMethod:'spline-cnn',seed:42});
+    const protocol=echoProtocol(input);protocol.guarded.name='EchoSpline-CNN';
+    Object.freeze(protocol.guarded);Object.freeze(protocol);
+    const before=JSON.stringify({input,protocol}),state={protocol,scenario:{input}};
+    Object.assign(window,{$,form:$('settings'),state,PAPER_SETTINGS,canonicalRightMethod,activeRightMethods,rightMethods,
+      renderThresholdProtocol:()=>assert.fail('Filling controls must not overwrite historical protocol metadata')});
+    window.eval(section('function fillSettings(','function settings()'));
+    window.fillSettings(input);
+    assert.equal($('rightMethod').value,'spline-cnn-fast');assert.equal($('settings').elements.seed.value,'42');
+    assert.equal(state.protocol,protocol);assert.equal(state.scenario.input,input);
+    assert.equal(JSON.stringify({input,protocol}),before);
+    assert.deepEqual([...$('rightMethod').options].map(option=>option.value),activeRightMethods);
+    window.eval(section('for (const id of activeRightMethods)', 'function renderDeviceBenchmark('));
+    assert.deepEqual([...$('deviceBenchmarkMethods').options].filter(option=>Object.hasOwn(rightMethods,option.value)).map(option=>option.value),activeRightMethods);
+    for(const id of ['rightMethod','deviceBenchmarkMethods']){
+      assert.equal($(id).querySelector('option[value="spline-cnn"]'),null);
+      assert.equal($(id).querySelector('option[value="spline-cnn-fast"]').textContent,'EchoSpline-CNN');
+    }
+  }finally{window.close();}
+});
+
+test('saved previous-CNN sweeps use server resume even when the old method is no longer executable',async()=>{
+  for(const status of ['done','cancelled']){
+    const input=Object.freeze({...DEFAULT_INPUT,rightMethod:'spline-cnn',seed:42}),jobs=Object.freeze([input]);
+    const protocol=Object.freeze({echoSpline:{name:'EchoSpline'},guarded:{id:'spline-cnn',name:'EchoSpline-CNN'}});
+    const results=[{input,protocol}],savedSweep={id:'previous-cnn-sweep',mode:'sweep',status,next:1,jobs};
+    const state={generation:1,server:{rightMethods:activeRightMethods,savedSweep},sweepRuns:[]},nodes=new Map(),calls=[];
+    const $=id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);};
+    const context=vm.createContext({state,$,controls(){},renderSweep(){},setInterval:()=>1,clearInterval(){},
+      requestedServerJob:()=>assert.fail('An explicit saved ID must not reconnect to a different job'),
+      fillSettings:()=>assert.fail('Reading a saved sweep must not normalize its stored jobs'),
+      startSweep:()=>assert.fail('Historical results must not be recomputed locally'),
+      startServerSweep:(server,requested,onProgress,options)=>{
+        calls.push(options);assert.equal(server,state.server);assert.equal(requested,jobs);
+        assert.match($('sweepStatus').textContent,/Loading saved sweep/);
+        onProgress({completed:1,total:1,results});
+        return {promise:Promise.resolve({results,cancelled:status==='cancelled'})};
+      }});
+    vm.runInContext(section('async function runSweep(',"$('sweepButton').onclick")
+      +section("$('loadSavedSweep').onclick",'const jsonValue ='),context);
+    await $('loadSavedSweep').onclick();
+    assert.equal(calls.length,1);assert.equal(calls[0].resumeId,savedSweep.id);
+    assert.equal(state.sweepRuns,results);assert.equal(state.sweepRuns[0].input,input);assert.equal(state.sweepRuns[0].protocol,protocol);
+    assert.equal(input.rightMethod,'spline-cnn');assert.equal(protocol.guarded.name,'EchoSpline-CNN');
+    assert.match($('sweepStatus').textContent,/^(Complete|Cancelled) · 1 \/ 1 experiments$/);
+  }
+});
+
+test('saved sweep chart and table labels distinguish previous and current CNN without rewriting protocol metadata',async()=>{
+  const {JSDOM}=await import('jsdom');
+  const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{pretendToBeVisual:true});
+  try{
+    const document=window.document,$=id=>document.getElementById(id),state={sweepRuns:[]},drawn=[];
+    const context=vm.createContext({document,$,state,rightMethods,aggregateRuns,fmt:String,renderDiagnostics(){},
+      drawSweep:(canvas,rows)=>drawn.push({canvas,rows}),
+      setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');}});
+    vm.runInContext(section('function renderSweep()', 'async function runSweep('),context);
+    for(const [id,name,expected] of [['spline-cnn','EchoSpline-CNN','이전 EchoSpline-CNN'],['spline-cnn-fast','EchoSpline-CNN 고속 (실험)','EchoSpline-CNN']]){
+      const protocol=Object.freeze({echoSpline:Object.freeze({name:'EchoSpline'}),guarded:Object.freeze({id,name})});
+      const summary={precision:.8,recall:.7,p95:.3,offwall:.1};
+      const runs=[{input:{seed:42,sigmaD:.4,roughness:0},protocol,methods:{echoSpline:{summary},guarded:{summary}}}];
+      const before=JSON.stringify(runs);state.sweepRuns=runs;drawn.length=0;
+      context.renderSweep();
+      assert.equal($('sweepBaselineChart').previousElementSibling.textContent,expected);
+      assert.equal($('sweepBaselineChart').getAttribute('aria-label'),expected+' observed recall');
+      assert.deepEqual([...$('sweepTable').querySelectorAll('tbody tr td:first-child')].map(cell=>cell.textContent),['EchoSpline',expected]);
+      assert.equal(drawn.find(item=>item.canvas.id==='sweepBaselineChart').rows[0].protocol,protocol.guarded);
+      assert.equal(state.sweepRuns,runs);assert.equal(JSON.stringify(runs),before);assert.equal(protocol.guarded.name,name);
+    }
+  }finally{window.close();}
 });
 
 test('server page load remains idle for saved completed, active and paused comparisons or sweeps',async()=>{
@@ -316,7 +420,7 @@ test('view reset preserves simulation, selection and replay, and clearing a run 
     selected:3,next:3,busy:false,replay:false,frameTimes:[0,40,120],lastFrameAt:120,generation:0,valid:true,grid:{},
     scenario:{input:{snapshots:3},truth:[{configs:[]},{configs:[]},{configs:[]}],wire:[],walls:[]},
     workers:[{stop(){stoppedWorkers++;}}],sweep:{cancel(){cancelledSweeps++;}},sweepRuns:[{}]};
-  const context=vm.createContext({state,$,form,rightMethods,setMethodLabel,performance:{now:()=>300},hoverGeneration:0,hoverTimer:0,replayFrame:0,
+  const context=vm.createContext({state,$,form,rightMethods,activeRightMethods,setMethodLabel,performance:{now:()=>300},hoverGeneration:0,hoverTimer:0,replayFrame:0,
     runWorker:{},evalWorker:{},hoverWorker:{},DEFAULT_INPUT:{snapshots:60},pageDefaults:{snapshots:60,vehicles:3},LAYERED_DOMAIN,URL,location:new URL('http://localhost/drf.html?interpolation=extended#old'),
     history:{replaceState(_state,_title,url){context.location=url;}},
     document,createDiagnosticView,interpolationResult,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
@@ -604,7 +708,7 @@ test('timeline and replay stay locked until the run ends, including paused and p
   assert.equal($('timeSlider').disabled,true);assert.equal($('replayButton').disabled,true);
 });
 
-test('both fields and their vehicle tracks follow EchoSpline live, in replay and when scrubbing',async()=>{
+test('fields follow EchoSpline through replay and saved previous-CNN results retain their distinct label',async()=>{
   const {JSDOM}=await import('jsdom');
   const dom=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{pretendToBeVisual:true});
   try {
@@ -616,16 +720,30 @@ test('both fields and their vehicle tracks follow EchoSpline live, in replay and
       methodFrames:{echoSpline:[sample(1,5),sample(2,10,early)],guarded:[sample(1,15)]}};
     const maps={};
     for(const name of ['map','baselineMap','densityMap','contrastMap'])maps[name]={set(value){this.state=value;}};
-    const context=vm.createContext({$,document,form:$('settings'),state,rightMethods,setMethodLabel,
+    const context=vm.createContext({$,document,form:$('settings'),state,rightMethods,activeRightMethods,setMethodLabel,
       ...maps,hoverGeneration:0,LAYERED_DOMAIN,interpolationResult,fmt:String,performance,
       percentile,renderInterpolationPanel(){},drawComparisonHistory(){},renderDiagnostics(){}});
     vm.runInContext(section('function renderSelected()','// Sweep diagnostics'),context);
-    for(const rightMethod of ['wmp','spline-cnn-fast','spline-cnn']){
+    for(const rightMethod of ['wmp','spline-cnn-fast']){
       $('rightMethod').value=rightMethod;context.renderSelected();
-      assert.equal($('fastCnnNote').hidden,rightMethod!=='spline-cnn-fast');
-      assert.equal($('rightMethod').getAttribute('aria-describedby'),rightMethod==='spline-cnn-fast'?'fastCnnNote':null);
+      assert.equal($('previousCnnNote').hidden,true);assert.equal($('rightMethod').hidden,false);
     }
-    assert.match($('fastCnnNote').textContent,/일부 복잡한 벽에서는 정확도가 낮아질 수 있으므로 기존 모델과 비교해 사용하세요/);
+    const savedInput=Object.freeze({snapshots:3,rightMethod:'spline-cnn'}),savedProtocol=echoProtocol(savedInput);
+    savedProtocol.guarded.name='EchoSpline-CNN';
+    Object.freeze(savedProtocol.guarded);Object.freeze(savedProtocol);
+    const saved=JSON.stringify({savedInput,savedProtocol}),frames=state.frames;
+    state.scenario.input=savedInput;state.protocol=savedProtocol;
+    for(const method of ['compare','guarded']){
+      state.method=method;context.renderSelected();
+      const title=$(method==='guarded'?'primaryMapName':'secondaryMapName');
+      assert.equal(title.textContent,'이전 EchoSpline-CNN');assert.equal(title.hidden,false);
+      assert.equal($('rightMethod').hidden,true);assert.equal($('previousCnnNote').hidden,false);
+      assert.equal($('methodBaseline').title,'이전 EchoSpline-CNN');
+    }
+    assert.match($('previousCnnNote').textContent,/이전 EchoSpline-CNN의 저장 결과/);
+    assert.equal(state.protocol,savedProtocol);assert.equal(state.scenario.input,savedInput);assert.equal(state.frames,frames);
+    assert.equal(JSON.stringify({savedInput,savedProtocol}),saved);
+    state.protocol=null;state.method='compare';
     $('rightMethod').value='wmp';
     function check(t,field) {
       context.renderSelected();

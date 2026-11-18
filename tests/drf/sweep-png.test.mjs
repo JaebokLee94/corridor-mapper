@@ -74,3 +74,19 @@ test('sweep PNG names absent results and rejects an empty sweep instead of expor
     assert.ok(prose.includes('No completed conditions'));
   } finally {env.restore();}
 });
+
+test('sweep PNG identifies previous and current CNN headings without changing saved protocol names',async()=>{
+  for(const [id,name,expected] of [['spline-cnn','EchoSpline-CNN','이전 EchoSpline-CNN'],['spline-cnn-fast','EchoSpline-CNN 고속 (실험)','EchoSpline-CNN']]){
+    const env=canvasEnvironment();
+    try{
+      const protocol=Object.freeze({id,name});
+      const aggregates=[row('echoSpline',.4,.7,null),{...row('guarded',.4,.8,null),protocol}],before=structuredClone(aggregates);
+      await sweepPng(aggregates);
+      const headings=env.canvases[0].calls.filter(call=>call.type==='text').map(call=>call.text);
+      assert.ok(headings.includes('EchoSpline'));assert.ok(headings.includes(expected));
+      assert.ok(!headings.includes(name),'The obsolete display name must not label the exported results');
+      assert.equal(aggregates[1].protocol,protocol);assert.equal(protocol.name,name);
+      assert.deepEqual(aggregates,before,'Export must preserve historical metadata and statistics');
+    }finally{env.restore();}
+  }
+});

@@ -11,7 +11,7 @@ function read(path) {
   return inputs.get(key);
 }
 read('build-drf-offline.mjs');
-const workerConstructor = "new Worker(new URL('./sweep.worker.mjs?v=20261118-cnn-integrated', import.meta.url), { type: 'module' })";
+const workerConstructor = "new Worker(new URL('./sweep.worker.mjs?v=20261118-cnn-current', import.meta.url), { type: 'module' })";
 const options = {
   absWorkingDir: root, bundle: true, platform: 'browser', format: 'iife', target: 'es2022',
   write: false, minify: true, define: { 'import.meta.url': 'globalThis.__drfOffline.moduleUrl' },
@@ -32,7 +32,7 @@ const bundles = await Promise.all([...names.map(name => `drf/${name}.worker.mjs`
   .map(entry => build({ ...options, entryPoints: [entry] })));
 const sources = Object.fromEntries(names.map((name, i) => [name, bundles[i].outputFiles[0].text]));
 const metadata = ['drf/provenance.json', 'drf/reference/octave/fixtures.json'].map(path => JSON.parse(read(path)));
-const modelData=Object.fromEntries(['arc','gbdt','gat','spline-cnn','spline-cnn-fast','kernels'].map(name=>{
+const modelData=Object.fromEntries(['arc','gbdt','gat','spline-cnn-fast','kernels'].map(name=>{
   const source=read('drf/models/'+name+'.mjs');
   return [name,JSON.parse(source.slice('export default '.length).trim().replace(/;$/, ''))];
 }));

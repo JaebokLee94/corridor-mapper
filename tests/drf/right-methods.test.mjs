@@ -6,7 +6,7 @@ import { experimentSettings } from '../../drf/experiment-settings.mjs';
 import { EchoComparison, echoProtocol } from '../../drf/echo-comparison.mjs';
 import { createSceneGeometry,generateSnapshot } from '../../drf/scenario.mjs';
 import { gpSubset } from '../../drf/gat-gpr.mjs';
-import { rightMethods } from '../../drf/right-methods.mjs';
+import { rightMethods, activeRightMethods, canonicalRightMethod } from '../../drf/right-methods.mjs';
 import { fitMethodLabel, setMethodLabel } from '../../drf/method-label.mjs';
 
 for(const [full,short] of [['EchoSpline-GBDT','ES-GBDT'],['EchoSpline-CNN (Rugged Wall Recovery)','EchoSpline-CNN']])
@@ -34,16 +34,22 @@ test('the map heading owns the ordered selector; its form still saves/defaults t
   assert.equal(doc.querySelector('#experimentSidebar').contains(select),false);
   assert.equal(select.form,doc.querySelector('#settings'));
   assert.deepEqual(Object.keys(rightMethods),['gat','wmp','gbdt','spline-cnn','spline-cnn-fast','pair-ridge','pair-gbdt','pair-extra-trees','arc']);
-  assert.deepEqual(Array.from(select.options).filter(o=>!o.hidden).map(o=>o.value),['gat','wmp','gbdt','spline-cnn','spline-cnn-fast','pair-ridge','pair-gbdt','pair-extra-trees']);
+  assert.deepEqual(Array.from(select.options).filter(o=>!o.hidden).map(o=>o.value),['gat','wmp','gbdt','spline-cnn-fast','pair-ridge','pair-gbdt','pair-extra-trees']);
+  assert.deepEqual(activeRightMethods,Object.keys(rightMethods).filter(id=>id!=='spline-cnn'));
+  assert.equal(rightMethods['spline-cnn'].name,'이전 EchoSpline-CNN');
+  assert.equal(rightMethods['spline-cnn'].deprecated,true);
   assert.equal(experimentSettings({rightMethod:'wmf'}).rightMethod,undefined);
-  assert.deepEqual(Array.from(select.options,o=>o.text),Object.values(rightMethods).map(m=>m.name));
+  for(const option of select.options)assert.equal(option.text,rightMethods[option.value].name);
   assert.equal(select.value,'wmp');assert.equal(doc.querySelector('#showInterpolation').checked,true);
   select.value='gbdt';assert.equal(new dom.window.FormData(select.form).get('rightMethod'),'gbdt');
   select.value='arc';assert.equal(new dom.window.FormData(select.form).get('rightMethod'),'arc');
   select.value='spline-cnn-fast';assert.equal(new dom.window.FormData(select.form).get('rightMethod'),'spline-cnn-fast');
-  assert.equal(rightMethods['spline-cnn-fast'].name,'EchoSpline-CNN 고속 (실험)');
+  assert.equal(rightMethods['spline-cnn-fast'].name,'EchoSpline-CNN');
   const saved=experimentSettings({rightMethod:'spline-cnn-fast'});
   assert.equal(experimentSettings(JSON.parse(JSON.stringify(saved))).rightMethod,'spline-cnn-fast');
+  assert.equal(experimentSettings({rightMethod:'spline-cnn'}).rightMethod,'spline-cnn-fast');
+  assert.equal(canonicalRightMethod('spline-cnn'),'spline-cnn-fast');
+  assert.equal(canonicalRightMethod('wmf'),'wmp');
   assert.equal(experimentSettings({rightMethod:'arc'}).rightMethod,'arc');
   assert.equal(experimentSettings({}).rightMethod,undefined);
   assert.throws(()=>experimentSettings({rightMethod:'invalid'}));
@@ -68,16 +74,20 @@ test('frozen learned methods reproduce independent Python estimates on a shared 
 });
 
 
-test('both CNN choices keep the fixed anchor separate from custom EchoSpline settings',()=>{
+test('current CNN and its saved alias share the fixed anchor while historical protocol metadata stays distinct',()=>{
   for(const rightMethod of ['spline-cnn','spline-cnn-fast']){
     const input={scene:'paper-upper',vehicles:3,rightMethod},domain=[0,100,-20,50];
     const shared=new EchoComparison(input,domain),custom=new EchoComparison({...input,echoKnotM:4},domain);
+    assert.equal(shared.id,'spline-cnn-fast');assert.equal(custom.id,'spline-cnn-fast');
+    assert.equal(shared.cnnConfigs,undefined);assert.equal(custom.cnnConfigs,undefined);
+    assert.equal(shared.protocol.guarded.id,'spline-cnn-fast');
     assert.equal(shared.fixedSpline,shared.spline);
     assert.notEqual(custom.fixedSpline,custom.spline);
     assert.equal(echoProtocol(input).guarded.id,rightMethod);
     shared.close();custom.close();
   }
   assert.notEqual(echoProtocol({rightMethod:'spline-cnn-fast'}).guarded.revision,echoProtocol({rightMethod:'spline-cnn'}).guarded.revision);
+  assert.equal(echoProtocol({rightMethod:'spline-cnn'}).guarded.name,'이전 EchoSpline-CNN');
   const defaults=new EchoComparison({vehicles:3},[0,100,-20,50]);
   assert.equal(defaults.id,'wmp');defaults.close();
 });

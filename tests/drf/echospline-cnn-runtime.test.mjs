@@ -5,7 +5,7 @@ import { modelData, neuralRuntime } from '../../drf/model-runtime.mjs';
 import { EchoComparison } from '../../drf/echo-comparison.mjs';
 import { splineCnnProposal, decodeSplineCnn } from '../../drf/echospline-cnn.mjs';
 
-test('frozen EchoSpline-CNN reproduces the H200 path on two supported intervals', async () => {
+test('archived previous EchoSpline-CNN reproduces the H200 path on two supported intervals', async () => {
   const rt=await neuralRuntime('spline-cnn');
   const ref=JSON.parse(readFileSync(new URL('./fixtures/echospline-cnn.json',import.meta.url)));
   const {x,heights,points,curves,pointsWide3,pointsWide5,wires,links,sign}=ref.fixture;
@@ -38,7 +38,7 @@ test('a separated modal path is selected independently after the support gap',()
 });
 
 
-test('the fast checkpoint keeps the 23 non-range channels and skips every range call',async()=>{
+test('the current checkpoint and saved alias share 23 non-range channels and skip every range call',async()=>{
   const rt=await neuralRuntime('spline-cnn-fast');
   const ref=JSON.parse(readFileSync(new URL('./fixtures/echospline-cnn.json',import.meta.url)));
   const {x,heights,points,curves,pointsWide3,pointsWide5,links,sign}=ref.fixture;
@@ -67,9 +67,23 @@ test('the fast checkpoint keeps the 23 non-range channels and skips every range 
     if(value===null)assert.ok(Number.isNaN(result.base[i]));
     else assert.ok(Number.isFinite(result.base[i])&&Math.abs(result.base[i]-result.anchor[i])<=16+1e-10);
   }
+  const settings={scene:'paper-upper',vehicles:3,rightMethod:'spline-cnn'},beforeSettings=JSON.stringify(settings);
+  const alias=new EchoComparison(settings,[0,100,-20,50],'guarded');
+  try{
+    await alias.loadModel();
+    assert.equal(JSON.stringify(settings),beforeSettings);
+    assert.equal(alias.id,'spline-cnn-fast');assert.equal(alias.cnnConfigs,undefined);
+    assert.equal(alias.cnn.weights['start.weight'].shape[2],23);
+    assert.equal(alias.cnn.data.checkpointSha256,rt.data.checkpointSha256);
+    const aliasCall=alias.cnn.call;
+    alias.cnn.call=(method,...args)=>{assert.notEqual(method,'rangeVotes');return aliasCall(method,...args);};
+    const actual=splineCnnProposal(alias.cnn,fit,curves,{points:[pointsWide3,pointsWide5],links,sign,
+      get configs(){assert.fail('Saved CNN aliases must not read range configurations');}});
+    assert.deepEqual(actual,result,'Compatibility alias preserves the current model output exactly');
+  }finally{alias.close();}
 });
 
-test('fast selection rejects a range-model asset instead of silently changing its contract',async()=>{
+test('current CNN selection rejects a range-model asset instead of silently changing its contract',async()=>{
   const original=await modelData('spline-cnn'),previous=globalThis.__echoModelData;
   const model=new EchoComparison({scene:'paper-upper',vehicles:3,rightMethod:'spline-cnn-fast'},[0,100,-20,50],'guarded');
   try{

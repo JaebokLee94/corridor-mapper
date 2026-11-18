@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { benchmarkCases, benchmarkPlan, compareWallOutputs, startDeviceBenchmark, expectedGpuStages, benchmarkDisplayRows, summarizeDeviceTrials, sampleBenchmarkFrames } from '../../drf/device-benchmark.mjs';
+import { benchmarkMethods, benchmarkCases, benchmarkPlan, compareWallOutputs, startDeviceBenchmark, expectedGpuStages, benchmarkDisplayRows, summarizeDeviceTrials, sampleBenchmarkFrames } from '../../drf/device-benchmark.mjs';
 
 const base = {scene:'paper-upper',wallSide:'upper',vehicles:3,snapshots:2,seed:538772167};
 const scene = {domain:[0,100,-20,50],wire:[{t:1,configs:[]},{t:2,configs:[]}],truth:[],walls:[]};
@@ -25,13 +25,20 @@ test('matrix freezes seed/duration, crosses 3/10 and simple/rugged, and rotates 
   const cases = benchmarkCases(base,'matrix');
   assert.deepEqual(cases.map(c=>[c.id,c.input.vehicles,c.input.seed,c.input.snapshots]),[
     ['simple-3',3,538772167,2],['simple-10',10,538772167,2],['rugged-3',3,538772167,2],['rugged-10',10,538772167,2]]);
-  const plan = benchmarkPlan(['echoSpline','spline-cnn'],3,true);
+  const plan = benchmarkPlan(['echoSpline','spline-cnn-fast'],3,true);
   assert.equal(plan.length,20);
-  assert.deepEqual(plan.filter(p=>p.method==='spline-cnn'&&p.round===1).map(p=>p.variant.id),['gpu','neural-gpu','cpu']);
+  assert.deepEqual(plan.filter(p=>p.method==='spline-cnn-fast'&&p.round===1).map(p=>p.variant.id),['gpu','neural-gpu','cpu']);
   assert.deepEqual(plan.find(p=>p.variant.id==='neural-gpu').variant,{id:'neural-gpu',computeDevice:'gpu',echoBackend:'cpu'});
 });
 
-test('fast CNN includes all three device variants and rotates their measured order', () => {
+test('only the current CNN is benchmarked; the retired ID cannot start a new trial', () => {
+  assert.equal(benchmarkMethods.includes('spline-cnn'),false);
+  assert.equal(benchmarkMethods.filter(id=>id.startsWith('spline-cnn')).length,1);
+  assert.ok(benchmarkPlan(benchmarkMethods,1,false).every(trial=>trial.method!=='spline-cnn'));
+  assert.throws(()=>benchmarkPlan(['spline-cnn'],1,false),/supported methods/);
+});
+
+test('current CNN includes all three device variants and rotates their measured order', () => {
   const plan = benchmarkPlan(['spline-cnn-fast'],3,true);
   assert.equal(plan.length,12);
   for(const round of [-1,0]) assert.deepEqual(plan.filter(p=>p.round===round).map(p=>p.variant),[
@@ -78,11 +85,9 @@ test('GPU fallback is not reported as GPU speed, and a small curve difference re
 
 
 test('requested GPU stages and fallback errors are checked throughout each prefix', async () => {
-  for(const method of ['spline-cnn','spline-cnn-fast']) {
-    assert.deepEqual(expectedGpuStages(method,'cpu'),[]);
-    assert.deepEqual(expectedGpuStages(method,'gpu'),['splineGpu','neuralGpu']);
-    assert.deepEqual(expectedGpuStages(method,'neural-gpu'),['neuralGpu']);
-  }
+  assert.deepEqual(expectedGpuStages('spline-cnn-fast','cpu'),[]);
+  assert.deepEqual(expectedGpuStages('spline-cnn-fast','gpu'),['splineGpu','neuralGpu']);
+  assert.deepEqual(expectedGpuStages('spline-cnn-fast','neural-gpu'),['neuralGpu']);
   assert.deepEqual(expectedGpuStages('wmp','gpu'),['densityGpu']);
   const f = fixture();
   const method = (id,input,domain) => {

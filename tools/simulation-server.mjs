@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { rightMethods } from '../drf/right-methods.mjs';
+import { activeRightMethods } from '../drf/right-methods.mjs';
 import { experimentSettings as normalizeInput } from '../drf/experiment-settings.mjs';
 /** Loopback-only computation service. Workers own jobs independently of clients.
  * SSE carries small availability notices; lossless binary packets are spooled to
@@ -219,7 +219,7 @@ export async function createSimulationServer({ root = defaultRoot, cacheDirector
         && request.headers['sec-fetch-mode'] === 'navigate' && request.headers['sec-fetch-dest'] === 'document';
       if (request.headers['sec-fetch-site'] === 'cross-site' && !enteringViewer) throw fail(403, 'Cross-site requests are not allowed');
       if (path === '/api/health' && request.method === 'GET') return json(response, 200,
-        { schema: 'echomap-server/1', service: 'echomap-local', independentMethods:true, rightMethods:Object.keys(rightMethods), maxConcurrent: 1, sweepWorkers, retentionHours: completedTtlMs / 3600000 });
+        { schema: 'echomap-server/1', service: 'echomap-local', independentMethods:true, rightMethods:activeRightMethods, maxConcurrent: 1, sweepWorkers, retentionHours: completedTtlMs / 3600000 });
       if (path === '/api/jobs') {
         if (request.method === 'GET') { await cleanup(); return json(response, 200, { jobs: [...jobs.values()].map(view).reverse() }); }
         if (request.method === 'POST') {

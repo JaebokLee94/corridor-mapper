@@ -1,3 +1,4 @@
+import { rightMethods } from './right-methods.mjs?v=20261118-cnn-current';
 import {confirmedExtensions} from './checked-centre.mjs?v=20261112-chain-tips';
 import { centreSpline } from './centre-spline.mjs';
 import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261118-device-selection-final';
@@ -485,7 +486,8 @@ export function drawSweep(canvas,aggregates,reference=[],metric='medianError',re
  */
 export async function sweepPng(aggregates) {
   if (!Array.isArray(aggregates)) throw new TypeError('Sweep aggregates must be an array.');
-  const methods=aggregates.some(r=>r.method==='baseline')?[['guarded','WM-P'],['baseline','WM-F']]:[['echoSpline','EchoSpline'],['guarded',aggregates.find(r=>r.method==='guarded')?.protocol?.name??'WM-P']];
+  const right=aggregates.find(r=>r.method==='guarded')?.protocol;
+  const methods=aggregates.some(r=>r.method==='baseline')?[['guarded','WM-P'],['baseline','WM-F']]:[['echoSpline','EchoSpline'],['guarded',rightMethods[right?.id]?.name??right?.name??'WM-P']];
   const rows=aggregates.filter(row=>methods.some(([method])=>row.method===method));
   if (!rows.length) throw new Error('Run a parameter sweep before exporting its charts.');
   if (rows.some(row=>!Number.isFinite(row.sigmaD) || !Number.isFinite(row.roughness) || !row.recall))
