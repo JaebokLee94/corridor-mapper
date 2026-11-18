@@ -8,12 +8,14 @@ import { experimentSettings } from '../../drf/experiment-settings.mjs';
 import { workerMethod } from '../../drf/method-client.mjs';
 
 test('CPU overrides every stage; mixed CNN and old spline GPU links remain explicit',()=>{
-  assert.deepEqual(computationDevice({computeDevice:'cpu',echoBackend:'gpu'},'spline-cnn'),
-    {requested:'cpu',neural:false,spline:false});
-  assert.deepEqual(computationDevice({computeDevice:'gpu',echoBackend:'cpu'},'spline-cnn'),
-    {requested:'gpu',neural:true,spline:false});
+  for(const method of ['spline-cnn','spline-cnn-fast']){
+    assert.deepEqual(computationDevice({computeDevice:'cpu',echoBackend:'gpu'},method),
+      {requested:'cpu',neural:false,spline:false});
+    assert.deepEqual(computationDevice({computeDevice:'gpu',echoBackend:'cpu'},method),
+      {requested:'gpu',neural:true,spline:false});
+    assert.equal(computationDevice({},method).neural,true);
+  }
   assert.equal(computationDevice({echoBackend:'gpu'},'echoSpline').spline,true);
-  assert.equal(computationDevice({},'spline-cnn').neural,true);
   assert.equal(computationDevice({},'echoSpline').spline,false);
   for(const computeDevice of ['auto','cpu','gpu']){
     const normalized=experimentSettings({computeDevice});
@@ -22,10 +24,11 @@ test('CPU overrides every stage; mixed CNN and old spline GPU links remain expli
   assert.throws(()=>experimentSettings({computeDevice:'cuda'}),/device/);
 });
 
-test('production worker client passes device choices and returns initialization evidence',async()=>{
+for(const rightMethod of ['spline-cnn','spline-cnn-fast'])test(`${rightMethod}: worker passes device choices and returns initialization evidence`,async()=>{
   const sent=[],worker={postMessage(message){sent.push(message);},terminate(){}};
-  const input={vehicles:3,scene:'paper-upper',rightMethod:'spline-cnn',computeDevice:'gpu',echoBackend:'cpu',sigmaD:.4};
+  const input={vehicles:3,scene:'paper-upper',rightMethod,computeDevice:'gpu',echoBackend:'cpu',sigmaD:.4};
   const method=workerMethod(worker,'guarded',input,[0,100,-20,50]);
+  assert.equal(sent[0].rightMethod,rightMethod);
   assert.equal(sent[0].computeDevice,'gpu');assert.equal(sent[0].echoBackend,'cpu');
   const device={neuralGpu:true,splineGpu:false,adapter:{vendor:'test'}};
   worker.onmessage({data:{type:'initialized',device}});
@@ -37,8 +40,8 @@ test('production worker client passes device choices and returns initialization 
 
 
 test('Auto uses the fleet policy while explicit CPU, GPU and spline overrides retain priority',()=>{
-  const neural = new Set(['spline-cnn','arc']), fleetSpline = new Set(['echoSpline','gbdt','spline-cnn']);
-  for(const vehicles of [3,10])for(const method of ['echoSpline','gbdt','spline-cnn','arc','pair-ridge','pair-gbdt','pair-extra-trees','gat','wmp']){
+  const neural = new Set(['spline-cnn','spline-cnn-fast','arc']), fleetSpline = new Set(['echoSpline','gbdt','spline-cnn','spline-cnn-fast']);
+  for(const vehicles of [3,10])for(const method of ['echoSpline','gbdt','spline-cnn','spline-cnn-fast','arc','pair-ridge','pair-gbdt','pair-extra-trees','gat','wmp']){
     assert.deepEqual(computationDevice({vehicles},method),{requested:'auto',neural:neural.has(method)||method==='gat'&&vehicles>=10,spline:vehicles>=10&&fleetSpline.has(method)},method+'/'+vehicles);
     assert.deepEqual(computationDevice({vehicles,computeDevice:'cpu',echoBackend:'gpu'},method),{requested:'cpu',neural:false,spline:false});
     assert.equal(computationDevice({vehicles,computeDevice:'gpu'},method).spline,true);
@@ -48,6 +51,33 @@ test('Auto uses the fleet policy while explicit CPU, GPU and spline overrides re
   }
   assert.equal(computationDevice({vehicles:9},'gat').neural,false);
   assert.equal(computationDevice({vehicles:20},'gat').neural,true);
+});
+
+test('fast CNN initializes only the stages selected by CPU, fleet Auto and mixed GPU policies',async()=>{
+  const source=readFileSync(new URL('../../drf/echo-comparison.mjs',import.meta.url),'utf8');
+  const classSource=source.slice(source.indexOf('export class EchoComparison'),source.indexOf('// Final-only runs')).replace('export class','class');
+  for(const [choice,spline,neural] of [
+    [{vehicles:3},false,true], [{vehicles:10},true,true],
+    [{vehicles:10,computeDevice:'cpu',echoBackend:'gpu'},false,false],
+    [{vehicles:10,computeDevice:'gpu',echoBackend:'cpu'},false,true],
+    [{vehicles:3,computeDevice:'gpu'},true,true],
+  ]){
+    const allocated={spline:0,neural:0},closed={spline:0,neural:0};
+    const context=vm.createContext({computationDevice,echoProtocol:()=>({guarded:{}}),rightMethods:{'spline-cnn-fast':{}},
+      EchoSpline:class {constructor(){this.grid={};}},modelData:async()=>({}),
+      neuralRuntime:async name=>{assert.equal(name,'spline-cnn-fast');return {weights:{'start.weight':{shape:[3,3,23,64]}}};},
+      createSplineGpu:async()=>{allocated.spline++;return {destroy(){closed.spline++;}};},
+      createSplineCnnGpu:()=>{allocated.neural++;return {ready:Promise.resolve(),close(){closed.neural++;}};},
+    });
+    vm.runInContext(classSource+'\nglobalThis.Comparison=EchoComparison;',context);
+    const estimator=new context.Comparison({scene:'paper-upper',rightMethod:'spline-cnn-fast',...choice},[0,100,-20,50],'guarded');
+    try{
+      await estimator.loadModel({useGpu:true});
+      assert.deepEqual(allocated,{spline:Number(spline),neural:Number(neural)},JSON.stringify(choice));
+      assert.equal(estimator.deviceInfo().splineGpu,spline);assert.equal(estimator.deviceInfo().neuralGpu,neural);
+    }finally{estimator.close();}
+    assert.deepEqual(closed,allocated,'Every allocated stage closes');
+  }
 });
 
 test('pair estimators inherit their parent spline choice instead of reselecting the full-fleet EchoSpline Auto policy',()=>{

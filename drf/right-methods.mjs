@@ -3,6 +3,7 @@ export const rightMethods={
   wmp:{name:'WM-P',description:'Wall Mapping with Pair Tracking'},
   gbdt:{name:'EchoSpline-GBDT',curves:true,description:'Frozen height-residual trees on the 2 m EchoSpline fit with 8 m support.'},
   'spline-cnn':{name:'EchoSpline-CNN (Rugged Wall Recovery)',curves:true,description:'A CNN combines multiscale reflection candidates and measured ranges around an EchoSpline-GBDT anchor. Dynamic programming selects one wall profile per supported interval.'},
+  'spline-cnn-fast':{name:'EchoSpline-CNN 고속 (실험)',curves:true,description:'거리 특징 계산을 생략해 속도를 높입니다. 일부 복잡한 벽에서는 정확도가 낮아질 수 있으므로 기존 모델과 비교해 사용하세요.'},
   'pair-ridge':{name:'EchoSpline-Ridge (Computational Reduction)',curves:true,pairSelector:'ridge',description:'Ridge selects up to 10 measured pairs every 10 snapshots; EchoSpline updates the wall at every snapshot. Frozen pair-selection model trained on 3, 5, 7 and 10 vehicles.'},
   'pair-gbdt':{name:'EchoSpline-GBDT (Computational Reduction)',curves:true,pairSelector:'gbdt',description:'GBDT selects up to 10 measured pairs every 10 snapshots; EchoSpline updates the wall at every snapshot. Frozen pair-selection model trained on 3, 5, 7 and 10 vehicles.'},
   'pair-extra-trees':{name:'EchoSpline-ExtraTrees (Computational Reduction)',curves:true,pairSelector:'extraTrees',description:'ExtraTrees selects up to 10 measured pairs every 10 snapshots; EchoSpline updates the wall at every snapshot. Frozen pair-selection model trained on 3, 5, 7 and 10 vehicles.'},

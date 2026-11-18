@@ -1,5 +1,5 @@
-const gpuMethods = new Set(['spline-cnn', 'arc']);
-const fleetGpuSplines = new Set(['echoSpline', 'gbdt', 'spline-cnn']);
+const gpuMethods = new Set(['spline-cnn', 'spline-cnn-fast', 'arc']);
+const fleetGpuSplines = new Set(['echoSpline', 'gbdt', 'spline-cnn', 'spline-cnn-fast']);
 
 // shortcut: Auto is measured on M4 Chrome at 3/10 vehicles; remeasure for other hardware or fleet sizes.
 export function computationDevice(input, method) {

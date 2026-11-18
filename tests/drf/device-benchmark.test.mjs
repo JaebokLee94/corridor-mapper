@@ -5,14 +5,14 @@ import { benchmarkCases, benchmarkPlan, compareWallOutputs, startDeviceBenchmark
 const base = {scene:'paper-upper',wallSide:'upper',vehicles:3,snapshots:2,seed:538772167};
 const scene = {domain:[0,100,-20,50],wire:[{t:1,configs:[]},{t:2,configs:[]}],truth:[],walls:[]};
 const evaluator = () => ({step:() => ({interpolation:{rawMap:{mapF1:.8}}})});
-function fixture({gpuOffset = 0, gpuActive = true} = {}) {
+function fixture({gpuOffset = 0, gpuActive = true, neural = false} = {}) {
   let live = 0, maximum = 0;
   const calls = [];
   return { calls, get maximum(){ return maximum; }, makeMethod(method,input,domain) {
     assert.equal(Object.hasOwn(input,'truth'),false); assert.equal(Object.hasOwn(input,'wires'),false);
     assert.deepEqual(domain,scene.domain);
     live++; maximum = Math.max(maximum,live);
-    const gpu = input.computeDevice === 'gpu', device = {requested:input.computeDevice,splineGpu:gpu&&gpuActive,neuralGpu:false,densityGpu:false}, row = { method, input, prefixes:[] }; calls.push(row);
+    const gpu = input.computeDevice === 'gpu', device = {requested:input.computeDevice,splineGpu:gpu&&gpuActive&&input.echoBackend!=='cpu',neuralGpu:gpu&&gpuActive&&neural,densityGpu:false}, row = { method, input, prefixes:[] }; calls.push(row);
     let closed = false;
     return {ready:Promise.resolve(device), async step(wire) {
       row.prefixes.push(wire.t);
@@ -29,6 +29,17 @@ test('matrix freezes seed/duration, crosses 3/10 and simple/rugged, and rotates 
   assert.equal(plan.length,20);
   assert.deepEqual(plan.filter(p=>p.method==='spline-cnn'&&p.round===1).map(p=>p.variant.id),['gpu','neural-gpu','cpu']);
   assert.deepEqual(plan.find(p=>p.variant.id==='neural-gpu').variant,{id:'neural-gpu',computeDevice:'gpu',echoBackend:'cpu'});
+});
+
+test('fast CNN includes all three device variants and rotates their measured order', () => {
+  const plan = benchmarkPlan(['spline-cnn-fast'],3,true);
+  assert.equal(plan.length,12);
+  for(const round of [-1,0]) assert.deepEqual(plan.filter(p=>p.round===round).map(p=>p.variant),[
+    {id:'cpu',computeDevice:'cpu'},{id:'gpu',computeDevice:'gpu'},
+    {id:'neural-gpu',computeDevice:'gpu',echoBackend:'cpu'},
+  ]);
+  assert.deepEqual(plan.filter(p=>p.round===1).map(p=>p.variant.id),['gpu','neural-gpu','cpu']);
+  assert.deepEqual(plan.filter(p=>p.round===2).map(p=>p.variant.id),['neural-gpu','cpu','gpu']);
 });
 
 test('full production-style prefixes are serial, no truth reaches an estimator, and every output is compared', async () => {
@@ -67,8 +78,11 @@ test('GPU fallback is not reported as GPU speed, and a small curve difference re
 
 
 test('requested GPU stages and fallback errors are checked throughout each prefix', async () => {
-  assert.deepEqual(expectedGpuStages('spline-cnn','gpu'),['splineGpu','neuralGpu']);
-  assert.deepEqual(expectedGpuStages('spline-cnn','neural-gpu'),['neuralGpu']);
+  for(const method of ['spline-cnn','spline-cnn-fast']) {
+    assert.deepEqual(expectedGpuStages(method,'cpu'),[]);
+    assert.deepEqual(expectedGpuStages(method,'gpu'),['splineGpu','neuralGpu']);
+    assert.deepEqual(expectedGpuStages(method,'neural-gpu'),['neuralGpu']);
+  }
   assert.deepEqual(expectedGpuStages('wmp','gpu'),['densityGpu']);
   const f = fixture();
   const method = (id,input,domain) => {
@@ -85,6 +99,55 @@ test('requested GPU stages and fallback errors are checked throughout each prefi
   const failed = record.trials.find(t=>t.variant.id==='gpu');
   assert.equal(failed.status,'unavailable'); assert.match(failed.error,/lost device/); assert.equal(failed.frames.length,2);
   assert.equal(record.summary.some(t=>t.device==='gpu'),false);
+});
+
+test('fast CNN rejects a missing neural GPU at initialization while accepting neural-only GPU', async () => {
+  const f = fixture({neural:true});
+  const makeMethod = (id,input,domain) => {
+    const client = f.makeMethod(id,input,domain);
+    if(input.computeDevice==='gpu' && input.echoBackend!=='cpu')
+      client.ready=client.ready.then(device=>({...device,neuralGpu:false}));
+    return client;
+  };
+  const record = await startDeviceBenchmark({cases:benchmarkCases(base),methods:['spline-cnn-fast'],repeats:3,warmup:true,
+    prepare:async()=>scene,makeMethod,makeEvaluator:evaluator,page:undefined}).promise;
+  assert.equal(record.status,'complete'); assert.equal(f.maximum,1);
+  const rejected=record.trials.find(t=>t.variant.id==='gpu');
+  assert.equal(rejected.initialized.splineGpu,true); assert.equal(rejected.initialized.neuralGpu,false);
+  assert.equal(rejected.status,'unavailable'); assert.match(rejected.error,/GPU stage unavailable: neuralGpu/);
+  assert.equal(rejected.rows.length,0);
+  assert.equal(record.trials.filter(t=>t.variant.id==='gpu'&&t.status==='skipped').length,3);
+  const accepted=record.trials.filter(t=>t.variant.id==='neural-gpu');
+  assert.equal(accepted.length,4);
+  assert.ok(accepted.every(t=>t.status==='complete'&&t.admissible&&t.backendVerified));
+  assert.ok(accepted.every(t=>!t.initialized.splineGpu&&t.initialized.neuralGpu
+    &&t.rows.every(row=>!row.device.splineGpu&&row.device.neuralGpu)));
+  assert.deepEqual(record.summary.map(t=>[t.device,t.n]),[['cpu',3],['neural-gpu',3]]);
+});
+
+test('fast CNN loses GPU eligibility when its neural stage disappears during a prefix', async () => {
+  const f = fixture({neural:true});
+  const makeMethod = (id,input,domain) => {
+    const client = f.makeMethod(id,input,domain), step=client.step;
+    client.step=async wire=>{
+      const result=await step(wire);
+      if(input.computeDevice==='gpu'&&wire.t===2) result.device={...result.device,neuralGpu:false};
+      return result;
+    };
+    return client;
+  };
+  const record = await startDeviceBenchmark({cases:benchmarkCases(base),methods:['spline-cnn-fast'],repeats:3,warmup:true,
+    prepare:async()=>scene,makeMethod,makeEvaluator:evaluator,page:undefined}).promise;
+  assert.equal(record.status,'complete'); assert.equal(f.maximum,1);
+  for(const variant of ['gpu','neural-gpu']) {
+    const rejected=record.trials.find(t=>t.variant.id===variant);
+    assert.equal(rejected.initialized.neuralGpu,true); assert.equal(rejected.status,'unavailable');
+    assert.match(rejected.error,/GPU stage was lost during an update/);
+    assert.equal(rejected.rows.length,2); assert.equal(rejected.rows[0].device.neuralGpu,true);
+    assert.equal(rejected.rows[1].device.neuralGpu,false); assert.equal(rejected.rows[1].device.fallbackReason,undefined);
+    assert.equal(record.trials.filter(t=>t.variant.id===variant&&t.status==='skipped').length,3);
+  }
+  assert.deepEqual(record.summary.map(t=>t.device),['cpu']);
 });
 
 test('a hidden trial is kept as invalid, retries after visibility, and cancellation terminates its worker', async () => {

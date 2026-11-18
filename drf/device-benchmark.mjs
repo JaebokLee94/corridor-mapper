@@ -1,9 +1,9 @@
-import { experimentSettings } from './experiment-settings.mjs?v=20261118-device-selection-final';
+import { experimentSettings } from './experiment-settings.mjs?v=20261118-cnn-integrated';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { workerMethod } from './method-client.mjs?v=20261118-device-selection-final';
-import { createGrid } from './field.mjs?v=20261118-device-selection-final';
+import { workerMethod } from './method-client.mjs?v=20261118-cnn-integrated';
+import { createGrid } from './field.mjs?v=20261118-cnn-integrated';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
-import { rightMethods } from './right-methods.mjs?v=20261118-device-selection-final';
+import { rightMethods } from './right-methods.mjs?v=20261118-cnn-integrated';
 import { percentile } from './statistics.mjs';
 
 export const benchmarkMethods = ['echoSpline', ...Object.keys(rightMethods)];
@@ -20,7 +20,7 @@ export function benchmarkCases(base, scope = 'current') {
 }
 export const deviceVariants = method => [
   { id: 'cpu', computeDevice: 'cpu' }, { id: 'gpu', computeDevice: 'gpu' },
-  ...(method === 'spline-cnn' ? [{ id: 'neural-gpu', computeDevice: 'gpu', echoBackend: 'cpu' }] : []),
+  ...(['spline-cnn', 'spline-cnn-fast'].includes(method) ? [{ id: 'neural-gpu', computeDevice: 'gpu', echoBackend: 'cpu' }] : []),
 ];
 export function benchmarkPlan(methods, repeats, warmup) {
   if (!methods.length || methods.some(m => !benchmarkMethods.includes(m)) || new Set(methods).size !== methods.length)
@@ -144,13 +144,13 @@ export function benchmarkDisplayRows(record) {
 }
 export function expectedGpuStages(method, variant) {
   if (variant === 'cpu') return [];
-  if (method === 'spline-cnn') return variant === 'neural-gpu' ? ['neuralGpu'] : ['splineGpu', 'neuralGpu'];
+  if (['spline-cnn', 'spline-cnn-fast'].includes(method)) return variant === 'neural-gpu' ? ['neuralGpu'] : ['splineGpu', 'neuralGpu'];
   if (['arc', 'gat'].includes(method)) return ['neuralGpu'];
   return method === 'wmp' ? ['densityGpu'] : ['splineGpu'];
 }
 const abortError = () => new DOMException('Benchmark cancelled', 'AbortError');
 function productionMethod(method, input, domain) {
-  const worker = globalThis.__drfOffline?.worker('compare') ?? new Worker(new URL('./compare.worker.mjs?v=20261118-device-selection-final', import.meta.url), { type: 'module' });
+  const worker = globalThis.__drfOffline?.worker('compare') ?? new Worker(new URL('./compare.worker.mjs?v=20261118-cnn-integrated', import.meta.url), { type: 'module' });
   return workerMethod(worker, method === 'echoSpline' ? 'echoSpline' : 'guarded', input, domain);
 }
 

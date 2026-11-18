@@ -41,7 +41,7 @@ test('offline bundle is current and its classic Blob workers preserve the field'
   });
   vm.runInContext(artifact.slice(0, split), context);
   const runtime = context.__drfOffline;
-  for (const path of ['drf/app.mjs', 'drf/render.mjs', 'drf/field.worker.mjs', 'drf/sweep.mjs', 'drf/pspt.mjs', 'drf/pspt.worker.mjs', 'drf/pspt-math.mjs', 'drf/pspt-ridges.mjs', 'build-drf-offline.mjs'])
+  for (const path of ['drf/app.mjs', 'drf/render.mjs', 'drf/field.worker.mjs', 'drf/sweep.mjs', 'drf/pspt.mjs', 'drf/pspt.worker.mjs', 'drf/pspt-math.mjs', 'drf/pspt-ridges.mjs', 'build-drf-offline.mjs', 'drf/models/spline-cnn.mjs', 'drf/models/spline-cnn-fast.mjs'])
     assert.ok(runtime.sourceHashes[path], `Recorded source: ${path}`);
   for (const [path, hash] of Object.entries(runtime.sourceHashes))
     assert.equal(createHash('sha256').update(read(path)).digest('hex'), hash, `${path}: run npm run build:drf-offline`);
@@ -55,6 +55,10 @@ test('offline bundle is current and its classic Blob workers preserve the field'
     const source = await blobs.get(worker.url).text();
     assert.ok(!source.includes('import.meta'), `${name}: no module metadata dependency`);
     assert.doesNotThrow(() => new vm.Script(source), `${name}: parses as a classic script`);
+    if(['compare','sweep'].includes(name))for(const id of ['spline-cnn','spline-cnn-fast']){
+      const model=JSON.parse(read(`drf/models/${id}.mjs`).toString().slice('export default '.length).trim().replace(/;$/,''));
+      assert.ok(source.includes(JSON.stringify(id)+':'+JSON.stringify(model)),`${name}: embedded ${id} matches its frozen asset`);
+    }
   }
   assert.equal(blobs.size, 7);
   const messages = [], workerContext = vm.createContext({ performance, postMessage: data => messages.push(data) });

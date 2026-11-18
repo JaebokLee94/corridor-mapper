@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import { neuralRuntime } from '../../drf/model-runtime.mjs';
+import { modelData, neuralRuntime } from '../../drf/model-runtime.mjs';
+import { EchoComparison } from '../../drf/echo-comparison.mjs';
 import { splineCnnProposal, decodeSplineCnn } from '../../drf/echospline-cnn.mjs';
 
 test('frozen EchoSpline-CNN reproduces the H200 path on two supported intervals', async () => {
@@ -34,4 +35,48 @@ test('a separated modal path is selected independently after the support gap',()
   const y=decodeSplineCnn(logits,anchor);
   assert.ok(Number.isNaN(y[5]));
   for(let j=0;j<n;j++)if(j!==5)assert.ok(Math.abs(y[j]-(j<5?-5:13))<1e-9);
+});
+
+
+test('the fast checkpoint keeps the 23 non-range channels and skips every range call',async()=>{
+  const rt=await neuralRuntime('spline-cnn-fast');
+  const ref=JSON.parse(readFileSync(new URL('./fixtures/echospline-cnn.json',import.meta.url)));
+  const {x,heights,points,curves,pointsWide3,pointsWide5,links,sign}=ref.fixture;
+  assert.equal(rt.weights['start.weight'].shape[2],23);
+  assert.notEqual(rt.data.checkpointSha256,ref.checkpointSha256);
+  let input,convolutions=0;
+  const call=rt.call;
+  rt.call=(method,args,...rest)=>{
+    assert.notEqual(method,'rangeVotes','23-channel inference must not compute range features');
+    if(method==='convolutionXY'){convolutions++;input??=args[0].slice();}
+    return call(method,args,...rest);
+  };
+  const fit={x,heights,points},before=JSON.stringify(fit);
+  const result=splineCnnProposal(rt,fit,curves,{points:[pointsWide3,pointsWide5],links,sign,
+    get configs(){assert.fail('The fast checkpoint must not read range configurations');}});
+  assert.equal(convolutions,rt.data.dilations.length+2);
+  assert.equal(input.length,23*81*x.length);assert.equal(result.logits.length,81*x.length);
+  assert.equal(JSON.stringify(fit),before);
+  // The feature contract is unchanged except for removing range channels 18:21.
+  for(const [c,z,j,value] of ref.expectedFeatureProbes){
+    if(c>=18&&c<=20)continue;
+    const channel=c>=21?c-3:c;
+    assert.ok(Math.abs(input[(z*x.length+j)*23+channel]-value)<.001,`feature ${c} -> ${channel}`);
+  }
+  for(const [i,value] of ref.expectedHeights){
+    if(value===null)assert.ok(Number.isNaN(result.base[i]));
+    else assert.ok(Number.isFinite(result.base[i])&&Math.abs(result.base[i]-result.anchor[i])<=16+1e-10);
+  }
+});
+
+test('fast selection rejects a range-model asset instead of silently changing its contract',async()=>{
+  const original=await modelData('spline-cnn'),previous=globalThis.__echoModelData;
+  const model=new EchoComparison({scene:'paper-upper',vehicles:3,rightMethod:'spline-cnn-fast'},[0,100,-20,50],'guarded');
+  try{
+    globalThis.__echoModelData={...previous,'spline-cnn-fast':original};
+    await assert.rejects(model.loadModel(),/23|channel|range/i);
+  }finally{
+    model.close();
+    if(previous===undefined)delete globalThis.__echoModelData;else globalThis.__echoModelData=previous;
+  }
 });

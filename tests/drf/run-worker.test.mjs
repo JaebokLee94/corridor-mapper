@@ -200,7 +200,7 @@ for(const blockedSide of ['echoSpline','guarded']){
 
 test('independent learned estimators produce the same prefix outputs as a joint comparison',async()=>{
   const scene=await generateScenario({...input,scene:'paper-upper',seed:3296639392,snapshots:16});
-  for(const rightMethod of ['spline-cnn','gbdt','gat','arc']){
+  for(const rightMethod of ['spline-cnn','spline-cnn-fast','gbdt','gat','arc']){
     const settings={...scene.input,rightMethod},joint=new EchoComparison(settings,scene.domain),
       left=new EchoComparison(settings,scene.domain,'echoSpline'),right=new EchoComparison(settings,scene.domain,'guarded');
     await Promise.all([joint.loadModel(),right.loadModel({useGpu:rightMethod==='arc'})]);

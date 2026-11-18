@@ -204,9 +204,9 @@ test('EchoSpline-CNN new wall draw assigns exactly half of its probability to th
     const form=window.document.getElementById('settings');window.form=form;
     window.eval(section('function randomizeWallGeometry(', 'async function prepare('));
     const fields=['sigmaM','deltaM','sigmaDGeometry','deltaD'];
-    for(const [scene,wallSide] of [['paper-upper','upper'],['layered','lower'],['layered','upper'],['layered','both']]){
+    for(const rightMethod of ['spline-cnn','spline-cnn-fast'])for(const [scene,wallSide] of [['paper-upper','upper'],['layered','lower'],['layered','upper'],['layered','both']]){
       function drawGeometry(previous,draws) {
-        const input={scene,wallSide,rightMethod:'spline-cnn'};
+        const input={scene,wallSide,rightMethod};
         fields.forEach((key,i)=>{form.elements[key].value=String(previous[i]);});
         window.Math.random=()=>{assert.ok(draws.length);return draws.shift();};
         window.randomizeWallGeometry(input);
@@ -620,6 +620,13 @@ test('both fields and their vehicle tracks follow EchoSpline live, in replay and
       ...maps,hoverGeneration:0,LAYERED_DOMAIN,interpolationResult,fmt:String,performance,
       percentile,renderInterpolationPanel(){},drawComparisonHistory(){},renderDiagnostics(){}});
     vm.runInContext(section('function renderSelected()','// Sweep diagnostics'),context);
+    for(const rightMethod of ['wmp','spline-cnn-fast','spline-cnn']){
+      $('rightMethod').value=rightMethod;context.renderSelected();
+      assert.equal($('fastCnnNote').hidden,rightMethod!=='spline-cnn-fast');
+      assert.equal($('rightMethod').getAttribute('aria-describedby'),rightMethod==='spline-cnn-fast'?'fastCnnNote':null);
+    }
+    assert.match($('fastCnnNote').textContent,/일부 복잡한 벽에서는 정확도가 낮아질 수 있으므로 기존 모델과 비교해 사용하세요/);
+    $('rightMethod').value='wmp';
     function check(t,field) {
       context.renderSelected();
       for(const view of [maps.densityMap,maps.contrastMap]){

@@ -1,5 +1,5 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-device-selection-final';
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-device-selection-final';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-cnn-integrated';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-cnn-integrated';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
@@ -8,16 +8,16 @@ import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
-import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-device-selection-final';
-import { rightMethods } from './right-methods.mjs?v=20261118-device-selection-final';
-import { echoProtocol } from './echo-comparison.mjs?v=20261118-device-selection-final';
+import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-cnn-integrated';
+import { rightMethods } from './right-methods.mjs?v=20261118-cnn-integrated';
+import { echoProtocol } from './echo-comparison.mjs?v=20261118-cnn-integrated';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-device-selection-final';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261118-device-selection-final';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-cnn-integrated';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261118-cnn-integrated';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
-import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261118-device-selection-final';
+import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261118-cnn-integrated';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 
 renderMath();
@@ -123,7 +123,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261118-device-selection-final';
+  const revision = '20261118-cnn-integrated';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -285,7 +285,7 @@ function replaceSeed() {
 }
 function randomizeWallGeometry(input) {
   const ruggedBands = { sigmaM:[9,12], deltaM:[4,10], sigmaDGeometry:[2.4,3], deltaD:[1,2] };
-  const mix = input.rightMethod === 'spline-cnn' && ['paper-upper','layered'].includes(input.scene);
+  const mix = ['spline-cnn','spline-cnn-fast'].includes(input.rightMethod) && ['paper-upper','layered'].includes(input.scene);
   const rugged = mix && Math.random() < .5;
   let withinRuggedBands = true;
   for (const [name, [low, high]] of Object.entries(ruggedBands)) {
@@ -569,6 +569,9 @@ function renderSelected() {
   $('primaryMapName').classList.toggle('baseline-name',selected===second);
   $('secondaryMapName').textContent=longName(second);
   const selector=$('rightMethod'),primaryTitle=$('primaryMapName'),secondaryTitle=$('secondaryMapName');
+  $('fastCnnNote').hidden=rightId!=='spline-cnn-fast';
+  if(rightId==='spline-cnn-fast')selector.setAttribute('aria-describedby','fastCnnNote');
+  else selector.removeAttribute('aria-describedby');
   const rightPrimary=state.method===second;
   const title=rightPrimary?primaryTitle:secondaryTitle;
   if(selector.parentElement!==title.parentElement)title.parentElement.append(selector);

@@ -1,16 +1,16 @@
-import { rightMethods } from './right-methods.mjs?v=20261118-device-selection-final';
-import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-device-selection-final';
-import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-device-selection-final';
-import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-device-selection-final';
+import { rightMethods } from './right-methods.mjs?v=20261118-cnn-integrated';
+import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-cnn-integrated';
+import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-cnn-integrated';
+import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-cnn-integrated';
 import { correctFit } from './echospline-gbdt.mjs';
-import { GatGpr } from './gat-gpr.mjs?v=20261118-device-selection-final';
-import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-device-selection-final';
-import { createSplineGpu } from './spline-gpu.mjs?v=20261118-device-selection-final';
-import { EchoSpline } from './echospline.mjs?v=20261118-device-selection-final';
+import { GatGpr } from './gat-gpr.mjs?v=20261118-cnn-integrated';
+import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-cnn-integrated';
+import { createSplineGpu } from './spline-gpu.mjs?v=20261118-cnn-integrated';
+import { EchoSpline } from './echospline.mjs?v=20261118-cnn-integrated';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
-import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261118-device-selection-final';
+import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261118-cnn-integrated';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
-import { computationDevice } from './compute-device.mjs?v=20261118-device-selection-final';
+import { computationDevice } from './compute-device.mjs?v=20261118-cnn-integrated';
 
 const paperSettings = new Map([
   [3, {threshold:6, parameters:{K:8, ext:1.1}}],
@@ -34,14 +34,15 @@ export function echoProtocol(input={}) {
     guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded
       : {...rightMethods[input.rightMethod],id:input.rightMethod,threshold:input.rightMethod==='arc'?0.7:null,
         ...(rightMethods[input.rightMethod].pairSelector?{parameters:{maxSelectedPairs:10,selectionInterval:10,trainedFleets:[3,5,7,10]}}:{}),
-        training:rightMethods[input.rightMethod].pairSelector?'Frozen pair-subset scorer trained on 48 training wall scenes from eight seed groups, with 3, 5, 7 and 10 vehicles; features use current and past observations only':input.rightMethod==='spline-cnn'?'Frozen upper-wall checkpoint refined on 4,736 independent walls with 3- and 10-vehicle measured prefixes':'Frozen three-vehicle upper-wall checkpoint',
-        revision:rightMethods[input.rightMethod].pairSelector?'20261118-pair-selection':input.rightMethod==='spline-cnn'?'20261118-rugged-canonical':'20261115'}};
+        training:rightMethods[input.rightMethod].pairSelector?'Frozen pair-subset scorer trained on 48 training wall scenes from eight seed groups, with 3, 5, 7 and 10 vehicles; features use current and past observations only':input.rightMethod==='spline-cnn'?'Frozen upper-wall checkpoint refined on 4,736 independent walls with 3- and 10-vehicle measured prefixes':input.rightMethod==='spline-cnn-fast'?'기존 EchoSpline-CNN을 교사로 증류한 고정 체크포인트':'Frozen three-vehicle upper-wall checkpoint',
+        revision:rightMethods[input.rightMethod].pairSelector?'20261118-pair-selection':input.rightMethod==='spline-cnn'?'20261118-rugged-canonical':input.rightMethod==='spline-cnn-fast'?'20261118-cnn-integrated':'20261115'}};
 }
 
 export class EchoComparison {
   constructor(input,domain,side,stationaryCandidates) {
     this.protocol=echoProtocol(input);this.side=side;
     this.id=input.rightMethod??'wmp'; this.vehicles=input.vehicles; this.lastT=0;this.leftT=0;
+    this.isSplineCnn=this.id==='spline-cnn'||this.id==='spline-cnn-fast';
     this.leftDeviceChoice=computationDevice(input,'echoSpline');
     this.deviceChoice=side==='echoSpline'?this.leftDeviceChoice:computationDevice(input,this.id);
     this.echoBackend=this.deviceChoice.spline?'gpu':'cpu';
@@ -52,7 +53,7 @@ export class EchoComparison {
     if(side==='echoSpline')return;
     this.pairMethod=rightMethods[this.id]?.pairSelector;
     if(this.pairMethod)this.pairEstimator=new EchoComparison({...input,rightMethod:'wmp',echoBackend:this.echoBackend},domain,'echoSpline',stationaryCandidates);
-    if(this.id==='gbdt'||this.id==='spline-cnn')this.fixedSpline=this.spline && this.leftDeviceChoice.spline===this.deviceChoice.spline && (input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
+    if(this.id==='gbdt'||this.isSplineCnn)this.fixedSpline=this.spline && this.leftDeviceChoice.spline===this.deviceChoice.spline && (input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
       ? this.spline : new EchoSpline({...splineOptions,spacing:2,support:8});
     if(this.id==='wmp'){
       const {parameters,refinement,clustering}=this.protocol.guarded;
@@ -73,14 +74,16 @@ export class EchoComparison {
     }
     if(this.side==='echoSpline' || this.closed)return;
     if(this.pairEstimator){
-      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261118-device-selection-final');
+      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261118-cnn-integrated');
       if(this.closed)return;
       this.pairSelector=createPairSelector(this.pairMethod,this.vehicles);
       await this.pairEstimator.loadModel({useGpu});
       return;
     }
-    if(this.id==='spline-cnn'){
-      [this.tree,this.cnn]=await Promise.all([modelData('gbdt'),neuralRuntime('spline-cnn')]);
+    if(this.isSplineCnn){
+      [this.tree,this.cnn]=await Promise.all([modelData('gbdt'),neuralRuntime(this.id)]);
+      if(this.id==='spline-cnn-fast'&&this.cnn.weights['start.weight'].shape[2]!==23)
+        throw new Error('Fast EchoSpline-CNN requires a 23-channel checkpoint');
       if(useGpu&&this.deviceChoice.neural&&!this.closed){
         this.cnn.gpu=createSplineCnnGpu(this.cnn);
         try{await this.cnn.gpu?.ready;}
@@ -186,8 +189,8 @@ export class EchoComparison {
       const calls=this.rightGpuCalls(),gpuCallsThisStep=calls-before;
       return {...map,ms:performance.now()-start,
         ...(this.pairEstimator?{selectedPairCount:this.pairSelector.selectedCount,availablePairCount:wire.configs.length}:{}),
-        ...(!this.pairEstimator && (['spline-cnn','arc'].includes(this.id)||calls||this.deviceChoice.requested==='gpu')?{
-          backend:gpuCallsThisStep?'WebGPU + CPU':['spline-cnn','arc','gat'].includes(this.id)?'CPU WASM':'CPU',
+        ...(!this.pairEstimator && (['spline-cnn','spline-cnn-fast','arc'].includes(this.id)||calls||this.deviceChoice.requested==='gpu')?{
+          backend:gpuCallsThisStep?'WebGPU + CPU':['spline-cnn','spline-cnn-fast','arc','gat'].includes(this.id)?'CPU WASM':'CPU',
           gpuCalls:calls,gpuCallsThisStep}: {})};
     };
     return result?.then?result.then(finish):finish(result);
@@ -200,14 +203,14 @@ export class EchoComparison {
   correctedMap(result,pairCount) {
     if(!result.fit)return {curves:[],candidates:[]};
     let fit=result.fit;
-    const flip=this.id==='spline-cnn' && fit.sign<0;
+    const flip=this.isSplineCnn && fit.sign<0;
     if(flip){
       // Express the selected lower wall in the upper-wall coordinates used in training.
       fit={...fit,heights:fit.heights.map(y=>-y),prior:fit.prior.map(y=>-y),
         points:fit.points.map(([x,y,slope])=>[x,-y,-slope]),matches:fit.matches.map(m=>({...m,g:-m.g}))};
     }
     const curves=correctFit(fit,this.tree,pairCount,8);
-    if(this.id!=='spline-cnn' || !curves.length)return {curves,candidates:[]};
+    if(!this.isSplineCnn || !curves.length)return {curves,candidates:[]};
     const extra=this.cnn.weights['start.weight'].shape[2]>11?this.fixedSpline.cnnPoints(result.fit.sign):null;
     const evidence=extra?{points:flip?extra.map(points=>points.map(([x,y,s])=>[x,-y,-s])):extra,
       configs:this.cnnConfigs,links:pairCount,sign:flip?-1:1}:undefined;

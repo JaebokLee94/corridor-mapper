@@ -111,12 +111,13 @@
             <option value="wmp" selected>WM-P</option>
             <option value="gbdt">EchoSpline-GBDT</option>
             <option value="spline-cnn">EchoSpline-CNN (Rugged Wall Recovery)</option>
+            <option value="spline-cnn-fast" lang="ko">EchoSpline-CNN 고속 (실험)</option>
             <option value="pair-ridge">EchoSpline-Ridge (Computational Reduction)</option>
             <option value="pair-gbdt">EchoSpline-GBDT (Computational Reduction)</option>
             <option value="pair-extra-trees">EchoSpline-ExtraTrees (Computational Reduction)</option>
             <option value="arc" hidden>EchoArc-CNN</option>
           </select></h3><span id="secondaryProgress" class="method-progress" hidden></span></div></div><div class="view-body"><span id="secondaryTimer" class="map-timer" role="timer" aria-live="off" aria-label="Secondary method computation elapsed time">0.000 s</span><canvas id="baselineCanvas" class="dashboard-canvas" role="img" aria-label="WM-P candidate map, sharing the EchoSpline camera"></canvas></div></div></div>
-            <div class="legend-row" aria-label="Map legend"><ul class="legend"><li data-layer="proxy"><span class="swatch swatch-supported" aria-hidden="true"></span>Fitted / supported</li><li id="centreLegend" data-layer="proxy" hidden><span class="swatch swatch-centre" aria-hidden="true"></span>Linked centre</li><li data-layer="proxy" title="Dotted lines show inferred connections. Extended centre spline checks new curve sections against measured ranges. Extended linear can span wider gaps and cross real openings."><span class="swatch swatch-interpolated" aria-hidden="true"></span>Interpolated</li><li data-layer="proxy"><span class="swatch swatch-pending" aria-hidden="true"></span>Held</li><li data-layer="proxy"><span class="swatch swatch-contradicted" aria-hidden="true"></span>Rejected</li><li data-layer="truth"><span class="swatch swatch-truth" aria-hidden="true"></span>True wall</li><li data-layer="vehicles"><span class="swatch swatch-track" aria-hidden="true"></span>Trajectory</li><li data-layer="ellipses"><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipse</li></ul><span id="ellipseStats" class="view-meta">No measurements yet</span></div>
+            <div class="legend-row" aria-label="Map legend"><ul class="legend"><li data-layer="proxy"><span class="swatch swatch-supported" aria-hidden="true"></span>Fitted / supported</li><li id="centreLegend" data-layer="proxy" hidden><span class="swatch swatch-centre" aria-hidden="true"></span>Linked centre</li><li data-layer="proxy" title="Dotted lines show inferred connections. Extended centre spline checks new curve sections against measured ranges. Extended linear can span wider gaps and cross real openings."><span class="swatch swatch-interpolated" aria-hidden="true"></span>Interpolated</li><li data-layer="proxy"><span class="swatch swatch-pending" aria-hidden="true"></span>Held</li><li data-layer="proxy"><span class="swatch swatch-contradicted" aria-hidden="true"></span>Rejected</li><li data-layer="truth"><span class="swatch swatch-truth" aria-hidden="true"></span>True wall</li><li data-layer="vehicles"><span class="swatch swatch-track" aria-hidden="true"></span>Trajectory</li><li data-layer="ellipses"><span class="swatch swatch-ellipse" aria-hidden="true"></span>Range ellipse</li></ul><span id="ellipseStats" class="view-meta">No measurements yet</span><p id="fastCnnNote" class="note" lang="ko" hidden>거리 특징 계산을 생략해 속도를 높입니다. 일부 복잡한 벽에서는 정확도가 낮아질 수 있으므로 기존 모델과 비교해 사용하세요.</p></div>
           </figure>
           <section class="view results-panel" aria-labelledby="resultsTitle">
             <div class="results-heading"><h2 id="resultsTitle">Method comparison</h2><span class="evaluation" title="Post-hoc ground-truth evaluation">Evaluation only</span></div>
@@ -155,7 +156,7 @@
         <section id="deviceBenchmarkPanel" role="tabpanel" aria-labelledby="deviceBenchmarkTab" hidden>
           <h2>Compare computation devices</h2><p class="note">Runs the simulator’s production estimators one at a time on the same measured snapshots. CPU and GPU must reproduce the same wall before a faster device can be selected. Keep this tab visible; hidden trials are interrupted and recorded. Model loading, simulation, evaluation and rendering are outside estimator time.</p>
           <form id="deviceBenchmarkSettings" class="sweep-settings">
-            <label class="field"><span>Methods</span><select id="deviceBenchmarkMethods" name="benchmarkMethods"><option value="selected">Selected right-hand method</option><option value="all">All 9 methods</option><option value="echoSpline">EchoSpline</option></select></label>
+            <label class="field"><span>Methods</span><select id="deviceBenchmarkMethods" name="benchmarkMethods"><option value="selected">Selected right-hand method</option><option value="all">All methods</option><option value="echoSpline">EchoSpline</option></select></label>
             <label class="field"><span>Conditions</span><select id="deviceBenchmarkScope" name="benchmarkScope"><option value="current">Current experiment</option><option value="matrix">3 / 10 vehicles × simple / rugged walls</option></select></label>
             <label class="field"><span>Measured repetitions per device</span><select id="deviceBenchmarkRepeats" name="benchmarkRepeats"><option value="1">1 · screening only</option><option value="3" selected>3</option><option value="5">5</option></select></label>
             <label class="field"><span>Warm-up</span><select id="deviceBenchmarkWarmup" name="benchmarkWarmup"><option value="1" selected>One complete run per device</option><option value="0">No separate warm-up</option></select></label>
@@ -195,8 +196,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261118-device-selection-final';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261118-table-names';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261118-cnn-integrated';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261118-cnn-integrated';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

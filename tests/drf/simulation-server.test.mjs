@@ -67,7 +67,9 @@ test('diagnostic deltas retain causal history without repeating earlier arrays',
 
 test('local service rejects foreign origins, DNS rebinding, non-JSON and private paths', async t => {
   const { base } = await ready(t);
-  assert.equal((await (await fetch(base + '/api/health')).json()).schema, 'echomap-server/1');
+  const health=await (await fetch(base + '/api/health')).json();
+  assert.equal(health.schema, 'echomap-server/1');
+  for(const id of ['wmp','spline-cnn','spline-cnn-fast'])assert.ok(health.rightMethods.includes(id),`Advertised method: ${id}`);
   const hostileHost = await new Promise((resolve, reject) => {
     http.get(base + '/api/health', { headers: { Host: 'attacker.example' } }, response => { response.resume(); resolve(response.statusCode); }).on('error', reject);
   });

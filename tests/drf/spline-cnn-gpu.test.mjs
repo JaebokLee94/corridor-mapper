@@ -36,9 +36,9 @@ function fakeGpu(){
   const adapter={info:{description:'mock lifecycle device'},requestDevice:async()=>device};
   return {state,device,adapter,loss,gpu:{requestAdapter:async()=>adapter}};
 }
-function runtime(width=32){
+function runtime(width=32,channels=26){
   const dilations=[[1,2],[2,4],[4,8],[8,16],[12,24],[20,40]],weights={};
-  for(const [name,k,inc,out] of [['start',3,26,width],...dilations.map((_,i)=>['blocks.'+i,3,width,width]),['end',1,width,1]]){
+  for(const [name,k,inc,out] of [['start',3,channels,width],...dilations.map((_,i)=>['blocks.'+i,3,width,width]),['end',1,width,1]]){
     weights[name+'.weight']={shape:[k,k,inc,out],values:new Float32Array(k*k*inc*out)};
     weights[name+'.bias']={shape:[out],values:new Float32Array(out)};
   }
@@ -62,12 +62,12 @@ test('unsupported GPU returns null without starting work',()=>{
   const restore=environment(undefined);try{assert.equal(createSplineCnnGpu(runtime()),null);}finally{restore();}
 });
 
-for(const width of [32,64])test(`width${width}: one submit/readback, resident reuse, serialization and raw-logit contract`,async()=>{
-  const f=fakeGpu(),restore=environment(f.gpu),backend=createSplineCnnGpu(runtime(width));
+for(const [width,channels] of [[32,26],[64,26],[64,23]])test(`width${width}/input${channels}: one submit/readback, resident reuse, serialization and raw-logit contract`,async()=>{
+  const f=fakeGpu(),restore=environment(f.gpu),backend=createSplineCnnGpu(runtime(width,channels));
   try{
     await backend.ready;
     const submits=f.state.submissions,maps=f.state.maps;
-    const input=new Float32Array(26*81*41).fill(.75),original=input.slice();
+    const input=new Float32Array(channels*81*41).fill(.75),original=input.slice();
     const first=await backend.estimate(input,41),allocated=f.state.buffers.length;
     assert(first.every(v=>v===0),'raw zero-weight logits must not subtract the input prior');
     await Promise.all([backend.estimate(input,41),backend.estimate(input,41)]);
@@ -75,7 +75,7 @@ for(const width of [32,64])test(`width${width}: one submit/readback, resident re
     assert.equal(f.state.submissions-submits,3);assert.equal(f.state.maps-maps,3);assert.equal(backend.completedCalls,3);
     assert.equal(backend.completedReadbacks,3);assert.equal(backend.inputBytes,3*input.byteLength);assert.deepEqual(input,original);
     await assert.rejects(backend.estimate(new Float32Array(1),41),/Invalid/);
-    const smaller=await backend.estimate(new Float32Array(26*81*37),37);assert.equal(smaller.length,81*37);
+    const smaller=await backend.estimate(new Float32Array(channels*81*37),37);assert.equal(smaller.length,81*37);
     assert(f.state.buffers.slice(allocated-6,allocated).every(b=>b.destroyed),'resize releases previous workspace');
   }finally{backend.close();restore();}
   assert(f.state.buffers.every(b=>b.destroyed));assert.equal(f.state.destroyed,1);
@@ -111,8 +111,8 @@ test('device loss and close during mapped readback reject for caller CPU fallbac
 });
 
 
-test('joint comparison awaits the CNN branch independently of the Arc GPU flag',async()=>{
-  const model=new EchoComparison({scene:'paper-upper',vehicles:3,rightMethod:'spline-cnn'},[0,100,-20,50]);
+for(const rightMethod of ['spline-cnn','spline-cnn-fast'])test(`${rightMethod} awaits the CNN branch independently of the Arc GPU flag`,async()=>{
+  const model=new EchoComparison({scene:'paper-upper',vehicles:3,rightMethod},[0,100,-20,50]);
   const details={token:'shared fit'},left={curves:[[[0,4],[.2,4]]],fit:details},right={curves:[[[0,5],[.2,5]]],candidates:[]};
   let supplied;
   model.stepLeft=()=>left;
@@ -149,8 +149,8 @@ test('cancelling a pending CNN readback propagates rejection without CPU recompu
   assert.equal(calls.filter(k=>k==='convolutionXY').length,0);
 });
 
-test('GPU CNN receives the same canonical WASM range features as CPU CNN',async()=>{
-  const rt=await neuralRuntime('spline-cnn'),call=rt.call;
+for(const [id,channels] of [['spline-cnn',26],['spline-cnn-fast',23]])test(`${id}: GPU receives the same canonical features as CPU CNN`,async()=>{
+  const rt=await neuralRuntime(id),call=rt.call;
   let cpuInput,gpuInput,rangeCalls=0,convolutionCalls=0;
   rt.call=(name,inputs,...args)=>{
     if(name==='rangeVotes')rangeCalls++;
@@ -167,20 +167,21 @@ test('GPU CNN receives the same canonical WASM range features as CPU CNN',async(
   };
   rt.gpu=gpu;
   await splineCnnProposal(rt,fitFixture(),anchorFixture,evidence);
-  assert.equal(rt.gpu,gpu);assert.equal(rangeCalls,2);assert.equal(convolutionCalls,8);
-  assert.ok(cpuInput[(40*3)*26+18]>0,'the range evidence must be nonzero');
+  assert.equal(rt.gpu,gpu);assert.equal(rangeCalls,channels===26?2:0);assert.equal(convolutionCalls,8);
+  assert.equal(cpuInput.length,81*3*channels);
+  if(channels===26)assert.ok(cpuInput[(40*3)*26+18]>0,'the range evidence must be nonzero');
   assert.deepEqual(gpuInput,cpuInput,'changing CNN backend must not change any input channel');
 });
 
-test('stepRight keeps causal configurations and records the completed CNN invocation',async()=>{
-  const model=new EchoComparison({scene:'paper-upper',vehicles:3,rightMethod:'spline-cnn'},[0,100,-20,50],'guarded');
+for(const rightMethod of ['spline-cnn','spline-cnn-fast'])test(`${rightMethod} records the completed invocation and retains only needed configurations`,async()=>{
+  const model=new EchoComparison({scene:'paper-upper',vehicles:3,rightMethod},[0,100,-20,50],'guarded');
   const wire=t=>({t,configs:[[1,2],[1,3],[2,3]].map(([i,j])=>({i,j,pHat_i:[i,0],pHat_j:[j,0],Sigma_i:[0,0,0],Sigma_j:[0,0,0],paths:[{dHat:10,sigmaD:.4}]}))});
   model.cnn={gpu:{completedCalls:0,close(){}}};model.fixedSpline={step:()=>({fit:{}})};
   model.correctedMap=async()=>{model.cnn.gpu.completedCalls++;return {curves:[],candidates:[]};};
   const first=await model.stepRight(wire(1)),second=await model.stepRight(wire(2));
   assert.equal(first.backend,'WebGPU + CPU');assert.equal(first.gpuCallsThisStep,1);assert.equal(first.gpuCalls,1);
   assert.equal(second.gpuCallsThisStep,1);assert.equal(second.gpuCalls,2);
-  assert.equal(model.cnnConfigs.length,6);assert.equal(model.lastT,2);
-  assert.throws(()=>model.stepRight(wire(2)),/consecutive/);assert.equal(model.cnnConfigs.length,6);
+  assert.equal(model.cnnConfigs?.length,rightMethod==='spline-cnn'?6:undefined);assert.equal(model.lastT,2);
+  assert.throws(()=>model.stepRight(wire(2)),/consecutive/);assert.equal(model.cnnConfigs?.length,rightMethod==='spline-cnn'?6:undefined);
   model.close();
 });
