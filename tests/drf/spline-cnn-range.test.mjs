@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {neuralRuntime} from '../../drf/model-runtime.mjs';
-import {splineRangeImage} from '../../drf/spline-cnn-range.mjs';
+import {rangeConfiguration,splineRangeImage} from '../../drf/spline-cnn-range.mjs';
 import {pathFieldPoint} from '../../drf/field.mjs';
 
 test('CNN range features agree with scalar ellipse likelihood and preserve measured inputs',async()=>{
@@ -32,4 +32,30 @@ test('range kernel has the analytic circular-ellipse density and empty-prefix li
   assert.ok(Math.abs(center[0]-Math.log1p(2/(Math.sqrt(2*Math.PI)*.4*10*Math.PI)))<1e-7);
   assert.equal(center[1],0);assert.equal(center[2],0);
   assert.ok(splineRangeImage(rt,[0],[5],[],3).every(v=>v===0));
+});
+
+test('supported-column compaction exactly preserves the full-cell WASM range image',async()=>{
+  const rt=await neuralRuntime('spline-cnn'),call=rt.call;
+  const configs=[
+    {pHat_i:[-3,1],pHat_j:[3,-2],Sigma_i:[.03,.005,.02],Sigma_j:[.02,-.003,.01],
+      paths:[{dHat:21,sigmaD:.4},{dHat:10,sigmaD:.3},{dHat:2,sigmaD:.4}]},
+    {pHat_i:[2,0],pHat_j:[2,0],Sigma_i:[0,0,0],Sigma_j:[0,0,0],paths:[{dHat:10,sigmaD:.4}]},
+  ];
+  const x=Float64Array.from([-2,-.2,0,.2,4]);
+  for(const anchor of [[4,4,4,4,4],[NaN,4,NaN,5,NaN],[NaN,NaN,NaN,NaN,NaN]])for(const sign of [1,-1]){
+    const packed=rangeConfiguration(configs,sign),xy=new Float32Array(81*x.length*2);
+    for(let z=0;z<81;z++)for(let j=0;j<x.length;j++){
+      const k=2*(z*x.length+j);xy[k]=x[j];xy[k+1]=(Number.isFinite(anchor[j])?anchor[j]:0)+(z-40)*.4;
+    }
+    const expected=call('rangeVotes',[xy,packed.configs,packed.paths],81*x.length*3,[81*x.length,packed.configs.length/13,3]);
+    for(let j=0;j<x.length;j++)if(!Number.isFinite(anchor[j]))for(let z=0;z<81;z++)expected.fill(0,3*(z*x.length+j),3*(z*x.length+j)+3);
+    const before=structuredClone({x,anchor,configs});let cells=0,raw;
+    rt.call=(name,inputs,outputSize,params)=>{cells+=params[0];return raw=call(name,inputs,outputSize,params);};
+    const actual=splineRangeImage(rt,x,anchor,configs,3,sign),supported=anchor.filter(Number.isFinite).length;
+    assert.deepEqual(actual,expected);
+    assert.equal(cells,81*supported,'only supported cells enter the range kernel');
+    if(supported===x.length)assert.equal(actual,raw,'full support returns the kernel output without a copy');
+    assert.deepEqual({x,anchor,configs},before);
+  }
+  assert.deepEqual(splineRangeImage(rt,[],[],configs,3),new Float32Array());
 });

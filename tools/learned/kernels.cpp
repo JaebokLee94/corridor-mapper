@@ -1,5 +1,6 @@
 // Browser linear algebra for the frozen inference models. Matrices passed by JS use row-major storage.
 #include <Eigen/Dense>
+#include <wasm_simd128.h>
 #include "gp-simd.hpp"
 #include <cmath>
 #include <cstdlib>
@@ -8,6 +9,59 @@
 #include <algorithm>
 using namespace Eigen;
 using RowF = Matrix<float,Dynamic,Dynamic,RowMajor>;
+// NHWC [H,W,In] × [K,K,In,64]; O(H*W*K²*In*64), constant scratch memory.
+// Preserve Eigen 5.0.1 FP32 channel sums, including sequential spatial tails.
+template<int In>
+void convolution64(const float *image,const float *weights,const float *bias,float *out,
+                   int height,int width,int kernel,int dilationY,int dilationX) {
+    for(int p=0;p<height*width;p++)for(int c=0;c<64;c+=4)
+        wasm_v128_store(out+p*64+c,wasm_v128_load(bias+c));
+    for(int ky=0;ky<kernel;ky++)for(int kx=0;kx<kernel;kx++) {
+        const int dx=(kx-kernel/2)*dilationX,dy=(ky-kernel/2)*dilationY;
+        const int begin=std::max(0,-dx),count=width-std::abs(dx),panels=count/4*4;
+        if(count<=0)continue;
+        const float *w=weights+(ky*kernel+kx)*In*64;
+        for(int y=std::max(0,-dy);y<std::min(height,height-dy);y++) {
+            const float *src=image+((y+dy)*width+begin+dx)*In;
+            float *dest=out+(y*width+begin)*64;
+            int x=0;
+            for(;x<panels;x+=4)for(int o=0;o<64;o+=4) {
+                v128_t e0=wasm_f32x4_splat(0),e1=e0,e2=e0,e3=e0;
+                v128_t o0=e0,o1=e0,o2=e0,o3=e0;
+                int c=0;
+                for(;c<In/8*8;c+=2) {
+                    const v128_t we=wasm_v128_load(w+c*64+o),wo=wasm_v128_load(w+(c+1)*64+o);
+                    e0=wasm_f32x4_add(e0,wasm_f32x4_mul(wasm_f32x4_splat(src[x*In+c]),we));
+                    e1=wasm_f32x4_add(e1,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+1)*In+c]),we));
+                    e2=wasm_f32x4_add(e2,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+2)*In+c]),we));
+                    e3=wasm_f32x4_add(e3,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+3)*In+c]),we));
+                    o0=wasm_f32x4_add(o0,wasm_f32x4_mul(wasm_f32x4_splat(src[x*In+c+1]),wo));
+                    o1=wasm_f32x4_add(o1,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+1)*In+c+1]),wo));
+                    o2=wasm_f32x4_add(o2,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+2)*In+c+1]),wo));
+                    o3=wasm_f32x4_add(o3,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+3)*In+c+1]),wo));
+                }
+                e0=wasm_f32x4_add(e0,o0);e1=wasm_f32x4_add(e1,o1);
+                e2=wasm_f32x4_add(e2,o2);e3=wasm_f32x4_add(e3,o3);
+                for(;c<In;c++) {
+                    const v128_t wc=wasm_v128_load(w+c*64+o);
+                    e0=wasm_f32x4_add(e0,wasm_f32x4_mul(wasm_f32x4_splat(src[x*In+c]),wc));
+                    e1=wasm_f32x4_add(e1,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+1)*In+c]),wc));
+                    e2=wasm_f32x4_add(e2,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+2)*In+c]),wc));
+                    e3=wasm_f32x4_add(e3,wasm_f32x4_mul(wasm_f32x4_splat(src[(x+3)*In+c]),wc));
+                }
+                wasm_v128_store(dest+x*64+o,wasm_f32x4_add(wasm_v128_load(dest+x*64+o),e0));
+                wasm_v128_store(dest+(x+1)*64+o,wasm_f32x4_add(wasm_v128_load(dest+(x+1)*64+o),e1));
+                wasm_v128_store(dest+(x+2)*64+o,wasm_f32x4_add(wasm_v128_load(dest+(x+2)*64+o),e2));
+                wasm_v128_store(dest+(x+3)*64+o,wasm_f32x4_add(wasm_v128_load(dest+(x+3)*64+o),e3));
+            }
+            for(;x<count;x++)for(int o=0;o<64;o+=4) {
+                v128_t sum=wasm_f32x4_splat(0);
+                for(int c=0;c<In;c++)sum=wasm_f32x4_add(sum,wasm_f32x4_mul(wasm_f32x4_splat(src[x*In+c]),wasm_v128_load(w+c*64+o)));
+                wasm_v128_store(dest+x*64+o,wasm_f32x4_add(wasm_v128_load(dest+x*64+o),sum));
+            }
+        }
+    }
+}
 extern "C" {
 void setulb(int,int,double*,double*,double*,int*,double*,double*,double,double,double*,int*,int*,int*,int*,double*,int,int*);
 
@@ -18,6 +72,8 @@ void multiply(const float *a,const float *b,float *out,int rows,int inner,int co
 // NHWC image; weights in [kernel row, kernel column, input channel, output channel] order.
 void convolutionXY(const float *image,const float *weights,const float *bias,float *out,
                  int height,int width,int in,int channels,int kernel,int dilationY,int dilationX) {
+    if(channels==64 && in==26){convolution64<26>(image,weights,bias,out,height,width,kernel,dilationY,dilationX);return;}
+    if(channels==64 && in==64){convolution64<64>(image,weights,bias,out,height,width,kernel,dilationY,dilationX);return;}
     Map<RowF> result(out,height*width,channels);
     result.rowwise() = Map<const RowVectorXf>(bias,channels);
     for (int ky=0;ky<kernel;ky++) for (int kx=0;kx<kernel;kx++) {
@@ -48,13 +104,15 @@ void rangeVotes(const float *xy,const float *configs,const float *paths,float *o
             const float *p=configs+c*13;
             float ax=xy[j*2]-p[0],ay=xy[j*2+1]-p[1],bx=xy[j*2]-p[2],by=xy[j*2+1]-p[3];
             float ra=std::max(1e-9f,std::sqrt(ax*ax+ay*ay)),rb=std::max(1e-9f,std::sqrt(bx*bx+by*by));
-            ax/=ra;ay/=ra;bx/=rb;by/=rb;
-            const float gx=ax+bx,gy=ay+by,norm=std::max(1e-9f,std::sqrt(gx*gx+gy*gy));
-            const float var=p[4]*ax*ax+2*p[5]*ax*ay+p[6]*ay*ay+p[7]*bx*bx+2*p[8]*bx*by+p[9]*by*by;
             const float rho=ra+rb,lower=rho-p[12],upper=rho+p[12];
             const int begin=int(p[10]),end=begin+int(p[11]);
             int lo=begin,hi=end;
             while(lo<hi){int mid=(lo+hi)/2;if(paths[3*mid]<lower)lo=mid+1;else hi=mid;}
+            // Empty finite likelihoods add exactly zero; keep the admitted-path reduction order.
+            if(std::isfinite(rho) && (lo==end || paths[3*lo]>upper))continue;
+            ax/=ra;ay/=ra;bx/=rb;by/=rb;
+            const float gx=ax+bx,gy=ay+by,norm=std::max(1e-9f,std::sqrt(gx*gx+gy*gy));
+            const float var=p[4]*ax*ax+2*p[5]*ax*ay+p[6]*ay*ay+p[7]*bx*bx+2*p[8]*bx*by+p[9]*by*by;
             float total=0;
             for(int k=lo;k<end&&paths[3*k]<=upper;k++) {
                 const float *path=paths+3*k,sd=std::sqrt(std::max(1e-12f,path[1]+var));
