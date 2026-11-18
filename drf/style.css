@@ -393,6 +393,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .map-pair { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); min-height:0; }
 .map-pair:not([data-mode="compare"]) { grid-template-columns:minmax(0,1fr); }
 .map-pane { min-width:0; min-height:0; display:grid; grid-template-rows:minmax(28px,auto) minmax(0,1fr); }
+.map-timer { position:absolute; top:20px; right:calc(var(--plot-right-inset,16px) + 4px); z-index:1; color:var(--color-ink); font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; pointer-events:none; }
 .map-pane+.map-pane { border-left:1px solid var(--color-line); }
 .map-pane-heading { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:8px; min-width:0; padding:3px var(--plot-right-inset,16px) 3px calc(var(--heading-inset) + var(--method-button-inset) + 1px); }
 .map-heading-details { display:flex; flex-wrap:wrap; align-items:center; gap:0 8px; min-width:0; }

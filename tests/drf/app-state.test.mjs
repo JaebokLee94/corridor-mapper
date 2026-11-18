@@ -409,7 +409,7 @@ function runUiContext(total=120) {
     next:0,frames:[],frameTimes:[],evaluations:[],selected:0,followLive:true,sweepRuns:[],valid:true};
   const context=vm.createContext({state,$,performance,form:{elements},document:{body:{dataset:{}},createElement:()=>({})},DEFAULT_INPUT,
     runWorker:{postMessage:message=>posted.push({...message})},
-    diagnosticWorker:null,diagnosticView:{reset(){}},
+    diagnosticWorker:null,diagnosticView:{reset(){}},paintComputeClock(){},
     renderSelected:()=>drawn.push(state.selected),notice:text=>{$('status').textContent=text;},
     hashField:async()=> 'completed-hash',requestAnimationFrame:()=>assert.fail('UI receipt must not depend on a repaint'),
     fail:error=>errors.push(error),makeWorker:()=>assert.fail('Only prepared messages create inspection workers'),
@@ -613,7 +613,7 @@ test('both fields and their vehicle tracks follow EchoSpline live, in replay and
     const maps={};
     for(const name of ['map','baselineMap','densityMap','contrastMap'])maps[name]={set(value){this.state=value;}};
     const context=vm.createContext({$,document,form:$('settings'),state,rightMethods,setMethodLabel,
-      ...maps,hoverGeneration:0,LAYERED_DOMAIN,interpolationResult,fmt:String,
+      ...maps,hoverGeneration:0,LAYERED_DOMAIN,interpolationResult,fmt:String,performance,
       percentile,renderInterpolationPanel(){},drawComparisonHistory(){},renderDiagnostics(){}});
     vm.runInContext(section('function renderSelected()','// Sweep diagnostics'),context);
     function check(t,field) {
@@ -636,45 +636,77 @@ test('both fields and their vehicle tracks follow EchoSpline live, in replay and
   } finally {dom.window.close();}
 });
 
-test('table timings follow each estimator through completion and retain the full run on replay',async()=>{
-  const {context,state,$,errors}=runUiContext(2);
-  context.document.hidden=true;context.percentile=percentile;
-  vm.runInContext(section('function renderComputeTimes','// Sweep diagnostics'),context);
+test('graph timers and table use elapsed time, stop each completed method and remain fixed during replay',async()=>{
+  const {context,state,$,errors}=runUiContext(2);let now=1000;
+  context.document.hidden=true;context.percentile=percentile;context.performance={now:()=>now};
+  vm.runInContext(section('function computeElapsedMs','// Sweep diagnostics'),context);
   const values=()=>['computeTimeValue','bComputeTimeValue','updateP95Value','bUpdateP95Value'].map(id=>$(id).textContent);
-  const show=(selected='echoSpline')=>context.renderComputeTimes('echoSpline','guarded',selected,true);
-  const frame=(side,t,ms)=>context.receiveRunMessage({type:'method-frame',requestId:1,side,t,result:{ms}},1);
-  await frame('echoSpline',1,12);await frame('guarded',1,50);await frame('echoSpline',2,18);
-  show();assert.deepEqual(values(),['0.030','0.050','18.0','50.0']);
-  await frame('guarded',2,70);
-  state.replay=true;state.selected=1;show();
-  assert.deepEqual(values(),['0.030','0.120','18.0','70.0']);
-  show('guarded');
-  assert.equal($('interpolationComputeTimeValue').textContent,'0.120');
+  const show=(selected='echoSpline')=>{
+    context.renderComputeTimes('echoSpline','guarded',selected,true);
+    assert.equal($('primaryTimer').textContent,`${$(selected==='guarded'?'bComputeTimeValue':'computeTimeValue').textContent} s`);
+    assert.equal($('secondaryTimer').textContent,`${$('bComputeTimeValue').textContent} s`);
+  };
+  const clock=(elapsedMs,running,requestId=1)=>context.receiveRunMessage({type:'compute-clock',requestId,elapsedMs,running},requestId);
+  const frame=(side,t,at,ms)=>context.receiveRunMessage({type:'method-frame',requestId:1,side,t,at,result:{ms}},1);
+  state.methodFrames={echoSpline:[],guarded:[]};
+  show();assert.deepEqual(values(),['0.000','0.000','—','—'],'Measurement preparation is outside the computation clock');
+  await clock(0,true);now=1100;show();
+  assert.deepEqual(values(),['0.100','0.100','—','—'],'Time advances before the first result');
+  now=1200;await frame('echoSpline',1,200,12);now=1240;await frame('guarded',1,240,50);now=1300;await frame('echoSpline',2,300,18);
+  now=1500;show();assert.deepEqual(values(),['0.300','0.500','18.0','50.0']);
+  await clock(500,false);now=9000;show();
+  assert.deepEqual(values(),['0.300','0.500','18.0','50.0'],'Pause excludes idle time');
+  await clock(500,true);now=9100;show();
+  assert.equal($('bComputeTimeValue').textContent,'0.600');
+  await clock(99999,true,0);show();
+  assert.equal($('bComputeTimeValue').textContent,'0.600','Stale runs cannot replace the clock');
+  await frame('guarded',2,650,70);await clock(660,false);
+  now=50000;state.mode='done';state.replay=true;state.selected=1;show('guarded');
+  assert.deepEqual(values(),['0.300','0.650','18.0','70.0']);
+  assert.equal($('interpolationComputeTimeValue').textContent,'0.650');
   assert.equal($('interpolationUpdateP95Value').textContent,'70.0');
+  state.replay=false;state.selected=2;show();
+  assert.deepEqual(values(),['0.300','0.650','18.0','70.0'],'Scrubbing does not rewind completed timers');
   assert.deepEqual(errors,[]);
 });
 
-test('timing summaries use nearest-rank P95 and keep empty or incomplete measurements explicit',()=>{
+test('cancellation freezes the computation clock and reset clears it before the next run',()=>{
+  const {context,state,$}=runUiContext(2);let now=1000;
+  Object.assign(context,{performance:{now:()=>now},percentile,hoverGeneration:0,hoverTimer:0,
+    clearTimeout(){},stopReplay(){},map:{fit(){}},baselineMap:{fit(){}},densityMap:{fit(){}},contrastMap:{fit(){}}});
+  context.document.hidden=true;state.workers=[];
+  vm.runInContext(section('function computeElapsedMs','// Sweep diagnostics')+section('function cancel(','async function requestedServerJob('),context);
+  context.syncComputeClock(100,true);now=1250;context.cancel(false);now=9000;
+  context.renderComputeTimes('echoSpline','guarded','echoSpline',false);
+  assert.equal($('computeTimeValue').textContent,'0.350');assert.equal($('primaryTimer').textContent,'0.350 s');
+  assert.equal(state.computeClock.startedAt,null);assert.equal(state.mode,'cancelled');
+  context.cancel(true);context.renderComputeTimes('echoSpline','guarded','echoSpline',false);
+  assert.equal(state.computeClock,null);assert.equal($('computeTimeValue').textContent,'0.000');
+  context.syncComputeClock(0,true);now=9250;context.renderComputeTimes('echoSpline','guarded','echoSpline',false);
+  assert.equal($('computeTimeValue').textContent,'0.250','A new run cannot retain the cancelled run time');
+});
+
+test('P95 retains nearest-rank semantics independently of the elapsed computation clock',()=>{
   const {context,state,$}=runUiContext(20);context.percentile=percentile;
-  vm.runInContext(section('function renderComputeTimes','// Sweep diagnostics'),context);
+  vm.runInContext(section('function computeElapsedMs','// Sweep diagnostics'),context);
   const values=()=>['computeTimeValue','bComputeTimeValue','updateP95Value','bUpdateP95Value'].map(id=>$(id).textContent);
-  const samples=times=>times.map((ms,i)=>({result:{ms},totalMs:times.slice(0,i+1).reduce((sum,v)=>sum+v,0)}));
+  const samples=times=>times.map((ms,i)=>({t:i+1,at:(i+1)*50,result:{ms}}));
   const first=Array.from({length:20},(_,i)=>i+1),second=first.map(v=>v*2).reverse();
   for(const independent of [true,false]){
     const [left,right]=independent?['echoSpline','guarded']:['guarded','baseline'];
     const load=(a,b)=>{
       state.methodFrames=independent?{[left]:samples(a),[right]:samples(b)}:null;
       state.frames=independent?[]:a.map((ms,i)=>({methods:{[left]:{ms},[right]:{ms:b[i]}}}));
-      state.joinedComputeMs={[left]:a.reduce((sum,v)=>sum+v,0),[right]:b.reduce((sum,v)=>sum+v,0)};
+      state.computeClock={elapsedMs:a.length*50,startedAt:null};
       context.renderComputeTimes(left,right,right,independent);
     };
     load([],[]);assert.deepEqual(values(),['0.000','0.000','—','—']);
-    load(first,second);assert.deepEqual(values(),['0.210','0.420','19.0','38.0']);
-    assert.equal($('interpolationComputeTimeValue').textContent,'0.420');
+    load(first,second);assert.deepEqual(values(),['1.000','1.000','19.0','38.0']);
+    assert.equal($('interpolationComputeTimeValue').textContent,'1.000');
     assert.equal($('interpolationUpdateP95Value').textContent,'38.0');
     if(independent)assert.deepEqual(state.methodFrames[right].map(s=>s.result.ms),second,'Quantile computation must preserve snapshot order');
     for(const invalid of [undefined,null,NaN,Infinity,-1]){
-      load([1,invalid],[2,4]);assert.deepEqual(values(),['—','0.006','—','4.0']);
+      load([1,invalid],[2,4]);assert.deepEqual(values(),['0.100','0.100','—','4.0']);
     }
   }
 });
@@ -743,7 +775,7 @@ test('hidden charts defer rendering and visibility return refreshes the current 
     document,$:()=>assert.fail('Hidden chart rendering must be skipped'),
   });
   vm.runInNewContext(section("document.addEventListener('visibilitychange'","document.addEventListener('keydown'"),{
-    document,state,controls(){},renderSelected:()=>drawn.push(state.selected),renderSweep:()=>sweeps.push('refreshed'),advance:()=>assert.fail('Visibility must not start computation'),
+    document,state,controls(){},paintComputeClock(){},renderSelected:()=>drawn.push(state.selected),renderSweep:()=>sweeps.push('refreshed'),advance:()=>assert.fail('Visibility must not start computation'),
   });
   events.get('visibilitychange')();assert.deepEqual(drawn,[]);assert.deepEqual(sweeps,[]);
   document.hidden=false;events.get('visibilitychange')();

@@ -122,7 +122,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261118-rugged-canonical';
+  const revision = '20261118-compute-timer';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -230,6 +230,10 @@ function updateRunProgress() {
   $('runProgress').max = total; $('runProgress').value = state.frames.length;
 }
 function cancel(clear = false) {
+  if (state.computeClock) {
+    state.computeClock.elapsedMs=computeElapsedMs(null,false);
+    state.computeClock.startedAt=null;
+  }
   state.generation++; hoverGeneration++; clearTimeout(hoverTimer); stopReplay();
   const generation = state.generation;
   for (const worker of state.workers) {
@@ -245,6 +249,7 @@ function cancel(clear = false) {
   if (clear) {
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
     state.frameTimes = []; state.methodFrames=null; state.joinedComputeMs=null;
+    state.computeClock=null;
     state.measurementLabel=''; state.generatedSnapshots = 0; state.measurementTotal = 0;
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
@@ -341,6 +346,9 @@ async function receiveRunMessage(data, generation) {
   if (generation !== state.generation || data.requestId !== generation) return;
   try {
     if (data.type === 'error') throw new Error(data.message);
+    if (data.type === 'compute-clock') {
+      syncComputeClock(data.elapsedMs,data.running); return;
+    }
     if (data.type === 'command-error') {
       const previous = state.pendingCommand;
       if (['running', 'paused'].includes(data.job?.status)) {
@@ -384,6 +392,7 @@ async function receiveRunMessage(data, generation) {
       const list=state.methodFrames[data.side];
       if(!list || data.t!==list.length+1)throw new Error('Out-of-order method result');
       list.push({...data,totalMs:(list.at(-1)?.totalMs??0)+data.result.ms});
+      syncComputeClock(Math.max(data.at,state.computeClock?.elapsedMs??0),true);
       scheduleLivePaint();
       return;
     }
@@ -417,6 +426,7 @@ async function receiveRunMessage(data, generation) {
     }
     if (data.type === 'status') {
       state.pendingCommand = null;
+      if(data.mode!=='running' && state.computeClock?.startedAt!=null)syncComputeClock(computeElapsedMs(null,false),false);
       state.mode = data.mode; state.busy = data.mode === 'running'; controls();
       if (data.mode === 'paused') notice('Paused after the current snapshot.');
       if (data.mode === 'done') {
@@ -630,16 +640,36 @@ function renderSelected() {
   drawComparisonHistory($('metricChart'),history,historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind,legacy,rightSolo);
   renderDiagnostics();
 }
+function computeElapsedMs(method,independently,now=performance.now()){
+  const list=independently ? state.methodFrames?.[method] : null;
+  const total=state.scenario?.input.snapshots??state.pendingInput?.snapshots;
+  if(list?.length>=total && Number.isFinite(list.at(-1)?.at))return list.at(-1).at;
+  const clock=state.computeClock;
+  // Older saved runs have completion timestamps but no live-clock messages.
+  if(!clock)return list?.at(-1)?.at??(state.frames.length ? null : 0);
+  return clock.elapsedMs+(clock.startedAt===null?0:Math.max(0,now-clock.startedAt));
+}
+function syncComputeClock(elapsedMs,running){
+  state.computeClock={elapsedMs,startedAt:running?performance.now():null};
+  if(!state.computePaint)paintComputeClock();
+}
+function paintComputeClock(){
+  state.computePaint=0;
+  if(document.hidden)return;
+  if(state.computeDisplay)renderComputeTimes(...state.computeDisplay);
+  if(state.computeClock?.startedAt!=null)state.computePaint=requestAnimationFrame(paintComputeClock);
+}
 function renderComputeTimes(first,second,selected,independently){
+  state.computeDisplay=[first,second,selected,independently];
+  const now=performance.now();
   const computeTimes={};
   for(const method of [first,second]){
     const times=independently ? state.methodFrames[method].map(frame=>frame.result?.ms)
       : state.frames.map(frame=>frame.methods?.[method]?.ms);
-    const ms=independently ? state.methodFrames[method].at(-1)?.totalMs??0
-      : state.frames.length ? state.joinedComputeMs?.[method] : 0;
+    const ms=computeElapsedMs(method,independently,now);
     const valid=times.every(time=>Number.isFinite(time) && time>=0);
     computeTimes[method]={
-      total:valid && Number.isFinite(ms) && ms>=0 ? (ms/1000).toFixed(3) : '—',
+      total:Number.isFinite(ms) && ms>=0 ? (ms/1000).toFixed(3) : '—',
       p95:valid && times.length ? percentile(times,.95).toFixed(1) : '—'
     };
   }
@@ -649,6 +679,8 @@ function renderComputeTimes(first,second,selected,independently){
   $('bUpdateP95Value').textContent=computeTimes[second].p95;
   $('interpolationComputeTimeValue').textContent=computeTimes[selected].total;
   $('interpolationUpdateP95Value').textContent=computeTimes[selected].p95;
+  $('primaryTimer').textContent=`${computeTimes[selected].total} s`;
+  $('secondaryTimer').textContent=`${computeTimes[second].total} s`;
 }
 
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
@@ -753,6 +785,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     if (state.replay) state.replayAt = performance.now();
     controls(); renderSelected(); renderSweep();
+    if(!state.computePaint)paintComputeClock();
     if (state.notice) notice(state.notice);
   }
 });
