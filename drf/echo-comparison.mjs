@@ -1,12 +1,12 @@
-import { rightMethods } from './right-methods.mjs?v=20261118-rugged-cnn';
-import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-rugged-cnn';
-import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-rugged-cnn';
-import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-rugged-cnn';
+import { rightMethods } from './right-methods.mjs?v=20261118-cnn-range-gpu';
+import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-cnn-range-gpu';
+import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-cnn-range-gpu';
+import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-cnn-range-gpu';
 import { correctFit } from './echospline-gbdt.mjs';
 import { GatGpr } from './gat-gpr.mjs';
-import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-rugged-cnn';
+import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-cnn-range-gpu';
 import { createSplineGpu } from './spline-gpu.mjs?v=20261117-spline-gpu';
-import { EchoSpline } from './echospline.mjs?v=20261118-rugged-cnn';
+import { EchoSpline } from './echospline.mjs?v=20261118-cnn-range-gpu';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
 import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
@@ -33,7 +33,7 @@ export function echoProtocol(input={}) {
     guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded
       : {...rightMethods[input.rightMethod],id:input.rightMethod,threshold:input.rightMethod==='arc'?0.7:null,
         training:input.rightMethod==='spline-cnn'?'Frozen upper-wall checkpoint trained on 1,664 independent walls with 3- and 10-vehicle measured prefixes':'Frozen three-vehicle upper-wall checkpoint',
-        revision:input.rightMethod==='spline-cnn'?'20261118-rugged-cnn':'20261115'}};
+        revision:input.rightMethod==='spline-cnn'?'20261118-cnn-range-gpu':'20261115'}};
 }
 
 export class EchoComparison {

@@ -89,6 +89,26 @@ test('close during adapter/device initialization disposes a late-created device'
   }finally{backend.close();restore();}
 });
 
+test('range GPU calibrates once, releases temporary buffers and rejects invalid input',async()=>{
+  const f=fakeGpu(),restore=environment(f.gpu),backend=createSplineCnnGpu(runtime());
+  try{
+    await backend.ready;const start=f.state.buffers.length,submits=f.state.submissions;
+    const xy=new Float32Array([0,5,3,4]),packed={configs:new Float32Array(),paths:new Float32Array()};
+    assert.equal((await backend.rangeImage(xy,packed,3)).length,6);
+    await backend.rangeImage(xy,packed,3);
+    assert.equal(backend.completedRangeCalls,2);assert.equal(backend.completedCalls,0);
+    assert.equal(f.state.submissions-submits,3,'one calibration and two measured range kernels');
+    assert(f.state.buffers.slice(start).every(b=>b.destroyed));
+    await assert.rejects(backend.rangeImage(new Float32Array(3),packed,3),/Invalid/);
+    assert.equal(backend.completedRangeCalls,2);
+    const gate=deferred();f.state.blockMap=gate;
+    const pending=backend.rangeImage(xy,packed,3);
+    await f.state.mapBlocked.promise;backend.close();gate.resolve();
+    await assert.rejects(pending,/destroyed|closed/);assert.equal(backend.completedRangeCalls,2);
+    assert(f.state.buffers.every(b=>b.destroyed));
+  }finally{backend.close();restore();}
+});
+
 test('close before an adapter arrives never creates a device',async()=>{
   const f=fakeGpu(),gate=deferred();f.gpu.requestAdapter=()=>gate.promise;
   const restore=environment(f.gpu),backend=createSplineCnnGpu(runtime());
@@ -146,6 +166,17 @@ test('cancelling a pending CNN readback propagates rejection without CPU recompu
   rt.closed=true;rt.gpu.close();gate.reject(new Error('cancelled readback'));
   await assert.rejects(result,/cancelled readback/);
   assert.equal(calls.filter(k=>k==='convolutionXY').length,0);
+});
+
+test('range GPU failure recomputes features on CPU before one network fallback',async()=>{
+  const rt=runtime(),calls=[];rt.data.penalty=.25;
+  rt.call=(name,_inputs,n)=>{calls.push(name);return new Float32Array(n);};
+  rt.gpu={completedCalls:0,rangeImage:()=>Promise.reject(new Error('range lost')),
+    estimate(){throw new Error('must not run after range failure');},close(){}};
+  const actual=await splineCnnProposal(rt,fitFixture(),anchorFixture,evidenceFixture);
+  assert.equal(rt.gpu,null);assert.equal(calls.filter(k=>k==='rangeVotes').length,1);
+  assert.equal(calls.filter(k=>k==='convolutionXY').length,8);
+  assert.deepEqual(Array.from(actual.base),[4,4,4]);
 });
 
 test('stepRight keeps causal configurations and records the completed CNN invocation',async()=>{

@@ -1,4 +1,4 @@
-import {splineRangeImage} from './spline-cnn-range.mjs';
+import {splineRangeImage} from './spline-cnn-range.mjs?v=20261118-cnn-range-gpu';
 
 // Measured-prefix fit: x [N,m], multiscale inverse points [P,(x,y,dy/dx)],
 // configurations and a GBDT anchor. Scores [81,N] span ±16 m at 0.4 m spacing.
@@ -135,16 +135,19 @@ export function splineCnnProposal(rt,fit,gbdtCurves,evidence) {
   const channels=rt.weights['start.weight'].shape[2];
   if(channels>11&&evidence?.points?.length!==2)throw new Error('EchoSpline-CNN requires its measured multiscale candidates');
   const pointSets=channels>11?[points,...evidence.points]:[points];
-  const range=channels===26?splineRangeImage(rt,x,anchor,evidence.configs,evidence.links,evidence.sign):null;
-  const input=voteImage(x,coarse,anchor,pointSets,range);
-  const finish=logits=>{
-    for(let i=0;i<logits.length;i++)logits[i]-=Math.abs(input[i*channels+channels-5]);
-    return {base:decodeSplineCnn(logits,anchor,rt.data.penalty),anchor,logits};
+  const infer=range=>{
+    const input=voteImage(x,coarse,anchor,pointSets,range);
+    const finish=logits=>{
+      for(let i=0;i<logits.length;i++)logits[i]-=Math.abs(input[i*channels+channels-5]);
+      return {base:decodeSplineCnn(logits,anchor,rt.data.penalty),anchor,logits};
+    };
+    return rt.gpu?rt.gpu.estimate(input,n).then(finish):finish(logitsFromVotes(rt,input,n));
   };
-  if(rt.gpu)return rt.gpu.estimate(input,n).then(finish).catch(error=>{
+  const range=channels===26?splineRangeImage(rt,x,anchor,evidence.configs,evidence.links,evidence.sign,rt.gpu):null;
+  if(rt.gpu)return Promise.resolve(range).then(infer).catch(error=>{
     if(rt.closed)throw error;
     rt.gpuCallsBeforeLoss=rt.gpu?.completedCalls??0;rt.gpu?.close();rt.gpu=null;
-    return finish(logitsFromVotes(rt,input,n));
+    return splineCnnProposal(rt,fit,gbdtCurves,evidence);
   });
-  return finish(logitsFromVotes(rt,input,n));
+  return infer(range);
 }
