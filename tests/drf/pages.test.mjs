@@ -11,7 +11,7 @@ test('Pages ships the original simulator with all dependencies and no design pre
   assert.deepEqual(files.filter(path => path.endsWith('.html')).sort(), ['drf.html']);
   assert.deepEqual(files.sort(), [...runtimeFiles].sort());
   for (const path of ['server-client.mjs', 'simulation-codec.mjs', 'run-engine.mjs', 'run.worker.mjs', 'baseline.mjs', 'comparison.mjs', 'compare.worker.mjs', 'scenario.worker.mjs', 'field.worker.mjs', 'eval.worker.mjs', 'sweep.worker.mjs', 'pspt.worker.mjs', 'pspt.mjs', 'pspt-math.mjs', 'pspt-ridges.mjs', 'pspt-evaluate.mjs',
-    'echospline-cnn.mjs', 'models/spline-cnn.mjs', 'models/kernels.mjs', 'statistics.mjs', 'reflection-diagnostics.mjs', 'provenance.json', 'reference/octave/fixtures.json', 'offline.bundle.js', 'style.css'])
+    'echospline-cnn.mjs', 'spline-cnn-gpu.mjs', 'spline-cnn-range.mjs', 'models/spline-cnn.mjs', 'models/kernels.mjs', 'statistics.mjs', 'reflection-diagnostics.mjs', 'provenance.json', 'reference/octave/fixtures.json', 'offline.bundle.js', 'style.css'])
     assert.ok(existsSync(new URL(`drf/${path}`, output)), `Dynamic runtime asset: ${path}`);
   for (const path of ['index.html', 'legacy.html', 'surf/app.mjs', 'surf/engine.worker.mjs', 'tests', 'README.md', 'drf/evaluate.mjs', 'preview', 'design-preview', 'drf-design-preview.html', 'preview-cache', 'preview-evidence', 'node_modules', '.git', 'tools'])
     assert.equal(existsSync(new URL(path, output)), false, path);
@@ -48,7 +48,8 @@ test('published online and sweep workers request one version of each wall estima
     'drf/compare.worker.mjs':['echo-comparison.mjs'],
     'drf/sweep.mjs':['experiment-settings.mjs','echo-comparison.mjs','sweep.worker.mjs'],
     'drf/sweep.worker.mjs':['sweep.mjs'],
-    'drf/echo-comparison.mjs':['model-runtime.mjs','echospline-cnn.mjs','echospline.mjs','spline-gpu.mjs','echoarc-cnn.mjs'],
+    'drf/echo-comparison.mjs':['model-runtime.mjs','echospline-cnn.mjs','echospline.mjs','spline-gpu.mjs','echoarc-cnn.mjs','spline-cnn-gpu.mjs'],
+    'drf/spline-cnn-gpu.mjs':['arc-gpu.mjs'],
     'drf/echoarc-cnn.mjs':['arc-gpu.mjs'],
     'drf/arc-gpu.mjs':['arc-gpu-norm.mjs'],
     'drf/arc-gpu-norm.mjs':['arc-gpu-math.mjs'],

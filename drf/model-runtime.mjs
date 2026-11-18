@@ -2,7 +2,7 @@
 export async function modelData(name) {
   if(globalThis.__echoModelData?.[name])return globalThis.__echoModelData[name];
   const asset=new URL('./models/'+name+'.mjs',import.meta.url);
-  if(name==='kernels')asset.searchParams.set('v','20261117-convolution-xy');
+  if(name==='kernels'||name==='spline-cnn')asset.searchParams.set('v','20261118-rugged-cnn');
   return (await import(asset)).default;
 }
 const bytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));

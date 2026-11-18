@@ -1,22 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import { neuralRuntime } from '../../drf/model-runtime.mjs';
 import { splineCnnProposal, decodeSplineCnn } from '../../drf/echospline-cnn.mjs';
 
 test('frozen EchoSpline-CNN reproduces the H200 path on two supported intervals', async () => {
   const rt=await neuralRuntime('spline-cnn');
-  const x=Array.from({length:41},(_,i)=>i*.2);
-  const anchor=x.map(v=>3+.05*v), heights=x.map((v,i)=>anchor[i]+.15*Math.sin(v));
-  const points=Array.from({length:30},(_,i)=>[.28*i,3+.1*i+i%3,.25*(i%5-2)]);
-  const curves=[x.slice(0,18).map((v,i)=>[v,anchor[i]]),x.slice(22).map((v,i)=>[v,anchor[i+22]])];
-  const result=splineCnnProposal(rt,{x,heights,points},curves);
+  const ref=JSON.parse(readFileSync(new URL('./fixtures/echospline-cnn.json',import.meta.url)));
+  const {x,heights,points,curves,pointsWide3,pointsWide5,wires,links,sign}=ref.fixture;
+  assert.equal(rt.data.checkpointSha256,ref.checkpointSha256);
+  let input;
+  const call=rt.call;
+  rt.call=(method,args,...rest)=>{
+    if(method==='convolutionXY'&&!input)input=args[0].slice();
+    return call(method,args,...rest);
+  };
+  const result=splineCnnProposal(rt,{x,heights,points},curves,
+    {points:[pointsWide3,pointsWide5],configs:wires.flatMap(w=>w.configs),links,sign});
   for(let i=18;i<22;i++)assert.ok(Number.isNaN(result.base[i]));
-  // Independent reference: the frozen PyTorch model on H200. Allow TF32 versus WASM FP32 rounding.
-  const expectedLogits=[[0,0,-4.554873],[16,7,-6.366501],[32,14,6.073967],[40,0,2.209099],
-    [40,17,9.844384],[40,22,6.971990],[47,32,3.432189],[63,35,-1.774060],[80,40,-2.137519]];
-  for(const [z,j,ref] of expectedLogits)assert.ok(Math.abs(result.logits[z*x.length+j]-ref)<.01);
-  for(const [i,ref] of [[0,3.029741],[8,3.472776],[17,3.591509],[22,5.572350],[33,5.745720],[40,5.787809]]){
-    assert.ok(Math.abs(result.base[i]-ref)<.002);
+  // Independent H200 PyTorch FP32 reference; CPU/CUDA logit discrepancy was 1.34e-5.
+  for(const [c,z,j,value] of ref.expectedFeatureProbes)assert.ok(Math.abs(input[(z*x.length+j)*26+c]-value)<.001);
+  for(const [z,j,value] of ref.expectedLogits)assert.ok(Math.abs(result.logits[z*x.length+j]-value)<.002,`logit ${z},${j}`);
+  for(const [i,value] of ref.expectedHeights){
+    if(value===null)assert.ok(Number.isNaN(result.base[i]));
+    else assert.ok(Math.abs(result.base[i]-value)<.0001,`height ${i}: ${result.base[i]} vs ${value}`);
   }
 });
 

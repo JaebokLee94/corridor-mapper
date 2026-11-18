@@ -1,7 +1,9 @@
-// Frozen EchoSpline-CNN. The measured-prefix fit supplies x [N, m], inverse
-// points [P, (x,y,dy/dx)] and the fixed 2 m spline. The GBDT supplies its anchor.
-// Output logits [81,N] span ±16 m around each anchor at 0.4 m resolution.
-// Fixed network width: O(31P + 81N) work and O(81N) temporary memory.
+import {splineRangeImage} from './spline-cnn-range.mjs';
+
+// Measured-prefix fit: x [N,m], multiscale inverse points [P,(x,y,dy/dx)],
+// configurations and a GBDT anchor. Scores [81,N] span ±16 m at 0.4 m spacing.
+// Cost: O(31P + 81N(C(log D + K) + Lw²)); temporary memory O(81Nw).
+// C configs, D paths/config, K nearby paths, L layers, w channels; weights O(Lw²).
 const H = 81, MID = 40, DZ = .4, DX = .2;
 const f32 = Math.fround;
 function roundEven(x) {
@@ -24,12 +26,13 @@ function gradient(a) {
   }
   return g;
 }
-function voteImage(x,coarse,anchor,points) {
-  const n=x.length, cells=H*n, channels=11;
+function voteImage(x,coarse,anchor,pointSets,range) {
+  const n=x.length, cells=H*n, histogramChannels=pointSets.length*6;
+  const channels=histogramChannels+(range?3:0)+5,prior=channels-5;
   const input=new Float32Array(cells*channels);
   const masked=Float64Array.from(anchor,v=>Number.isFinite(v)?v:0);
   const xx=Float32Array.from(x), initial=Float32Array.from(masked);
-  for(const point of points) {
+  for(let source=0;source<pointSets.length;source++)for(const point of pointSets[source]) {
     const px=f32(point[0]), py=f32(point[1]), slope=f32(point[2]);
     const center=roundEven(f32(f32(px-f32(x[0]))/f32(DX)));
     for(let j=Math.max(0,center-15);j<=Math.min(n-1,center+15);j++){
@@ -41,11 +44,11 @@ function voteImage(x,coarse,anchor,points) {
       for(let r=0;r<radii.length;r++){
         const weight=Math.exp(-.5*(delta/radii[r])**2);
         if(lo>=0){
-          const k=(lo*n+j)*channels+2*r, hit=weight*(1-frac);
+          const k=(lo*n+j)*channels+6*source+2*r, hit=weight*(1-frac);
           input[k]+=hit;input[k+1]+=hit*slope;
         }
         if(lo+1<H){
-          const k=((lo+1)*n+j)*channels+2*r, hit=weight*frac;
+          const k=((lo+1)*n+j)*channels+6*source+2*r, hit=weight*frac;
           input[k]+=hit;input[k+1]+=hit*slope;
         }
       }
@@ -58,12 +61,13 @@ function voteImage(x,coarse,anchor,points) {
     const m=(z-MID)*DZ, offset=half(m/16), gaussian=half(Math.exp(-.5*(m/.5)**2));
     for(let j=0;j<n;j++){
       const k=(z*n+j)*channels;
-      for(let r=0;r<6;r+=2){
+      for(let r=0;r<histogramChannels;r+=2){
         const mass=input[k+r];
         input[k+r+1]=half(input[k+r+1]/(1+mass)); input[k+r]=half(Math.log1p(mass));
       }
-      input[k+6]=offset;input[k+7]=gaussian;
-      for(let a=0;a<3;a++)input[k+8+a]=axes[a][j];
+      if(range)for(let r=0;r<3;r++)input[k+histogramChannels+r]=half(range[(z*n+j)*3+r]);
+      input[k+prior]=offset;input[k+prior+1]=gaussian;
+      for(let a=0;a<3;a++)input[k+prior+2+a]=axes[a][j];
     }
   }
   return input;
@@ -77,14 +81,12 @@ function convolution(rt,input,name,n,dz,dx) {
 function logitsFromVotes(rt,input,n) {
   let y=convolution(rt,input,'start',n,1,1);
   for(let i=0;i<y.length;i++)y[i]=Math.max(0,y[i]);
-  const dilations=[[1,2],[1,4],[2,8],[3,12]];
+  const dilations=rt.data.dilations??[[1,2],[1,4],[2,8],[3,12]];
   for(let layer=0;layer<dilations.length;layer++){
     const [dz,dx]=dilations[layer], next=convolution(rt,y,'blocks.'+layer,n,dz,dx);
     for(let i=0;i<y.length;i++)y[i]+=Math.max(0,next[i]);
   }
-  const logits=convolution(rt,y,'end',n,1,1);
-  for(let i=0;i<logits.length;i++)logits[i]-=Math.abs(input[i*11+6]);
-  return logits;
+  return convolution(rt,y,'end',n,1,1);
 }
 export function decodeSplineCnn(logits,anchor,penalty=.5){
   const n=anchor.length, base=new Float64Array(n).fill(NaN);
@@ -122,7 +124,7 @@ export function decodeSplineCnn(logits,anchor,penalty=.5){
   return base;
 }
 
-export function splineCnnProposal(rt,fit,gbdtCurves) {
+export function splineCnnProposal(rt,fit,gbdtCurves,evidence) {
   const {x,heights,points}=fit,n=x.length;
   const anchor=new Float64Array(n).fill(NaN), coarse=new Float64Array(n).fill(NaN);
   for(const line of gbdtCurves)for(const [q,height] of line){
@@ -130,7 +132,19 @@ export function splineCnnProposal(rt,fit,gbdtCurves) {
     if(i<0||i>=n||Math.abs(q-x[i])>1e-5||!Number.isFinite(height)||!Number.isFinite(heights[i]))continue;
     anchor[i]=height;coarse[i]=heights[i];
   }
-  const input=voteImage(x,coarse,anchor,points);
-  const logits=logitsFromVotes(rt,input,n);
-  return {base:decodeSplineCnn(logits,anchor,rt.data.penalty),anchor,logits};
+  const channels=rt.weights['start.weight'].shape[2];
+  if(channels>11&&evidence?.points?.length!==2)throw new Error('EchoSpline-CNN requires its measured multiscale candidates');
+  const pointSets=channels>11?[points,...evidence.points]:[points];
+  const range=channels===26?splineRangeImage(rt,x,anchor,evidence.configs,evidence.links,evidence.sign):null;
+  const input=voteImage(x,coarse,anchor,pointSets,range);
+  const finish=logits=>{
+    for(let i=0;i<logits.length;i++)logits[i]-=Math.abs(input[i*channels+channels-5]);
+    return {base:decodeSplineCnn(logits,anchor,rt.data.penalty),anchor,logits};
+  };
+  if(rt.gpu)return rt.gpu.estimate(input,n).then(finish).catch(error=>{
+    if(rt.closed)throw error;
+    rt.gpuCallsBeforeLoss=rt.gpu?.completedCalls??0;rt.gpu?.close();rt.gpu=null;
+    return finish(logitsFromVotes(rt,input,n));
+  });
+  return finish(logitsFromVotes(rt,input,n));
 }

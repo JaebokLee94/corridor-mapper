@@ -62,8 +62,8 @@ function basis(u,knots,n,spacing,out={idx:0,w:[1,0,0,0]},left=[],right=[]){
 }
 const value=(c,{idx,w})=>0+w[0]*c[idx]+w[1]*c[idx+1]+w[2]*c[idx+2]+w[3]*c[idx+3];
 const sgCache=new Map();
-function smoothed(track,k){
-  const n=track.length,w=Math.min(9,n%2?n:n-1),start=clip(k-(w>>1),0,n-w),at=k-start,key=w*10+at;
+function smoothed(track,k,window=9){
+  const n=track.length,w=Math.min(window,n%2?n:n-1),start=clip(k-(w>>1),0,n-w),at=k-start,key=w*10+at;
   let weights=sgCache.get(key);
   if(!weights){
     const h=zeros(9);
@@ -73,15 +73,15 @@ function smoothed(track,k){
   }
   return weights.map(row=>row.reduce((sum,w,i)=>sum+w*track[start+i].r,0));
 }
-function inversePoint(p,r,rate,sign,straight,limits,referenceFit){
+function inversePoint(p,r,rate,sign,straight,limits,referenceFit,minCos=.3,maxRate=.975){
   const {a,b,va,vb}=p,bx=b[0]-a[0],by=sign*(b[1]-a[1]),s=r*r-bx*bx-by*by;
-  if(!(s>.01&&r>0&&Math.abs(rate)<.975*(Math.hypot(...va)+Math.hypot(...vb))))return [];
+  if(!(s>.01&&r>0&&Math.abs(rate)<maxRate*(Math.hypot(...va)+Math.hypot(...vb))))return [];
   const midX=(a[0]+b[0])/2,midY=sign*(a[1]+b[1])/2;
   function sample(t,point=false){
     const sn=Math.sin(t),cs=Math.cos(t),bn=bx*sn+by*cs,root=Math.sqrt(s+bn*bn);
     if(straight&&!point)return 2*sn*root+r*rate;
     const x=midX+(s*sn+bx*bn)/(2*root),y=midY+(s*cs+by*bn)/(2*root);
-    if(point)return (cs>.3&&x>=limits[0]-5&&x<=limits[1]+5&&y>=Math.max(sign*a[1],sign*b[1])-.4)?[x,sign*y,-sign*sn/cs]:null;
+    if(point)return (cs>minCos&&x>=limits[0]-5&&x<=limits[1]+5&&y>=Math.max(sign*a[1],sign*b[1])-.4)?[x,sign*y,-sign*sn/cs]:null;
     const dx=x-a[0],dy=y-sign*a[1],ex=x-b[0],ey=y-sign*b[1];
     return -(dx*va[0]+dy*sign*va[1])/Math.max(1e-12,Math.hypot(dx,dy))-(ex*vb[0]+ey*sign*vb[1])/Math.max(1e-12,Math.hypot(ex,ey))-rate;
   }
@@ -297,6 +297,18 @@ export class EchoSpline {
     }
   }
   step(wire,details=false){this.observe(wire);return this.estimate(details); }
+  // Additional CNN evidence uses the same measured-prefix tracks, leaving the spline and its cache unchanged.
+  // Returns two [P,(x,y,dy/dx)] lists; O(track rows) work on a straight route.
+  cnnPoints(sign){
+    return [3,5].map(window=>{
+      const points=[];
+      for(const tr of this.tracks)if(tr.length>=5)for(let j=0;j<tr.length;j++){
+        const [r,rate]=smoothed(tr,j,window);
+        points.push(...inversePoint(tr[j].p,r,rate,sign,this.straight,this.limits,this.referenceFit,.08,.997));
+      }
+      return points;
+    });
+  }
   estimate(details=false){
     const fit=this.estimateMaps(details,this.grid.stationaryCandidates);
     let step=fit.next();

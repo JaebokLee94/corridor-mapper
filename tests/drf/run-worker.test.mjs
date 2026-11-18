@@ -17,7 +17,7 @@ const numerical = value => {
   if (ArrayBuffer.isView(value)) return Array.from(value);
   if (Array.isArray(value)) return value.map(numerical);
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !['ms', 'psptMs', 'simulatorMs'].includes(key)).map(([key, item]) => [key, numerical(item)]));
+    .filter(([key]) => !['ms', 'psptMs', 'simulatorMs', 'backend', 'gpuCalls', 'gpuCallsThisStep'].includes(key)).map(([key, item]) => [key, numerical(item)]));
   return value;
 };
 const waitUntil = async (condition, message) => {

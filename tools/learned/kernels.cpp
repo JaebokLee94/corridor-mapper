@@ -37,6 +37,40 @@ void convolution(const float *image,const float *weights,const float *bias,float
     convolutionXY(image,weights,bias,out,height,width,in,channels,kernel,dilation,dilation);
 }
 
+// xy [cells,2], configurations [count,13], sorted paths [paths,3] in metres.
+// Sum normalized ellipse likelihood and its horizontal normal moments.
+// O(cells*configs*(log paths + nearby paths)), O(cells) output memory.
+void rangeVotes(const float *xy,const float *configs,const float *paths,float *out,
+                int cells,int count,int links) {
+    for(int j=0;j<cells;j++) {
+        float mass=0,first=0,second=0;
+        for(int c=0;c<count;c++) {
+            const float *p=configs+c*13;
+            float ax=xy[j*2]-p[0],ay=xy[j*2+1]-p[1],bx=xy[j*2]-p[2],by=xy[j*2+1]-p[3];
+            float ra=std::max(1e-9f,std::sqrt(ax*ax+ay*ay)),rb=std::max(1e-9f,std::sqrt(bx*bx+by*by));
+            ax/=ra;ay/=ra;bx/=rb;by/=rb;
+            const float gx=ax+bx,gy=ay+by,norm=std::max(1e-9f,std::sqrt(gx*gx+gy*gy));
+            const float var=p[4]*ax*ax+2*p[5]*ax*ay+p[6]*ay*ay+p[7]*bx*bx+2*p[8]*bx*by+p[9]*by*by;
+            const float rho=ra+rb,lower=rho-p[12],upper=rho+p[12];
+            const int begin=int(p[10]),end=begin+int(p[11]);
+            int lo=begin,hi=end;
+            while(lo<hi){int mid=(lo+hi)/2;if(paths[3*mid]<lower)lo=mid+1;else hi=mid;}
+            float total=0;
+            for(int k=lo;k<end&&paths[3*k]<=upper;k++) {
+                const float *path=paths+3*k,sd=std::sqrt(std::max(1e-12f,path[1]+var));
+                const float residual=(rho-path[0])/sd;
+                total+=std::exp(-.5f*residual*residual)*path[2]/sd;
+            }
+            total*=norm/2.5066282746310005f;
+            const float nx=gx/norm;
+            mass+=total;first+=total*nx;second+=total*nx*nx;
+        }
+        out[j*3]=std::log1p(3.f/std::max(1,links)*mass);
+        out[j*3+1]=first/std::max(1e-12f,mass);
+        out[j*3+2]=second/std::max(1e-12f,mass);
+    }
+}
+
 // GP on measured GAT reflection points. Maximize the zero-mean RBF log marginal
 // likelihood with the study's box constraints and ten L-BFGS-B iterations.
 // Dense Cholesky is O(n^3) time and O(n^2) memory; callers apply the fleet cap.

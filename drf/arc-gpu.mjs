@@ -2,7 +2,7 @@ import { createArcNormalization } from './arc-gpu-norm.mjs?v=20261117-arc-reside
 
 // Eigen multiplies a row of spatial positions by [input channel, output channel]
 // weights at each kernel offset. Preserve its separate FP32 reductions before adding the bias.
-function convolutionShader(inChannels, outChannels, kernel, dilation, broadcast = false) {
+export function convolutionShader(inChannels, outChannels, kernel, dilation, broadcast = false, dilationY = dilation) {
   const sample=c=>broadcast?'cellValue':`image[base + ${c}]`;
   const packed = outChannels !== 1;
   const value = packed ? 'vec4f' : 'f32', bits = packed ? 'vec4u' : 'u32';
@@ -28,7 +28,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let channel = gid.x % groups;
   var outputValue = biases[channel];
   for (var ky = 0; ky < ${kernel}; ky++) {
-    let sy = y + (ky - ${kernel >> 1}) * ${dilation};
+    let sy = y + (ky - ${kernel >> 1}) * ${dilationY};
     if (sy < 0 || sy >= i32(cfg.height)) { continue; }
     for (var kx = 0; kx < ${kernel}; kx++) {
       let dx = (kx - ${kernel >> 1}) * ${dilation}; let sx = x + dx;

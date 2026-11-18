@@ -1,6 +1,6 @@
 // Input is the current measured Tx/Rx packet. Accumulate 64 upper-arc normal directions
 // per ellipse on the training grid (0.5 m). Output curves use the checkpoint's fixed cutoff.
-import { arcPeakCapacity, createArcGpu } from './arc-gpu.mjs?v=20261117-arc-compact';
+import { arcPeakCapacity, createArcGpu } from './arc-gpu.mjs?v=20261118-rugged-cnn';
 
 const NX=201, NY=144, STEP=.5, Y0=-20;
 const normals=Array.from({length:64},(_,i)=>{

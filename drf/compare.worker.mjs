@@ -1,4 +1,4 @@
-import { EchoComparison } from './echo-comparison.mjs?v=20261117-cnn-path';
+import { EchoComparison } from './echo-comparison.mjs?v=20261118-rugged-cnn';
 // Only declared range noise and measured snapshots cross the inference boundary.
 let estimator,side;
 globalThis.onmessage=async ({data})=>{

@@ -1,6 +1,6 @@
 import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 
-import { rightMethods } from './right-methods.mjs?v=20261117-cnn-path';
+import { rightMethods } from './right-methods.mjs?v=20261118-rugged-cnn';
 
 // Keep estimator settings out of the hash, request and cache key of physical measurements.
 export function experimentSettings(raw={}) {
