@@ -1,5 +1,5 @@
 // Keep the full name for screen readers and use the short label only when the rendered name wraps.
-const labels=[['EchoSpline + GBDT','+GBDT'],['EchoSpline-CNN (Rugged Wall Recovery)','EchoSpline-CNN']];
+const labels=[['EchoSpline-GBDT','ES-GBDT'],['EchoSpline-CNN (Rugged Wall Recovery)','EchoSpline-CNN']];
 export function fitMethodLabel(node){
   const text=node.dataset.fullMethodLabel;
   if(!text || !node.getClientRects().length)return;

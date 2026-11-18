@@ -1,4 +1,4 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-rugged-canonical';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-method-order';
 import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-compact-results';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
@@ -8,12 +8,12 @@ import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
-import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-rugged-canonical';
-import { rightMethods } from './right-methods.mjs?v=20261118-rugged-canonical';
-import { echoProtocol } from './echo-comparison.mjs?v=20261118-rugged-canonical';
+import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-method-order';
+import { rightMethods } from './right-methods.mjs?v=20261118-method-order';
+import { echoProtocol } from './echo-comparison.mjs?v=20261118-method-order';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-rugged-canonical';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-method-order';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-spline-fields';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -122,7 +122,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261118-compute-timer';
+  const revision = '20261118-method-order';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -573,7 +573,7 @@ function renderSelected() {
   $('mapCanvas').setAttribute('aria-label',longName(selected)+' wall estimate');
 
   document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{
-    setMethodLabel(th,names[i].replace(/\s*\([^)]*\)/g,'').replace(/^EchoSpline-/,'ES-').replace('ES-ExtraTrees','ES-ET').replace('EchoSpline + GBDT','ES+GBDT'));
+    setMethodLabel(th,names[i].replace(/\s*\([^)]*\)/g,'').replace(/^EchoSpline-/,'ES-').replace('ES-ExtraTrees','ES-ET'));
     th.title=names[i];th.setAttribute('aria-label',names[i]);th.dataset.methodCol=i?'second':'first';
   });
   $('methodMetrics').classList.toggle('echo-only',state.method==='echoSpline');
