@@ -1,16 +1,16 @@
-import { rightMethods } from './right-methods.mjs?v=20261118-device-selection';
-import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-device-selection';
-import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-device-selection';
-import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-device-selection';
+import { rightMethods } from './right-methods.mjs?v=20261118-device-selection-final';
+import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-device-selection-final';
+import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-device-selection-final';
+import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-device-selection-final';
 import { correctFit } from './echospline-gbdt.mjs';
-import { GatGpr } from './gat-gpr.mjs?v=20261118-device-selection';
-import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-device-selection';
-import { createSplineGpu } from './spline-gpu.mjs?v=20261118-device-selection';
-import { EchoSpline } from './echospline.mjs?v=20261118-device-selection';
+import { GatGpr } from './gat-gpr.mjs?v=20261118-device-selection-final';
+import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-device-selection-final';
+import { createSplineGpu } from './spline-gpu.mjs?v=20261118-device-selection-final';
+import { EchoSpline } from './echospline.mjs?v=20261118-device-selection-final';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
-import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261118-device-selection';
+import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261118-device-selection-final';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
-import { computationDevice } from './compute-device.mjs?v=20261118-device-selection';
+import { computationDevice } from './compute-device.mjs?v=20261118-device-selection-final';
 
 const paperSettings = new Map([
   [3, {threshold:6, parameters:{K:8, ext:1.1}}],
@@ -73,7 +73,7 @@ export class EchoComparison {
     }
     if(this.side==='echoSpline' || this.closed)return;
     if(this.pairEstimator){
-      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261118-device-selection');
+      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261118-device-selection-final');
       if(this.closed)return;
       this.pairSelector=createPairSelector(this.pairMethod,this.vehicles);
       await this.pairEstimator.loadModel({useGpu});
@@ -234,10 +234,10 @@ export class EchoComparison {
       const guarded=this.stepRight(wire,shared?echoSpline:undefined);
       if(shared)delete echoSpline.fit;
       // Shared prefix work belongs to the left result; right timing/counters remain incremental.
-      const join=result=>({echoSpline,guarded:shared?{...result,sharedPrefix:{
+      const join=result=>({echoSpline,guarded:result,...(shared&&(echoSpline.gpuCallsThisStep??0)>0?{sharedPrefix:{
         owner:'echoSpline',backend:echoSpline.backend??'CPU',ownerMs:echoSpline.ms,
         reusedGpuCallsThisStep:echoSpline.gpuCallsThisStep??0,reusedGpuCallsTotal:echoSpline.gpuCalls??0,
-        includedInRightMs:false,includedInRightGpuCalls:false}}:result});
+        includedInRightMs:false,includedInRightGpuCalls:false}}:{})});
       return guarded?.then?guarded.then(join):join(guarded);
     };
     const left=this.stepLeft(wire,shared);

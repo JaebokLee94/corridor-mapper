@@ -1,7 +1,7 @@
 const gpuMethods = new Set(['spline-cnn', 'arc']);
 const fleetGpuSplines = new Set(['echoSpline', 'gbdt', 'spline-cnn']);
 
-// Automatic choices are updated only from paired, full-prefix browser measurements.
+// shortcut: Auto is measured on M4 Chrome at 3/10 vehicles; remeasure for other hardware or fleet sizes.
 export function computationDevice(input, method) {
   const requested = input.computeDevice ?? 'auto';
   const spline = input.echoBackend ?? 'auto';

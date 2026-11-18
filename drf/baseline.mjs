@@ -10,7 +10,7 @@
  * substitute the declared range SD into the same Gaussian measurement model.
  */
 import { DRF } from './pspt-ridges.mjs?v=20261112-upper-wmp';
-import { prepareMeasuredSnapshot } from './pspt.mjs?v=20261118-device-selection';
+import { prepareMeasuredSnapshot } from './pspt.mjs?v=20261118-device-selection-final';
 import { eigen2 } from './pspt-math.mjs';
 
 export const BASELINE_CONFIG = Object.freeze({ life:20, cooldown:5, dNms:.75,

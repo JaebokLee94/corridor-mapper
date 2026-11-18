@@ -1,4 +1,4 @@
-import { createGrid, createField } from "./field.mjs?v=20261118-device-selection";
+import { createGrid, createField } from "./field.mjs?v=20261118-device-selection-final";
 
 let field;
 globalThis.onmessage = ({ data: message }) => {

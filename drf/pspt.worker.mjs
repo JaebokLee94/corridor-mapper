@@ -1,4 +1,4 @@
-import { PSPT } from './pspt.mjs?v=20261118-device-selection';
+import { PSPT } from './pspt.mjs?v=20261118-device-selection-final';
 
 // This worker receives measured snapshots only. No scenario, wall-side setting,
 // ground truth, evaluation result, or future sequence crosses this boundary.

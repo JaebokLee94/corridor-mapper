@@ -1,7 +1,7 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-device-selection';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-device-selection-final';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
-import { createGrid, createField } from './field.mjs?v=20261118-device-selection';
-import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261118-device-selection';
+import { createGrid, createField } from './field.mjs?v=20261118-device-selection-final';
+import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261118-device-selection-final';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.
@@ -57,7 +57,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
     while(current(run)&&run.target==='running'&&lane.next<lane.limit){
       const wire=run.scenario.wire[lane.next],result=await lane.client.step(wire);
       if(!current(run))return;
-      const t=++lane.next,at=run.elapsed+performance.now()-run.started;
+      const t=++lane.next;
       const evaluation=lane.evaluator.step({t,...result,method:run.method,curveMethod:side==='echoSpline'?side:run.input.rightMethod},
         side==='echoSpline'?{diagnostics:{}}:null,result.bridges,result.extendedBridges,result.checkedChains);
       const field=side==='echoSpline' ? run.field.step(wire) : undefined;
@@ -65,6 +65,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       const {diagnostics,...metrics}=evaluation;
       // A ready right-hand result delivers the field in the immediately following joined frame.
       const earlyField=field && !run.lanes.guarded.pending.has(t) ? field : undefined;
+      const at=run.elapsed+performance.now()-run.started;
       send(run,'method-frame',{side,t,at,result,evaluation:metrics,field:earlyField});
       if(!current(run))return;
       join(run);
@@ -74,10 +75,12 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
   async function pump(run){
     if(!current(run)||run.busy||!run.ready)return;
     run.busy=true;run.started=performance.now();
+    send(run,'compute-clock',{elapsedMs:run.elapsed,running:true});
     try{
       await Promise.all(sides.map(side=>advance(run,side)));
       if(!current(run))return;
       run.elapsed+=performance.now()-run.started;
+      send(run,'compute-clock',{elapsedMs:run.elapsed,running:false});
       if(run.next===run.input.snapshots){run.target='done';close(run);status(run,'done');}
       else {run.target='paused';status(run,'paused');}
     }catch(error){fail(run,error);}

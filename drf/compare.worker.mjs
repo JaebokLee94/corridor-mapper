@@ -1,4 +1,4 @@
-import { EchoComparison } from './echo-comparison.mjs?v=20261118-device-selection';
+import { EchoComparison } from './echo-comparison.mjs?v=20261118-device-selection-final';
 // Only declared range noise and measured snapshots cross the inference boundary.
 let estimator,side;
 globalThis.onmessage=async ({data})=>{

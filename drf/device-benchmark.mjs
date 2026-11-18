@@ -1,9 +1,9 @@
-import { experimentSettings } from './experiment-settings.mjs?v=20261118-device-selection';
+import { experimentSettings } from './experiment-settings.mjs?v=20261118-device-selection-final';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { workerMethod } from './method-client.mjs?v=20261118-device-selection';
-import { createGrid } from './field.mjs?v=20261118-device-selection';
+import { workerMethod } from './method-client.mjs?v=20261118-device-selection-final';
+import { createGrid } from './field.mjs?v=20261118-device-selection-final';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
-import { rightMethods } from './right-methods.mjs?v=20261118-device-selection';
+import { rightMethods } from './right-methods.mjs?v=20261118-device-selection-final';
 import { percentile } from './statistics.mjs';
 
 export const benchmarkMethods = ['echoSpline', ...Object.keys(rightMethods)];
@@ -150,7 +150,7 @@ export function expectedGpuStages(method, variant) {
 }
 const abortError = () => new DOMException('Benchmark cancelled', 'AbortError');
 function productionMethod(method, input, domain) {
-  const worker = globalThis.__drfOffline?.worker('compare') ?? new Worker(new URL('./compare.worker.mjs?v=20261118-device-selection', import.meta.url), { type: 'module' });
+  const worker = globalThis.__drfOffline?.worker('compare') ?? new Worker(new URL('./compare.worker.mjs?v=20261118-device-selection-final', import.meta.url), { type: 'module' });
   return workerMethod(worker, method === 'echoSpline' ? 'echoSpline' : 'guarded', input, domain);
 }
 

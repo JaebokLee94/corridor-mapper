@@ -1,7 +1,7 @@
 // Four consecutive measured echoes per Tx/Rx link form a 12-node graph. The trained
 // network predicts four reflection points [m]; only the newest point enters the GP.
 import { minimumAssignment } from './range-assignment.mjs';
-import { createGatGpu } from './gat-gpu.mjs?v=20261118-device-selection';
+import { createGatGpu } from './gat-gpu.mjs?v=20261118-device-selection-final';
 function association(old,now){
   const result=new Int32Array(now.length).fill(-1),n=Math.max(old.length,now.length);
   if(old.length && now.length)for(const [i,j] of minimumAssignment(n,n,(i,j)=>i<now.length&&j<old.length?Math.abs(now[i]-old[j]):2))

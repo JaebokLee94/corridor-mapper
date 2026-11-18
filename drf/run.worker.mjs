@@ -1,6 +1,6 @@
-import { workerMethod } from './method-client.mjs?v=20261118-device-selection';
+import { workerMethod } from './method-client.mjs?v=20261118-device-selection-final';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { createRunEngine } from './run-engine.mjs?v=20261118-device-selection';
+import { createRunEngine } from './run-engine.mjs?v=20261118-device-selection-final';
 import { warmTruthCache } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 import { truthCacheKey } from './truth-cache.mjs';
@@ -14,7 +14,7 @@ let warming, pendingStart;
 const engine = createRunEngine({ prepare:preparePublicScenario,
   createMethod(side,input,domain){
     const worker=globalThis.__echoMethodUrl?new Worker(globalThis.__echoMethodUrl):
-      new Worker(new URL('./compare.worker.mjs?v=20261118-device-selection',import.meta.url),{type:'module'});
+      new Worker(new URL('./compare.worker.mjs?v=20261118-device-selection-final',import.meta.url),{type:'module'});
     return workerMethod(worker,side,input,domain);
   },
   emit(message) {

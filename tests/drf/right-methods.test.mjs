@@ -9,7 +9,7 @@ import { gpSubset } from '../../drf/gat-gpr.mjs';
 import { rightMethods } from '../../drf/right-methods.mjs';
 import { fitMethodLabel, setMethodLabel } from '../../drf/method-label.mjs';
 
-for(const [full,short] of [['EchoSpline + GBDT','+GBDT'],['EchoSpline-CNN (Rugged Wall Recovery)','EchoSpline-CNN']])
+for(const [full,short] of [['EchoSpline-GBDT','ES-GBDT'],['EchoSpline-CNN (Rugged Wall Recovery)','EchoSpline-CNN']])
 test(`a wrapped ${full} label keeps its accessible name and expands again when it fits`,()=>{
   const doc=new JSDOM('<table><tr><th></th></tr></table>').window.document;
   const heading=doc.querySelector('th');
@@ -33,11 +33,14 @@ test('the map heading owns the ordered selector; its form still saves/defaults t
   assert.equal(select.closest('#baselinePane h3')?.contains(select),true);
   assert.equal(doc.querySelector('#experimentSidebar').contains(select),false);
   assert.equal(select.form,doc.querySelector('#settings'));
-  assert.deepEqual(Object.keys(rightMethods),['spline-cnn','gbdt','pair-ridge','pair-gbdt','pair-extra-trees','gat','wmp','arc']);
+  assert.deepEqual(Object.keys(rightMethods),['gat','wmp','gbdt','spline-cnn','pair-ridge','pair-gbdt','pair-extra-trees','arc']);
+  assert.deepEqual(Array.from(select.options).filter(o=>!o.hidden).map(o=>o.value),['gat','wmp','gbdt','spline-cnn','pair-ridge','pair-gbdt','pair-extra-trees']);
   assert.equal(experimentSettings({rightMethod:'wmf'}).rightMethod,undefined);
   assert.deepEqual(Array.from(select.options,o=>o.text),Object.values(rightMethods).map(m=>m.name));
   assert.equal(select.value,'wmp');assert.equal(doc.querySelector('#showInterpolation').checked,true);
   select.value='gbdt';assert.equal(new dom.window.FormData(select.form).get('rightMethod'),'gbdt');
+  select.value='arc';assert.equal(new dom.window.FormData(select.form).get('rightMethod'),'arc');
+  assert.equal(experimentSettings({rightMethod:'arc'}).rightMethod,'arc');
   assert.equal(experimentSettings({}).rightMethod,undefined);
   assert.throws(()=>experimentSettings({rightMethod:'invalid'}));
 });

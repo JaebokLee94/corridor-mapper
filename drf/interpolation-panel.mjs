@@ -1,4 +1,4 @@
-import { setMethodLabel } from './method-label.mjs';
+import { setMethodLabel } from './method-label.mjs?v=20261118-device-selection-final';
 // Table/selector/axis labels for lengths of the reconstructed map, not added gaps.
 export const centreMetricNames = {count:['Centre links','Centre links'], lengthM:['Map length [m]','Map [m]'], offWallM:['Off-wall length [m]','Off-wall [m]'], falseBridges:['Off-wall links','Off-wall links']};
 // Read only the post-hoc evaluation for one method at the selected snapshot.

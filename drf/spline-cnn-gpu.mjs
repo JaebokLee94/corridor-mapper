@@ -1,4 +1,4 @@
-import {convolutionShader} from './arc-gpu.mjs?v=20261118-device-selection';
+import {convolutionShader} from './arc-gpu.mjs?v=20261118-device-selection-final';
 
 const HEIGHT=81;
 const originalDilations=[[1,2],[1,4],[2,8],[3,12]];

@@ -19,11 +19,12 @@ test('combined shared prefixes retain their left owner without duplicating right
     estimator.stepRight=(_wire,prefix)=>{rightCalls++;assert.equal(prefix,left);assert.equal(prefix.fit,fit);return asyncRight?Promise.resolve(right):right;};
     const result=await estimator.step({t:1});
     assert.equal(leftCalls,1);assert.equal(rightCalls,1);assert.equal(result.echoSpline,left);
-    assert.equal(result.guarded.curves,curves);assert.equal(result.guarded.ms,4);
+    assert.equal(result.guarded,right);assert.equal(result.guarded.curves,curves);assert.equal(result.guarded.ms,4);
     assert.equal(result.guarded.backend,'CPU');assert.equal(result.guarded.gpuCalls,0);assert.equal(result.guarded.gpuCallsThisStep,0);
-    assert.deepEqual(result.guarded.sharedPrefix,{owner:'echoSpline',backend:left.backend,ownerMs:21,
+    if(prefixGpu)assert.deepEqual(result.sharedPrefix,{owner:'echoSpline',backend:left.backend,ownerMs:21,
       reusedGpuCallsThisStep:prefixGpu?3:0,reusedGpuCallsTotal:prefixGpu?18:0,
       includedInRightMs:false,includedInRightGpuCalls:false});
+    else assert.equal(Object.hasOwn(result,'sharedPrefix'),false);
     assert.equal(Object.hasOwn(right,'sharedPrefix'),false);
     assert.equal(Object.hasOwn(result.echoSpline,'fit'),false);
   }

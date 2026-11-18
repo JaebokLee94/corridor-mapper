@@ -68,6 +68,27 @@ test('autonomous engine matches the existing foreground kernels for every measur
   assert.deepEqual(messages.at(-1), { type: 'status', requestId: 17, mode: 'done', next: input.snapshots, total: input.snapshots });
 });
 
+test('worker computation clock excludes preparation and paused time across step and resume',async t=>{
+  const scenario=await generateScenario(input),messages=[];let now=1000;
+  t.mock.method(performance,'now',()=>now);
+  const engine=createRunEngine({emit:message=>messages.push(message),
+    prepare:async()=>{now+=5000;return scenario;},
+    createMethod:()=>({async step(){now+=10;return {candidates:[],curves:[],ms:1};},close(){}})});
+  await engine.command({type:'start',requestId:1,input,single:true});
+  now+=10000;
+  await engine.command({type:'step',requestId:1});
+  now+=10000;
+  await engine.command({type:'resume',requestId:1});
+  const clocks=messages.filter(message=>message.type==='compute-clock');
+  assert.deepEqual(clocks.map(({elapsedMs,running})=>[elapsedMs,running]),
+    [[0,true],[20,false],[20,true],[40,false],[40,true],[60,false]]);
+  assert.ok(messages.findIndex(message=>message.type==='prepared')<messages.indexOf(clocks[0]));
+  for(const side of ['echoSpline','guarded']){
+    assert.deepEqual(messages.filter(message=>message.type==='method-frame'&&message.side===side).map(message=>message.at),[20,40,60]);
+  }
+  assert.equal(messages.at(-1).mode,'done');
+});
+
 test('actual worker completes 120 snapshots without a parent result consumer or acknowledgement', async t => {
   const completion = new Int32Array(new SharedArrayBuffer(4)), worker = await moduleWorker(completion);
   t.after(() => worker.terminate());

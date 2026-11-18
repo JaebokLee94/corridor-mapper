@@ -1,4 +1,4 @@
-import { createGrid, createField, createRidgeDensityField } from "./field.mjs?v=20261118-device-selection";
+import { createGrid, createField, createRidgeDensityField } from "./field.mjs?v=20261118-device-selection-final";
 
 /** scipy.ndimage.map_coordinates(order=1, mode='nearest') on y-major data. */
 export function sampleLinear(field, nx, ny, row, column) {
