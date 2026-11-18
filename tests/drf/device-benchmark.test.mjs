@@ -198,6 +198,39 @@ test('display rows retain rejected warm-ups without mixing their durations into 
 });
 
 
+test('display rows show exhausted hidden trials without reporting partial timing or accuracy', () => {
+  const trials = [1,2,3].map(attempt => ({caseId:'rugged-10',method:'spline-cnn',variant:{id:'neural-gpu'},
+    stage:'measured',round:0,status:'hidden',attempt,error:'Page became hidden',totalMs:12,
+    rows:[{ms:12,mapF1:.8}],maxCandidatePatchDisplacementBoundM:2,discreteOutputChanges:3}));
+  const record = {summary:[{caseId:'rugged-10',method:'spline-cnn',device:'cpu',n:1,medianMs:20}],trials};
+  const rows = benchmarkDisplayRows(record);
+  assert.equal(rows.length,2); assert.equal(record.summary.length,1);
+  const hidden = rows[1];
+  assert.equal(hidden.device,'neural-gpu'); assert.equal(hidden.n,0); assert.equal(hidden.timingStage,'screening');
+  assert.equal(hidden.diagnosticMs,null); assert.equal(hidden.finalMapF1,null);
+  for (const key of ['medianMs','minMs','maxMs','maxCandidatePatchDisplacementBoundM','discreteOutputChanges','admissible','outputExact'])
+    assert.equal(hidden[key],undefined,key);
+  assert.match(hidden.excludedReason,/Page hidden.*final allowed attempt.*3 attempts/);
+  assert.match(hidden.excludedReason,/Keep this tab visible and retry/);
+});
+
+test('hidden diagnostics appear only after exhaustion and do not replace a completed measurement', () => {
+  const hidden = attempt => ({caseId:'rugged-10',method:'spline-cnn',variant:{id:'neural-gpu'},
+    stage:'measured',round:0,status:'hidden',attempt,error:'Page became hidden',rows:[]});
+  assert.deepEqual(benchmarkDisplayRows({summary:[],trials:[hidden(1),hidden(2)]}),[]);
+  const retryableFailure = {...hidden(1),status:'failed',error:'Estimator worker failed',retryableInitialization:true};
+  const exhausted = benchmarkDisplayRows({summary:[],trials:[retryableFailure,hidden(2),hidden(3)]});
+  assert.equal(exhausted.length,1); assert.equal(exhausted[0].n,0);
+  assert.match(exhausted[0].excludedReason,/Page hidden.*3 attempts/);
+  const completed = {...hidden(1),round:1,status:'complete',totalMs:15,rows:[{ms:15,mapF1:.9}],
+    admissible:true,backendVerified:true,outputExact:true};
+  const trials = [hidden(1),hidden(2),hidden(3),completed],summary=summarizeDeviceTrials(trials);
+  const recovered = benchmarkDisplayRows({summary,trials});
+  assert.equal(recovered.length,1); assert.equal(recovered[0].n,1); assert.equal(recovered[0].medianMs,15);
+  assert.equal(recovered[0].excludedReason,undefined); assert.equal(recovered[0].admissible,true);
+});
+
+
 test('initialization-only worker failures retry twice at most and preserve failed attempts', async () => {
   const f = fixture(); let attempts = 0;
   const makeMethod = (method,input,domain) => {

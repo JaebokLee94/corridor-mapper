@@ -125,10 +125,20 @@ export function summarizeDeviceTrials(trials) {
       updateP95Ms: percentile(group.flatMap(t => t.rows.map(r => r.ms)), .95) };
   });
 }
-/** Rejected/unavailable warm-ups stay visible without entering measured speed aggregates. */
+/** Rejected or exhausted attempts stay visible without entering measured speed aggregates. */
 export function benchmarkDisplayRows(record) {
   const rows = record.summary.map(row => ({...row, timingStage:'measured'})),
     displayed = new Set(rows.map(row => row.caseId + '/' + row.method + '/' + row.device));
+  // Prefer the terminal visibility failure over any earlier retryable initialization error.
+  for (const trial of record.trials) {
+    if (trial.status !== 'hidden' || trial.attempt !== 3) continue;
+    const key = trial.caseId + '/' + trial.method + '/' + trial.variant.id;
+    if (displayed.has(key)) continue;
+    displayed.add(key);
+    rows.push({caseId:trial.caseId, method:trial.method, device:trial.variant.id, n:0,
+      timingStage:trial.stage === 'warmup' ? 'warm-up' : 'screening', diagnosticMs:null, finalMapF1:null,
+      excludedReason:'Page hidden on the final allowed attempt (3 attempts). Keep this tab visible and retry.'});
+  }
   for (const trial of record.trials) {
     if (!trial.rejection && !['unavailable','failed'].includes(trial.status)) continue;
     const key = trial.caseId + '/' + trial.method + '/' + trial.variant.id;
