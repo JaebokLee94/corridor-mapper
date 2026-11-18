@@ -1,4 +1,4 @@
-import { rightMethods } from './right-methods.mjs?v=20261118-method-order';
+import { rightMethods } from './right-methods.mjs?v=20261118-method-order2';
 import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-rugged-canonical';
 import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-rugged-canonical';
 import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-rugged-canonical';
