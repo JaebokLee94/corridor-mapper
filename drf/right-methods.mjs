@@ -1,5 +1,5 @@
 export const rightMethods={
-  'spline-cnn':{name:'EchoSpline-CNN',curves:true,description:'A CNN combines multiscale reflection candidates and measured ranges around an EchoSpline + GBDT anchor. Dynamic programming selects one wall profile per supported interval.'},
+  'spline-cnn':{name:'EchoSpline-CNN (Rugged Wall Recovery)',curves:true,description:'A CNN combines multiscale reflection candidates and measured ranges around an EchoSpline + GBDT anchor. Dynamic programming selects one wall profile per supported interval.'},
   gbdt:{name:'EchoSpline + GBDT',curves:true,description:'Frozen height-residual trees on the 2 m EchoSpline fit with 8 m support.'},
   'pair-ridge':{name:'EchoSpline-Ridge (for Computational Reduction)',curves:true,pairSelector:'ridge',description:'Ridge selects up to 10 measured pairs every 10 snapshots; EchoSpline updates the wall at every snapshot. Frozen pair-selection model trained on 3, 5, 7 and 10 vehicles.'},
   'pair-gbdt':{name:'EchoSpline-GBDT (for Computational Reduction)',curves:true,pairSelector:'gbdt',description:'GBDT selects up to 10 measured pairs every 10 snapshots; EchoSpline updates the wall at every snapshot. Frozen pair-selection model trained on 3, 5, 7 and 10 vehicles.'},

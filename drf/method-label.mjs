@@ -1,17 +1,18 @@
 // Keep the full name for screen readers and use the short label only when the rendered name wraps.
-const full='EchoSpline + GBDT';
+const labels=[['EchoSpline + GBDT','+GBDT'],['EchoSpline-CNN (Rugged Wall Recovery)','EchoSpline-CNN']];
 export function fitMethodLabel(node){
   const text=node.dataset.fullMethodLabel;
   if(!text || !node.getClientRects().length)return;
   node.textContent=text;
   const range=node.ownerDocument.createRange();range.selectNodeContents(node);
   const lines=range.getClientRects();
-  if(lines.length>1 || lines[0] && node.clientWidth>0 && lines[0].width>node.clientWidth+.5)
-    node.textContent=text.replace(full,'+GBDT');
+  if(lines.length>1 || lines[0] && node.clientWidth>0 && lines[0].width>node.clientWidth+.5){
+    for(const [full,short] of labels)node.textContent=node.textContent.replace(full,short);
+  }
 }
 export function setMethodLabel(node,text){
   if(node.dataset.fullMethodLabel===text)return;
-  if(text.includes(full)){
+  if(labels.some(([full])=>text.includes(full))){
     node.dataset.fullMethodLabel=text;node.textContent=text;
     node.setAttribute('aria-label',text);node.title=text;
     fitMethodLabel(node);

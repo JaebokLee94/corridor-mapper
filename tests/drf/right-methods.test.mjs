@@ -9,14 +9,15 @@ import { gpSubset } from '../../drf/gat-gpr.mjs';
 import { rightMethods } from '../../drf/right-methods.mjs';
 import { fitMethodLabel, setMethodLabel } from '../../drf/method-label.mjs';
 
-test('a wrapped GBDT label keeps its accessible name and expands again when it fits',()=>{
+for(const [full,short] of [['EchoSpline + GBDT','+GBDT'],['EchoSpline-CNN (Rugged Wall Recovery)','EchoSpline-CNN']])
+test(`a wrapped ${full} label keeps its accessible name and expands again when it fits`,()=>{
   const doc=new JSDOM('<table><tr><th></th></tr></table>').window.document;
-  const heading=doc.querySelector('th'),full='EchoSpline + GBDT';
+  const heading=doc.querySelector('th');
   let lines=[{width:60},{width:40}];
   heading.getClientRects=()=>[{width:60}];
   doc.defaultView.Range.prototype.getClientRects=()=>lines;
   setMethodLabel(heading,full);
-  assert.equal(heading.textContent,'+GBDT');
+  assert.equal(heading.textContent,short);
   assert.equal(heading.getAttribute('aria-label'),full);
   lines=[{width:120}];
   fitMethodLabel(heading);

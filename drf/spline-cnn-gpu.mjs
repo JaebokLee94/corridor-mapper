@@ -1,4 +1,4 @@
-import {convolutionShader} from './arc-gpu.mjs?v=20261118-cnn-range-gpu';
+import {convolutionShader} from './arc-gpu.mjs?v=20261118-rugged-recovery';
 
 const HEIGHT=81;
 const originalDilations=[[1,2],[1,4],[2,8],[3,12]];

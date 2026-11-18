@@ -1,4 +1,4 @@
-import {splineRangeImage} from './spline-cnn-range.mjs?v=20261118-cnn-range-gpu';
+import {splineRangeImage} from './spline-cnn-range.mjs?v=20261118-rugged-recovery';
 
 // Measured-prefix fit: x [N,m], multiscale inverse points [P,(x,y,dy/dx)],
 // configurations and a GBDT anchor. Scores [81,N] span ±16 m at 0.4 m spacing.
