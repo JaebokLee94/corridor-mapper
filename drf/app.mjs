@@ -562,7 +562,10 @@ function renderSelected() {
   $('baselineCanvas').setAttribute('aria-label',names[1]+' wall estimate, sharing the '+names[0]+' camera');
   $('mapCanvas').setAttribute('aria-label',longName(selected)+' wall estimate');
 
-  document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{setMethodLabel(th,names[i]);th.dataset.methodCol=i?'second':'first';});
+  document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{
+    setMethodLabel(th,names[i].replace(/\s*\([^)]*\)/g,'').replace(/^EchoSpline-/,'ES-').replace('ES-ExtraTrees','ES-ET').replace('EchoSpline + GBDT','ES+GBDT'));
+    th.title=names[i];th.setAttribute('aria-label',names[i]);th.dataset.methodCol=i?'second':'first';
+  });
   $('methodMetrics').classList.toggle('echo-only',state.method==='echoSpline');
   $('methodMetrics').classList.toggle('right-only',rightSolo);
   $('historySecond').parentElement.hidden=echoOnly;
