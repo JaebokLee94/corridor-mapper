@@ -1,6 +1,7 @@
 // Four consecutive measured echoes per Tx/Rx link form a 12-node graph. The trained
 // network predicts four reflection points [m]; only the newest point enters the GP.
 import { minimumAssignment } from './range-assignment.mjs';
+import { createGatGpu } from './gat-gpu.mjs?v=20261118-device-selection';
 function association(old,now){
   const result=new Int32Array(now.length).fill(-1),n=Math.max(old.length,now.length);
   if(old.length && now.length)for(const [i,j] of minimumAssignment(n,n,(i,j)=>i<now.length&&j<old.length?Math.abs(now[i]-old[j]):2))
@@ -8,15 +9,14 @@ function association(old,now){
   return result;
 }
 
-function predict(graphs,rt,neighbors){
-  const {weights:w,call}=rt, rows=12*graphs.length;
+function* predictionLayers(graphs,rt,neighbors){
+  const {weights:w}=rt, rows=12*graphs.length;
   let input=new Float32Array(rows*2),at=0;
   for(const graph of graphs)for(const step of graph){input.set(step,at);at+=step.length;}
-  const linear=(a,weight,n)=>call('multiply',[a,weight.values],n*weight.shape[1],[n,...weight.shape]);
   const leaky=x=>x<0?.01*x:x;
   for(let layer=0;layer<4;layer++){
     const prefix='gat.'+layer+'.',src=w[prefix+'o_src'],dst=w[prefix+'o_dst'],[heads,d]=src.shape,stride=heads*d;
-    const h=linear(input,w[prefix+'W'],rows),a=new Float32Array(rows*heads),b=new Float32Array(a.length);
+    const h=yield [input,prefix+'W',rows],a=new Float32Array(rows*heads),b=new Float32Array(a.length);
     for(let i=0;i<rows;i++)for(let k=0;k<heads;k++){
       const offset=i*stride+k*d;let p=0,q=0;
       for(let f=0;f<d;f++){const x=h[offset+f];p+=x*src.values[k*d+f];q+=x*dst.values[k*d+f];}
@@ -42,10 +42,19 @@ function predict(graphs,rt,neighbors){
   }
   for(const idx of [0,2,4]){
     const key='mlp.'+idx,inputBias=w[key+'.bias'].values;
-    input=linear(input,w[key+'.weight'],graphs.length);
+    input=yield [input,key+'.weight',graphs.length];
     for(let i=0;i<input.length;i++){const z=input[i]+inputBias[i%inputBias.length];input[i]=idx===4?z:leaky(z);}
   }
   return input;
+}
+
+function predict(graphs,rt,neighbors){
+  const layers=predictionLayers(graphs,rt,neighbors);let layer=layers.next();
+  while(!layer.done){
+    const [input,name,rows]=layer.value,weight=rt.weights[name];
+    layer=layers.next(rt.call('multiply',[input,weight.values],rows*weight.shape[1],[rows,...weight.shape]));
+  }
+  return layer.value;
 }
 
 // NumPy PCG64(911) and choice(replace=False) used by the 10-vehicle experiment.
@@ -84,13 +93,13 @@ function nearby(point,bins,minimum,core){
 export class GatGpr{
   constructor(rt,vehicles){
     this.rt=rt;this.vehicles=vehicles;this.pairs=new Map();
-    this.gatMs=0;this.gprMs=0;
+    this.gatMs=0;this.gprMs=0;this.maxGraphRows=0;
     this.bins=new Map();this.core=new Set();this.inliers=new Set();this.changed=false;
     this.previousPoints=[];this.curve=[];
     const nodes=Array.from({length:12},(_,i)=>i);
     this.neighbors=nodes.map(i=>nodes.filter(j=>rt.weights.mask.values[12*i+j]));
   }
-  observe(wire){
+  graphsFor(wire){
     const graphs=[],owners=[],{mu,sd}=this.rt.data;
     for(const c of wire.configs){
       const key=c.i+','+c.j;
@@ -106,17 +115,56 @@ export class GatGpr{
       });
       pair.ranges=ranges;pair.tracks=tracks;
     }
-    if(graphs.length){
-      const start=performance.now();
-      const pr=predict(graphs,this.rt,this.neighbors);
-      this.gatMs+=performance.now()-start;
-      owners.forEach((o,i)=>{
+    this.maxGraphRows=Math.max(this.maxGraphRows,12*graphs.length);
+    return {graphs,owners};
+  }
+  acceptPrediction(pr,owners){
+    owners.forEach((o,i)=>{
         const k=i*8;for(let j=2;j<8;j+=2)if(Math.hypot(pr[k+j]-pr[k+j-2],pr[k+j+1]-pr[k+j-1])>2)return;
         const point=[pr[k],pr[k+1]],key=Math.floor(point[0]/.9)+','+Math.floor(point[1]/.9);
         if(!this.bins.has(key))this.bins.set(key,[]);
         this.bins.get(key).push(point);o.points.push(point);this.changed=true;
-      });
+    });
+  }
+  observe(wire){
+    const {graphs,owners}=this.graphsFor(wire);
+    if(!graphs.length)return;
+    const start=performance.now(),pr=predict(graphs,this.rt,this.neighbors);
+    this.gatMs+=performance.now()-start;this.acceptPrediction(pr,owners);
+  }
+  async useGpu(){
+    if(this.closed)return false;
+    if(this.gpu)return true;
+    const gpu=createGatGpu(this.rt);
+    if(!gpu){this.gpuFallbackReason='WebGPU unavailable';return false;}
+    try{
+      await gpu.ready;
+      if(this.closed){gpu.close();return false;}
+      this.gpu=gpu;this.gpuFallbackReason='';return true;
+    }catch(error){gpu.close();this.gpuFallbackReason=String(error.message??error);return false;}
+  }
+  close(){this.closed=true;this.gpu?.close();}
+  async observeAsync(wire){
+    if(!this.gpu)return this.observe(wire);
+    const {graphs,owners}=this.graphsFor(wire);
+    if(!graphs.length)return;
+    const start=performance.now(),gpu=this.gpu;let pr;
+    try{
+      const layers=predictionLayers(graphs,this.rt,this.neighbors);let layer=layers.next();
+      while(!layer.done)layer=layers.next(await gpu.multiply(...layer.value));
+      if(this.closed)throw new Error('GAT estimator is closed');
+      pr=layer.value;
+    }catch(error){
+      if(this.closed)throw error;
+      this.gpuCallsBeforeLoss=gpu.completedCalls;this.gpuFallbackReason=String(error.message??error);
+      gpu.close();this.gpu=null;
+      // The tracks are already recorded; recompute these graphs without recording the wire twice.
+      pr=predict(graphs,this.rt,this.neighbors);
     }
+    this.gatMs+=performance.now()-start;this.acceptPrediction(pr,owners);
+  }
+  async stepAsync(wire){
+    await this.observeAsync(wire);return this.estimate();
   }
   fit(){
     // Preserve link order for NumPy subset selection and the GP factorization.

@@ -1,4 +1,4 @@
-import {ellipsePerimeter} from './field.mjs';
+import {ellipsePerimeter} from './field.mjs?v=20261118-device-selection';
 
 // Measured configurations only; no scene geometry or evaluation labels.
 // Reflection in y preserves range and horizontal normals for lower walls.

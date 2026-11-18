@@ -188,9 +188,9 @@ test('independent learned estimators produce the same prefix outputs as a joint 
       assert.deepEqual(numerical(left.stepLeft(wire)),numerical(reference.echoSpline));
       const {stageTotalsMs,backend,gpuCalls,gpuAdapter,gpuMode,gpuReadbacks,gpuCompact,gpuInputBytes,gpuOutputBytes,gpuOverflowReadbacks,...single}=await right.stepSide('guarded',wire);
       if(rightMethod==='arc'){
-        assert.ok(backend==='CPU WASM'||backend==='WebGPU');
+        assert.ok(backend==='CPU WASM'||backend==='WebGPU + CPU');
         assert.equal(typeof gpuAdapter,'string');
-        if(backend==='WebGPU')assert.ok(gpuCalls>0);
+        if(backend==='WebGPU + CPU')assert.ok(gpuCalls>0);
         else assert.equal(gpuCalls,0);
         if(gpuMode==='resident')assert.equal(gpuCalls,11*(gpuReadbacks-(gpuOverflowReadbacks??0)));
         if(gpuCompact){
@@ -259,7 +259,7 @@ test('EchoSpline requests an adapter only for WebGPU selection and reports a CPU
     assert.equal(requests,1);
     const result=await fallback.stepLeft(wire);
     assert.equal(result.backend,'CPU');assert.equal(result.gpuCalls,0);assert.equal(result.gpuCallsThisStep,0);
-    fallback.close();assert.throws(()=>make('invalid'),/compute device/);
+    fallback.close();assert.throws(()=>make('invalid'),/device/);
   }finally{
     if(previous)Object.defineProperty(navigator,'gpu',previous);
     else delete navigator.gpu;

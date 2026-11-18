@@ -1,4 +1,4 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-rugged-canonical';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-device-selection';
 import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-compact-results';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
@@ -8,15 +8,16 @@ import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
-import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-rugged-canonical';
-import { rightMethods } from './right-methods.mjs?v=20261118-rugged-canonical';
-import { echoProtocol } from './echo-comparison.mjs?v=20261118-rugged-canonical';
+import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-device-selection';
+import { rightMethods } from './right-methods.mjs?v=20261118-device-selection';
+import { echoProtocol } from './echo-comparison.mjs?v=20261118-device-selection';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-rugged-canonical';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-device-selection';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-spline-fields';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
+import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261118-device-selection';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 
 renderMath();
@@ -106,7 +107,7 @@ function installSidebarControls() {
   }, true);
 }
 function fillSettings(input) {
-  for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,echoBackend:'cpu',rightMethod:'wmp',...input})) {
+  for (const [key, value] of Object.entries({echoKnotM:2,echoSupportM:8,echoBackend:'auto',computeDevice:'auto',rightMethod:'wmp',...input})) {
     const field = form.elements.namedItem(key);
     if(key==='rightMethod' && value==='wmf'){field.value='wmp';continue;}
     if (field) field.type === 'checkbox' ? field.checked = value : field.value = String(value);
@@ -122,14 +123,14 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261118-rugged-canonical';
+  const revision = '20261118-device-selection';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
   // Download/decode one selected raw bank record, never generate measurements or
   // start a run. Local Node computation already reads this bank from disk.
   if (globalThis.__drfOffline || useComputeServer
-    || ['running', 'paused'].includes(state.mode) || state.sweep) return;
+    || ['running', 'paused'].includes(state.mode) || state.sweep || state.deviceBenchmark) return;
   if (!form.checkValidity()) { runPreloader.dispose(); return; }
   try { runPreloader.schedule(input ?? settings()); } catch { runPreloader.dispose(); }
 }
@@ -161,7 +162,7 @@ function controls() {
   // Result receipt updates state even when hidden. Rebuild controls once when
   // the tab returns, rather than mutating every input/select for every snapshot.
   if (document.hidden) return;
-  const active = ['running', 'paused'].includes(state.mode), sweeping = !!state.sweep, preparing = active && !state.scenario;
+  const active = ['running', 'paused'].includes(state.mode), sweeping = !!state.sweep || !!state.deviceBenchmark, preparing = active && !state.scenario;
   const completed = state.mode === 'done' && state.valid && state.frames.length > 0;
   $('runButton').disabled = active || sweeping || !!state.connecting;
   $('newMapRun').disabled = $('runButton').disabled;
@@ -184,7 +185,11 @@ function controls() {
   if (focusedAction?.hidden) runActions.find(button => !button.hidden && !button.disabled)?.focus();
   for (const el of form.elements) el.disabled = active || sweeping;
   for (const el of $('sweepSettings').elements) el.disabled = active || sweeping;
-  $('sweepButton').disabled = active || sweeping || !!state.connecting; $('sweepCancel').disabled = !sweeping;
+  $('sweepButton').disabled = active || sweeping || !!state.connecting; $('sweepCancel').disabled = !state.sweep;
+  for (const el of $('deviceBenchmarkSettings')?.elements ?? []) el.disabled = active || sweeping;
+  $('deviceBenchmarkRun').disabled = active || sweeping || !!state.connecting;
+  $('deviceBenchmarkCancel').disabled = !state.deviceBenchmark;
+  $('deviceBenchmarkExport').disabled = !state.deviceBenchmarkResult;
   const savedSweep = state.server?.savedSweep ?? state.server?.job;
   $('loadSavedSweep').hidden = !(savedSweep?.mode === 'sweep' && ['done', 'cancelled'].includes(savedSweep.status) && savedSweep.next > 0);
   $('loadSavedSweep').disabled = active || sweeping || !!state.connecting;
@@ -303,7 +308,7 @@ function randomizeWallGeometry(input) {
   }
 }
 async function prepare({single = false, newMap = false} = {}) {
-  if (state.connecting || state.sweep || ['running', 'paused'].includes(state.mode)) return;
+  if (state.connecting || state.sweep || state.deviceBenchmark || ['running', 'paused'].includes(state.mode)) return;
   let resumeId;
   if (state.server) {
     state.connecting = true; controls();
@@ -582,9 +587,11 @@ function renderSelected() {
       if(Number.isFinite(result?.ms)){
         label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
         if(result.backend){
-          if(method==='echoSpline'||right.pairSelector){
-            label.title+=` Estimator: ${result.backend}. GPU stationary-path searches: ${result.gpuCallsThisStep??0} this update, ${result.gpuCalls??0} total.`;
-          }else label.title+=` Inference: ${result.backend}. WebGPU ${rightId==='spline-cnn'?'network forwards':'convolutions'} completed: ${result.gpuCalls}.`;
+          const gpuStages = [['splineGpu','spline candidate search'],['neuralGpu','neural inference'],['densityGpu','density field']]
+            .filter(([key]) => result.device?.[key]).map(([,name]) => name);
+          label.title+=` Estimator: ${result.backend}. GPU operations: ${result.gpuCallsThisStep??0} this update, ${result.gpuCalls??0} total.`;
+          if(gpuStages.length) label.title+=` Enabled GPU stages: ${gpuStages.join(', ')}. Other processing: CPU.`;
+          if(result.device?.fallbackReason) label.title+=` Device fallback: ${result.device.fallbackReason}.`;
           if(result.gpuMode==='resident'){
             label.title+=' Group normalization and SiLU: GPU.';
             if(result.gpuCompact)label.title+=` Wall-candidate readbacks: ${result.gpuReadbacks-result.gpuOverflowReadbacks}. Full-map fallbacks: ${result.gpuOverflowReadbacks}. Input/output bytes: ${result.gpuInputBytes}/${result.gpuOutputBytes}.`;
@@ -741,6 +748,7 @@ $('rightMethod').addEventListener('change', () => {
   form.dispatchEvent(new Event('change'));
   if(rerun)void prepare();
 });
+$('computeDevice').addEventListener('change', () => form.dispatchEvent(new Event('change')));
 form.addEventListener('change', () => { state.sweepRuns = []; notice('Parameters changed. Run again to compare methods.'); cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
 form.addEventListener('change', () => warmSelectedInput());
 $('timeSlider').oninput = () => {
@@ -783,6 +791,60 @@ for (const button of document.querySelectorAll('[data-tab]')) button.onclick = (
   }
   renderSelected(); renderSweep();
 };
+// Device measurements use the original independent estimator workers, with one active worker.
+for (const [id, method] of Object.entries(rightMethods)) $('deviceBenchmarkMethods').add(new Option(method.name, id));
+function renderDeviceBenchmark(record) {
+  const body = $('deviceBenchmarkTable').querySelector('tbody'); body.replaceChildren();
+  for (const row of benchmarkDisplayRows(record)) {
+    const tr = document.createElement('tr');
+    const values = [row.caseId, row.method === 'echoSpline' ? 'EchoSpline' : rightMethods[row.method].name,
+      row.device, row.n, row.n ? `${fmt(row.medianMs, 1)} (${fmt(row.minMs, 1)}–${fmt(row.maxMs, 1)})`
+        : row.diagnosticMs == null ? '—' : `${fmt(row.diagnosticMs, 1)} · ${row.timingStage} only`, fmt(row.finalMapF1 == null ? null : row.finalMapF1 * 100, 2),
+      row.excludedReason ? row.excludedReason + (row.maxCandidatePatchDisplacementBoundM ? `; patch displacement bound ${fmt(row.maxCandidatePatchDisplacementBoundM, 3)} m` : '')
+        + (row.discreteOutputChanges ? `; ${row.discreteOutputChanges} discrete changes` : '')
+        : !row.backendVerified ? 'GPU unavailable' : row.admissible ? row.outputExact ? 'Identical output' : 'Within 2 mm; same F₁' : 'Rejected: output differs'];
+    for (const value of values) { const td = document.createElement('td'); td.textContent = value; tr.append(td); }
+    body.append(tr);
+  }
+  const summary = { schema: record.schema, status: record.status, completed: record.completed, total: record.total,
+    source: record.source && {revision:record.source.revision,dirtySourceHash:record.source.dirtySourceHash}, saved: record.saved ?? false, saveError: record.saveError, error: record.error, summary: record.summary,
+    excluded: record.trials.filter(t => t.status !== 'complete' || t.rejection).map(t => ({ caseId:t.caseId, method:t.method,
+      device:t.variant.id, stage:t.stage, round:t.round, status:t.status, error:t.error, reason:t.rejection ?? t.reason })) };
+  $('deviceBenchmarkSummary').textContent = JSON.stringify(summary, null, 2);
+}
+$('deviceBenchmarkRun').onclick = async () => {
+  if (state.deviceBenchmark || state.sweep || ['running', 'paused'].includes(state.mode)) return;
+  let handle;
+  try {
+    const base = settings(), selected = $('deviceBenchmarkMethods').value;
+    const methods = selected === 'all' ? benchmarkMethods : [selected === 'selected' ? base.rightMethod ?? 'wmp' : selected];
+    const cases = benchmarkCases(base, $('deviceBenchmarkScope').value);
+    stopReplay(); runPreloader.dispose();
+    handle = startDeviceBenchmark({ cases, methods, repeats:Number($('deviceBenchmarkRepeats').value), warmup:$('deviceBenchmarkWarmup').value === '1',
+      source:provenance, localSave:['127.0.0.1','localhost','[::1]'].includes(location.hostname) && new URLSearchParams(location.search).get('benchmarkSave') === '1',
+      onProgress: event => {
+        state.deviceBenchmarkResult = event.record;
+        const status = $('deviceBenchmarkStatus'); status.textContent = event.message;
+        status.dataset.state = event.phase; status.dataset.completed = String(event.record.completed);
+        $('deviceBenchmarkProgress').max = event.record.total; $('deviceBenchmarkProgress').value = event.record.completed;
+        if (!['running','preparing'].includes(event.phase)) renderDeviceBenchmark(event.record);
+        $('deviceBenchmarkExport').disabled = false;
+      } });
+    state.deviceBenchmark = handle; controls();
+    state.deviceBenchmarkResult = await handle.promise;
+    renderDeviceBenchmark(state.deviceBenchmarkResult);
+  } catch (error) {
+    $('deviceBenchmarkStatus').textContent = error.message; $('deviceBenchmarkStatus').dataset.state = 'failed';
+  } finally {
+    if (state.deviceBenchmark === handle) state.deviceBenchmark = null;
+    controls();
+  }
+};
+$('deviceBenchmarkCancel').onclick = () => state.deviceBenchmark?.cancel();
+$('deviceBenchmarkExport').onclick = () => {
+  if (state.deviceBenchmarkResult) download(new Blob([JSON.stringify(state.deviceBenchmarkResult, jsonValue)], {type:'application/json'}), 'echomap-device-benchmark.json');
+};
+
 function renderSweep() {
   renderDiagnostics();
   if (document.hidden || $('sweepPanel').hidden) return;
@@ -909,6 +971,7 @@ for(const section of document.querySelectorAll('#methodMetrics, .method-switch, 
 window.addEventListener('resize', () => { renderSelected(); renderSweep(); });
 window.addEventListener('beforeunload', () => {
   runPreloader.dispose();
+  state.deviceBenchmark?.cancel();
   for (const worker of state.workers) worker.detach ? worker.detach() : worker.stop();
   if (state.sweep?.detach) state.sweep.detach(); else state.sweep?.cancel();
 });
@@ -948,7 +1011,8 @@ history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialI
   .catch(error => notice(`Could not load validation metadata: ${error.message}`));
 controls(); renderSelected();
 const serverPage = location.protocol !== 'file:' && document.querySelector('meta[name="echomap-compute"]')?.content === 'server';
-const useComputeServer = serverPage && new URLSearchParams(location.search).get('compute') !== 'browser';
+// The measured CPU/WebGPU policy runs in browser workers; persistent Node jobs remain opt-in.
+const useComputeServer = serverPage && new URLSearchParams(location.search).get('compute') === 'server';
 if (useComputeServer) {
   state.connecting = true; controls(); notice('Connecting to the compute server.');
   connectComputeServer().then(config => {

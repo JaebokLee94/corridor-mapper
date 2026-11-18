@@ -5,7 +5,7 @@ export function workerMethod(worker,side,input,domain) {
   function receive(data){
     if(!pending)return;
     if(data.type==='error'){reject(new Error(data.message));return;}
-    pending.resolve(data.methods);pending=null;
+    pending.resolve(data.type==='initialized'?data.device:data.methods);pending=null;
   }
   if(worker.on){
     worker.on('message',receive);worker.on('error',reject);
@@ -19,7 +19,7 @@ export function workerMethod(worker,side,input,domain) {
     return new Promise((resolve,reject)=>{pending={resolve,reject};worker.postMessage(message);});
   }
   const {vehicles,scene,rightMethod,echoKnotM,echoSupportM,sigmaD}=input;
-  return {ready:request({type:'init',side,vehicles,scene,rightMethod,domain,echoKnotM,echoSupportM,...(input.echoBackend?{echoBackend:input.echoBackend}:{}),sigmaR:sigmaD}),
+  return {ready:request({type:'init',side,vehicles,scene,rightMethod,domain,echoKnotM,echoSupportM,...(input.echoBackend?{echoBackend:input.echoBackend}:{}),...(input.computeDevice?{computeDevice:input.computeDevice}:{}),sigmaR:sigmaD}),
     step:snapshot=>request({type:'step',snapshot}),
     close(){closed=true;reject(new Error('Cancelled'));worker.terminate();}};
 }

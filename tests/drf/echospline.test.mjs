@@ -23,8 +23,8 @@ test('support reach changes output extent; input and parameter validation preser
     for(let t=1;t<=10;t++)method.observe(flat(t,8));return method.estimate().curves.flat().length;});
   assert.ok(lengths[1]>lengths[0]);assert.equal(experimentSettings({echoKnotM:'4',echoSupportM:5}).echoKnotM,4);assert.throws(()=>experimentSettings({echoKnotM:0}));
 });
-test('existing scene links use CPU and explicit WebGPU survives settings round trips',()=>{
-  assert.deepEqual(experimentSettings({echoBackend:'cpu'}),experimentSettings({}));
+test('explicit stage device choices survive settings round trips',()=>{
+  assert.equal(experimentSettings(experimentSettings({echoBackend:'cpu'})).echoBackend,'cpu');
   assert.equal(experimentSettings(experimentSettings({echoBackend:'gpu'})).echoBackend,'gpu');
   assert.throws(()=>experimentSettings({echoBackend:'other'}),/device/);
 });

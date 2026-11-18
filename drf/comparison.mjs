@@ -7,7 +7,7 @@ import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
 import { markCentreExtensions, checkedChainTips, confirmedExtensions, CHECKED_CENTRE_RULE } from './checked-centre.mjs?v=20261112-chain-tips';
 import { centreSpline, CENTRE_RULE } from './centre-spline.mjs';
 import { BRIDGE_RULE } from './wall-bridges.mjs?v=20261112-chain-tips';
-import { PSPT } from './pspt.mjs?v=20261112-upper-wmp';
+import { PSPT } from './pspt.mjs?v=20261118-device-selection';
 import { Baseline } from './baseline.mjs?v=20261112-upper-wmp';
 const tuning = Object.freeze({
   id:'tuning-200-20261020', role:'development / exploratory tuning', scenes:200,
