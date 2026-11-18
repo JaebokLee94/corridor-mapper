@@ -1,12 +1,11 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261117-cnn-path';
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261115-compact-gbdt';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-compact-results';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs?v=20261112-upper-wmp';
 import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
-import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
 import { rightMethods } from './right-methods.mjs?v=20261117-cnn-path';
@@ -31,16 +30,13 @@ function renderThresholdProtocol(protocol = echoProtocol()) {
     const wmp=protocol.guarded, p=protocol.echoSpline.parameters;
     if(wmp.id){
       const info=wmp.description?wmp:rightMethods[wmp.id]??wmp;
-      $('thresholdSummary').textContent=wmp.threshold==null ? info.description : info.name+' threshold: '+wmp.threshold;
       $('thresholdDetails').textContent=(info.description??info.name)+(wmp.training?' '+wmp.training+'.':'');
       return;
     }
-    $('thresholdSummary').textContent=`WM-P selection threshold: ${wmp.threshold.toFixed(4)}`;
     $('thresholdDetails').textContent=`EchoSpline uses ${p.knotSpacingM} m knots and ${p.supportDistanceM} m support reach. WM-P uses the fixed selection threshold ${wmp.threshold.toFixed(4)}.`;
     return;
   }
   const { guarded, baseline } = protocol;
-  $('thresholdSummary').textContent = `WM-P ${guarded.threshold.toFixed(4)} · WM-F ${baseline.threshold.toFixed(4)}`;
   const refinement = guarded.refinement === 'shared-pose'
     ? 'Candidate refinement accounts for shared vehicle position error.'
     : guarded.refinement === 'independent-pairs' ? 'Candidate refinement treats pair errors independently.' : 'Candidate refinement is not specified in this run metadata.';
@@ -568,7 +564,6 @@ function renderSelected() {
   document.querySelectorAll('#methodMetrics [data-method-col]').forEach((th,i)=>{setMethodLabel(th,names[i]);th.dataset.methodCol=i?'second':'first';});
   $('methodMetrics').classList.toggle('echo-only',state.method==='echoSpline');
   $('methodMetrics').classList.toggle('right-only',rightSolo);
-  $('methodMetrics').classList.toggle('curves-only',curveView);
   $('historySecond').parentElement.hidden=echoOnly;
   for(const opt of $('historyMetric').options)opt.disabled=curveView&&!['mapF1','recall','surfacePrecision'].includes(opt.value);
   if($('historyMetric').selectedOptions[0]?.disabled)$('historyMetric').value='mapF1';
@@ -612,34 +607,16 @@ function renderSelected() {
   for (const [method,prefix] of [[first,''],[second,'b']]) {
     const e=methodEvaluation(method) ?? (!independently && method==='guarded' ? evaluation : null);
     const node=(name)=>$(prefix ? prefix+name[0].toUpperCase()+name.slice(1) : name);
-    for (const [id,key] of [['precisionValue','precision'],['recallValue','recall'],['firstPrecisionValue','firstSupportPrecision'],['offwallValue','offwall']])
-      node(id).textContent=e?.[key]==null ? '—' : fmt(100*e[key],1);
-    for (const [id,key] of [['p95Value','p95'],['f1Value','f1']]) node(id).textContent=fmt(e?.[key]);
-    const candidates=methodResult(method)?.candidates ?? [];
-    for (const [id,status] of [['supportedValue','supported'],['pendingValue','pending'],['contradictedValue','contradicted']])
-      node(id).textContent=method==='echoSpline' || method===second && right.curves || (method==='baseline' || method===second && rightId==='wmf') && status==='contradicted' ? '—' : candidates.filter(c=>c.status===status).length;
-    const completed = interpolationResult(e, kind);
+    node('recallValue').textContent=e?.recall==null ? '—' : fmt(100*e.recall,1);
     const shownMap=interpolationResult(e,interpolate ? kind : 'off'), mapScore=shownMap?.mapF1;
     for(const key of ['mapPrecision','wholeWallRecall']){
       const value=shownMap?.[key];
       node(key+'Value').textContent=value==null?'—':fmt(100*value,1);
     }
-    for(const key of ['mapLengthM','mapOffWallM'])
-      node(key+'Value').textContent=fmt(shownMap?.[key],2);
+    node('mapOffWallMValue').textContent=fmt(shownMap?.mapOffWallM,2);
     node('mapF1Value').textContent=mapScore==null ? '—' : fmt(100*mapScore,1);
-    const mapRecall = node('mapRecallValue'), coverage = interpolate ? completed?.recall : e?.recall;
-    mapRecall.textContent = coverage == null ? '—' : fmt(100 * coverage, 1);
-    mapRecall.title = (method==='echoSpline' || method===second && right.curves) ? 'Observed-wall coverage of the fitted curve' : !interpolate ? 'Supported fragments only' : completed && ['centre','checked'].includes(kind) ? `${completed.count} centre links · ${fmt(completed.lengthM,2)} m of mapped wall · ${fmt(completed.offWallM,2)} m outside tolerance` : completed ? `${completed.count} interpolated gaps · ${fmt(completed.lengthM, 2)} m added · ${fmt(completed.offWallM, 2)} m outside tolerance` : '';
-    node('firstPrecisionValue').title=e?.firstSupportCount!=null ? `First-support errors: ${e.firstSupportErrors} / ${e.firstSupportCount}` : '';
   }
   for (const button of document.querySelectorAll('[data-method]')) button.setAttribute('aria-pressed',String(button.dataset.method===state.method));
-  $('qValue').textContent = frame?.Q ?? 0; $('acceptedValue').textContent = frame?.admitted ?? 0; $('rejectedValue').textContent = frame?.rejected ?? 0;
-  const diag = evaluation?.diagnostics;
-  $('pathValue').textContent = diag ? `Spec. ${diag.specularCount} / diff. ${diag.diffuseCount}` : '—';
-  $('pathValue').title = diag ? `Specular paths: ${diag.specularCount}; diffuse paths: ${diag.diffuseCount}` : 'Specular / diffuse paths';
-  const times = state.frames.slice(0,state.selected).map(f=>f.ms+(f.methods?.guarded.ms ?? 0)+(f.methods?.[legacy?'baseline':'echoSpline']?.ms ?? 0));
-  $('timingValue').textContent = times.length ? `p50 ${fmt(percentile(times,.5),1)} / p95 ${fmt(percentile(times,.95),1)} ms` : '—';
-  $('timingValue').title='Display field + both estimators, per snapshot; excludes generation, evaluation and rendering.';
   const historyMetric = $(state.method === 'compare' || echoOnly ? 'historyMetric' : 'interpolationChartMetric').value;
   const history=independently?Array.from({length:Math.max(methodT(first),methodT(second))},(_,i)=>({
     t:i+1,methods:{[first]:i<methodT(first)?state.methodFrames[first][i].evaluation:null,
@@ -657,8 +634,6 @@ function renderComputeTimes(first,second,selected,independently){
   }
   $('primaryTimer').textContent=computeTimes[selected];
   $('secondaryTimer').textContent=computeTimes[second];
-  $('computeTimeValue').textContent=computeTimes[first];
-  $('bComputeTimeValue').textContent=computeTimes[second];
 }
 
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.

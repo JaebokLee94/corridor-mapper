@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261117-comparison-note" />
+  <link rel="stylesheet" href="drf/style.css?v=20261118-compact-results" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -126,27 +126,13 @@
               <tr data-metric="offWallM" data-digits="3"><th scope="row">Off-wall added <small>m</small></th><td>—</td><td>—</td></tr>
               <tr data-metric="falseBridges" data-digits="0"><th scope="row">Off-wall joins</th><td>—</td><td>—</td></tr>
             </tbody></table>
-            <table id="methodMetrics" class="comparison-table"><caption class="sr-only">Results for the selected snapshot. Precision is undefined when no candidates are supported.</caption><thead><tr><th scope="col">Metric</th><th scope="col" data-method-col="echoSpline">EchoSpline</th><th scope="col" data-method-col="guarded">WM-P</th></tr></thead><tbody>
+            <table id="methodMetrics" class="comparison-table"><caption class="sr-only">Results for the selected snapshot. Map precision is undefined when the estimate is empty.</caption><thead><tr><th scope="col">Metric</th><th scope="col" data-method-col="echoSpline">EchoSpline</th><th scope="col" data-method-col="guarded">WM-P</th></tr></thead><tbody>
               <tr class="major-metric"><th scope="row" title="Harmonic mean of correct mapped length and coverage of the entire true wall, including unobserved wall (0.4 m tolerance).">Map <span data-tex="F_1">F₁</span> <small>%</small></th><td id="mapF1Value">—</td><td id="bMapF1Value">—</td></tr>
-              <tr class="major-metric"><th scope="row" title="Supported candidate centres within 0.4 m of the true wall. Undefined for an empty estimate.">Centre precision <small>%</small></th><td id="precisionValue">—</td><td id="bPrecisionValue">—</td></tr>
-              <tr class="major-metric"><th scope="row" title="Observed wall samples within 0.4 m of supported patches. Observed means within 1 m of a past generated reflection point.">Observed recall <small>%</small></th><td id="recallValue">—</td><td id="bRecallValue">—</td></tr>
-              <tr><th scope="row" title="Observed wall coverage with the selected interpolation setting (0.4 m tolerance). Hover over the values for added and off-wall lengths.">Map recall <small>%</small></th><td id="mapRecallValue">—</td><td id="bMapRecallValue">—</td></tr>
-              <tr><th scope="row" title="Supported fragments only; recall counts observed wall samples only.">Raw surface <span data-tex="F_1">F₁</span></th><td id="f1Value">—</td><td id="bF1Value">—</td></tr>
-              <tr><th scope="row">P95 distance <small>m</small></th><td id="p95Value">—</td><td id="bP95Value">—</td></tr>
-              <tr><th scope="row">Off-wall centres <small>%</small></th><td id="offwallValue">—</td><td id="bOffwallValue">—</td></tr>
-              <tr><th scope="row" title="Centre precision when each candidate was first supported, including subsequently corrected decisions.">First support <small>%</small></th><td id="firstPrecisionValue">—</td><td id="bFirstPrecisionValue">—</td></tr>
               <tr><th scope="row" title="Percentage of estimated wall length within 0.4 m of the true wall.">Map precision <small>%</small></th><td id="mapPrecisionValue">—</td><td id="bMapPrecisionValue">—</td></tr>
               <tr><th scope="row" title="Percentage of all true wall samples within 0.4 m of the estimate, including unobserved walls.">Whole-wall recall <small>%</small></th><td id="wholeWallRecallValue">—</td><td id="bWholeWallRecallValue">—</td></tr>
-              <tr><th scope="row" title="Total length of the displayed reconstruction, counting overlapping estimates separately.">Estimated length <small>m</small></th><td id="mapLengthMValue">—</td><td id="bMapLengthMValue">—</td></tr>
+              <tr class="major-metric"><th scope="row" title="Observed wall samples within 0.4 m of supported patches. Observed means within 1 m of a past generated reflection point.">Observed recall <small>%</small></th><td id="recallValue">—</td><td id="bRecallValue">—</td></tr>
               <tr><th scope="row" title="Estimated length farther than 0.4 m from the true wall.">Off-wall length <small>m</small></th><td id="mapOffWallMValue">—</td><td id="bMapOffWallMValue">—</td></tr>
-              <tr class="compute-time-row"><th scope="row" title="Sum of this estimator’s snapshot update times for the current run. Excludes measurement generation, evaluation and drawing.">Compute time</th><td id="computeTimeValue">0.000 s</td><td id="bComputeTimeValue">0.000 s</td></tr>
-              <tr class="count-row"><th scope="row">Supported</th><td id="supportedValue">0</td><td id="bSupportedValue">0</td></tr>
-              <tr><th scope="row">Held / unselected</th><td id="pendingValue">0</td><td id="bPendingValue">0</td></tr>
-              <tr><th scope="row">Rejected</th><td id="contradictedValue">0</td><td id="bContradictedValue">—</td></tr>
             </tbody></table>
-            <p id="bridgeTableNote" class="comparison-note" hidden>Interpolation adds inferred connections to the supported wall fragments.</p><p id="methodThresholdNote" class="comparison-note"><span id="thresholdSummary">WM-P selection threshold</span></p>
-            <h3 class="counts-heading" id="countsHeading">Counts &amp; computation</h3>
-            <dl class="metrics run-counts"><div><dt>Accumulated paths <span data-tex="Q_t">Qt</span></dt><dd id="qValue">0</dd></div><div><dt>Admitted / rejected</dt><dd><span id="acceptedValue">0</span> / <span id="rejectedValue">0</span></dd></div><div class="generated-count"><dt>Generated paths</dt><dd id="pathValue">—</dd></div><div><dt>Compute time</dt><dd id="timingValue">—</dd></div></dl>
           </section>
         </div>
         <div class="playback-bar"><div class="timeline"><button id="replayButton" type="button" disabled aria-label="Replay computed snapshots">Replay</button><label class="time-label" for="timeSlider">Snapshot <output id="snapshotLabel">0 / 120</output></label><input id="timeSlider" type="range" min="1" max="120" step="1" value="1" disabled /><label class="speed-label">Speed<select id="playbackSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div><p class="keyboard-note"><kbd>Space</kbd> replay <kbd>←</kbd><kbd>→</kbd> step</p></div>
@@ -188,8 +174,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261117-cnn-path';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261117-cnn-path';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261118-compact-results';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261118-compact-results';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

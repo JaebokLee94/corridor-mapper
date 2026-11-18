@@ -19,8 +19,6 @@ export function renderInterpolationPanel(get, mode, kind, frame, format, legacy=
   const echo=mode==='echoSpline'||rightSolo, single = mode !== 'compare' && !echo, name = mode === 'baseline' ? 'WM-F' : legacy?'WM-P':rightName;
   get('methodMetrics').hidden = single;
   get('interpolationMetrics').hidden = !single;
-  get('methodThresholdNote').hidden = single || echo;
-  get('bridgeTableNote').hidden = !single;
   get('historyMetric').hidden = single;
   get('interpolationChartMetric').hidden = !single;
   const centre=['centre','checked'].includes(kind);
@@ -37,9 +35,6 @@ export function renderInterpolationPanel(get, mode, kind, frame, format, legacy=
   setMethodLabel(get('historySecond'),single ? get('rawMapHeading').textContent : legacy?'WM-F':rightName);
   const selector = get(single ? 'interpolationChartMetric' : 'historyMetric');
   if(single){
-    get('bridgeTableNote').textContent=kind==='checked' ? 'Extended curves require repeated range support in every tested section. Map lengths include retained fragments.' : centre
-      ? 'Curves replace the linked halves of fragments. Map lengths include unlinked ends. Aligned openings may be crossed.'
-      : 'Interpolation adds inferred connections to the supported wall fragments.';
     for(const row of get('interpolationMetrics').tBodies[0].rows){
       const key=row.dataset.metric;
       if(!centreMetricNames[key])continue;

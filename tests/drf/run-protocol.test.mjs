@@ -11,7 +11,7 @@ const slice = (source,start,end) => {
   assert.ok(a>=0&&b>a,`Missing handler boundary: ${start}`);
   return source.slice(a,b);
 };
-function attachReceiver(source,state,elements={thresholdSummary:{},thresholdDetails:{}}) {
+function attachReceiver(source,state,elements={thresholdDetails:{}}) {
   const renderThresholdProtocol=new Function('$','METHOD_PROTOCOL','echoProtocol',
     `${slice(source,'function renderThresholdProtocol','const fmt =')}return renderThresholdProtocol;`)(id=>elements[id],METHOD_PROTOCOL,echoProtocol);
   return new Function('state','LEGACY_RUN_PROTOCOL','makeWorker','controls','fillSettings','location','fail','notice','renderSelected','renderThresholdProtocol',
@@ -62,14 +62,13 @@ const frame=()=>({type:'frame',requestId:7,next:1,frame:{t:1,methods:{guarded:{c
     assert.match(await downloads[1].blob.text(),/guarded45-independent-pairs-single-link-legacy/);
   });
   test(`${label}: threshold popup follows the loaded implementation and its saved threshold`,async()=>{
-    const elements={thresholdSummary:{},thresholdDetails:{}},state=initial(),receive=attachReceiver(source,state,elements);
+    const elements={thresholdDetails:{}},state=initial(),receive=attachReceiver(source,state,elements);
     await receive({type:'prepared',requestId:7,scenario:scenario(),grid:{nx:1,ny:1}},7);
     assert.match(elements.thresholdDetails.textContent,/treats pair errors independently/);
     assert.match(elements.thresholdDetails.textContent,/single-link distance grouping/);
     assert.doesNotMatch(elements.thresholdDetails.textContent,/accounts for shared vehicle position error|Each echo cluster is limited/);
     const current=structuredClone(METHOD_PROTOCOL);current.guarded.threshold=2.345;
     await receive({type:'prepared',requestId:7,scenario:scenario(),grid:{nx:1,ny:1},protocol:current},7);
-    assert.match(elements.thresholdSummary.textContent,/WM-P 2.3450/);
     assert.match(elements.thresholdDetails.textContent,/WM-P 2.345;/);
     assert.match(elements.thresholdDetails.textContent,/accounts for shared vehicle position error/);
     assert.match(elements.thresholdDetails.textContent,/Each echo cluster is limited/);

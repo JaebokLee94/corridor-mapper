@@ -635,18 +635,18 @@ test('both fields and their vehicle tracks follow EchoSpline live, in replay and
   } finally {dom.window.close();}
 });
 
-test('map and table timers follow each estimator through completion and retain totals on replay',async()=>{
+test('map timers follow each estimator through completion and retain totals on replay',async()=>{
   const {context,state,$,errors}=runUiContext(2);
   context.document.hidden=true;
   vm.runInContext(section('function renderComputeTimes','// Sweep diagnostics'),context);
-  const values=()=>['primaryTimer','secondaryTimer','computeTimeValue','bComputeTimeValue'].map(id=>$(id).textContent);
+  const values=()=>['primaryTimer','secondaryTimer'].map(id=>$(id).textContent);
   const show=(selected='echoSpline')=>context.renderComputeTimes('echoSpline','guarded',selected,true);
   const frame=(side,t,ms)=>context.receiveRunMessage({type:'method-frame',requestId:1,side,t,result:{ms}},1);
   await frame('echoSpline',1,12);await frame('guarded',1,50);await frame('echoSpline',2,18);
-  show();assert.deepEqual(values(),['0.030 s','0.050 s','0.030 s','0.050 s']);
+  show();assert.deepEqual(values(),['0.030 s','0.050 s']);
   await frame('guarded',2,70);
   state.replay=true;state.selected=1;show();
-  assert.deepEqual(values(),['0.030 s','0.120 s','0.030 s','0.120 s']);
+  assert.deepEqual(values(),['0.030 s','0.120 s']);
   show('guarded');assert.equal(values()[0],'0.120 s');
   assert.deepEqual(errors,[]);
 });
