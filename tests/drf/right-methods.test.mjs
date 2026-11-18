@@ -32,7 +32,7 @@ test('the map heading owns the ordered selector; its form still saves/defaults t
   assert.equal(select.closest('#baselinePane h3')?.contains(select),true);
   assert.equal(doc.querySelector('#experimentSidebar').contains(select),false);
   assert.equal(select.form,doc.querySelector('#settings'));
-  assert.deepEqual(Object.keys(rightMethods),['spline-cnn','gbdt','gat','wmp','arc']);
+  assert.deepEqual(Object.keys(rightMethods),['spline-cnn','gbdt','pair-ridge','pair-gbdt','pair-extra-trees','gat','wmp','arc']);
   assert.equal(experimentSettings({rightMethod:'wmf'}).rightMethod,undefined);
   assert.deepEqual(Array.from(select.options,o=>o.text),Object.values(rightMethods).map(m=>m.name));
   assert.equal(select.value,'wmp');assert.equal(doc.querySelector('#showInterpolation').checked,true);

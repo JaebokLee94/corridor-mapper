@@ -9,6 +9,7 @@ const originalMathFiles = ['latex-LICENSE.txt', 'latex.mjs', 'latex-assets.mjs',
 const originalComputeFiles = ['drf/experiment-settings.mjs','drf/echospline.mjs','drf/spline-gpu.mjs','drf/echo-comparison.mjs','drf/paper-preset.mjs','drf/public-measure.mjs','drf/field-reuse.mjs', 'drf/pspt-curvature.mjs', 'drf/pspt-recovery.mjs'];
 export const runtimeFiles = [
   ...['right-methods','method-label','range-assignment','order-statistic','model-runtime','echospline-cnn','spline-cnn-range','spline-cnn-gpu','models/spline-cnn','echoarc-cnn','arc-gpu','arc-gpu-norm','arc-gpu-math','gat-gpr','echospline-gbdt','models/arc','models/gbdt','models/gat','models/kernels'].map(f=>'drf/'+f+'.mjs'),
+  ...['candidates','choose','models','policy','selector'].map(f=>'drf/echo-pair-selection/'+f+'.mjs'),
   'drf/models/LICENSE.txt',
   ...originalMathFiles, ...originalDiagnosticFiles, ...originalCacheFiles, ...originalComputeFiles,
   'drf.html', 'wall_metrics.js', 'surf/map.mjs', 'surf/exports.mjs',

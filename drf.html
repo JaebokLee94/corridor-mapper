@@ -108,6 +108,9 @@
             <div class="map-pair" id="mapPair" data-mode="compare"><div class="map-pane"><div class="map-pane-heading"><div class="map-heading-details"><h3 class="map-name"><span id="primaryMapName">EchoSpline</span></h3><span id="primaryProgress" class="method-progress" hidden></span></div></div><div class="view-body"><canvas id="mapCanvas" class="dashboard-canvas" role="img" aria-label="Candidate map. The results panel shows metrics for the selected view.">Canvas support is required to display the map. Numerical results are available in the comparison table.</canvas></div></div><div class="map-pane" id="baselinePane"><div class="map-pane-heading"><div class="map-heading-details"><h3 class="map-name baseline-name"><span id="secondaryMapName" hidden>WM-P</span><select id="rightMethod" name="rightMethod" form="settings" aria-label="Right-hand method" autocomplete="off">
             <option value="spline-cnn">EchoSpline-CNN</option>
             <option value="gbdt">EchoSpline + GBDT</option>
+            <option value="pair-ridge">EchoSpline-Ridge (for Computational Reduction)</option>
+            <option value="pair-gbdt">EchoSpline-GBDT (for Computational Reduction)</option>
+            <option value="pair-extra-trees">EchoSpline-ExtraTrees (for Computational Reduction)</option>
             <option value="gat">GAT + GPR</option>
             <option value="wmp" selected>WM-P</option>
             <option value="arc">EchoArc-CNN</option>
@@ -176,8 +179,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261118-cnn-range-gpu';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261118-cnn-range-gpu';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261118-pair-selection';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261118-pair-selection';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

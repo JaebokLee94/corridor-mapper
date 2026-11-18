@@ -1,12 +1,12 @@
-import { rightMethods } from './right-methods.mjs?v=20261118-cnn-range-gpu';
-import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-cnn-range-gpu';
-import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-cnn-range-gpu';
-import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-cnn-range-gpu';
+import { rightMethods } from './right-methods.mjs?v=20261118-pair-selection';
+import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-pair-selection';
+import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-pair-selection';
+import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-pair-selection';
 import { correctFit } from './echospline-gbdt.mjs';
 import { GatGpr } from './gat-gpr.mjs';
-import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-cnn-range-gpu';
+import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-pair-selection';
 import { createSplineGpu } from './spline-gpu.mjs?v=20261117-spline-gpu';
-import { EchoSpline } from './echospline.mjs?v=20261118-cnn-range-gpu';
+import { EchoSpline } from './echospline.mjs?v=20261118-pair-selection';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
 import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
@@ -32,8 +32,9 @@ export function echoProtocol(input={}) {
     score:'robust one-to-one multi-echo range fit',tuning:{id:'single-wall-multiecho',certified:false}},
     guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded
       : {...rightMethods[input.rightMethod],id:input.rightMethod,threshold:input.rightMethod==='arc'?0.7:null,
-        training:input.rightMethod==='spline-cnn'?'Frozen upper-wall checkpoint trained on 1,664 independent walls with 3- and 10-vehicle measured prefixes':'Frozen three-vehicle upper-wall checkpoint',
-        revision:input.rightMethod==='spline-cnn'?'20261118-cnn-range-gpu':'20261115'}};
+        ...(rightMethods[input.rightMethod].pairSelector?{parameters:{maxSelectedPairs:10,selectionInterval:10,trainedFleets:[3,5,7,10]}}:{}),
+        training:rightMethods[input.rightMethod].pairSelector?'Frozen pair-subset scorer trained on 48 training wall scenes from eight seed groups, with 3, 5, 7 and 10 vehicles; features use current and past observations only':input.rightMethod==='spline-cnn'?'Frozen upper-wall checkpoint trained on 1,664 independent walls with 3- and 10-vehicle measured prefixes':'Frozen three-vehicle upper-wall checkpoint',
+        revision:rightMethods[input.rightMethod].pairSelector?'20261118-pair-selection':input.rightMethod==='spline-cnn'?'20261118-cnn-range-gpu':'20261115'}};
 }
 
 export class EchoComparison {
@@ -47,6 +48,8 @@ export class EchoComparison {
     const splineOptions={domain,upper:input.scene==='paper-upper',spacing:input.echoKnotM,support:input.echoSupportM,stationaryCandidates};
     if(side!=='guarded')this.spline=new EchoSpline(splineOptions);
     if(side==='echoSpline')return;
+    this.pairMethod=rightMethods[this.id]?.pairSelector;
+    if(this.pairMethod)this.pairEstimator=new EchoComparison({...input,rightMethod:'wmp'},domain,'echoSpline',stationaryCandidates);
     if(this.id==='gbdt'||this.id==='spline-cnn')this.fixedSpline=this.spline && (input.echoKnotM??2)===2 && (input.echoSupportM??8)===8
       ? this.spline : new EchoSpline({...splineOptions,spacing:2,support:8});
     if(this.id==='wmp'){
@@ -63,6 +66,13 @@ export class EchoComparison {
       else this.splineGpu=gpu;
     }
     if(this.side==='echoSpline' || this.closed)return;
+    if(this.pairEstimator){
+      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261118-pair-selection');
+      if(this.closed)return;
+      this.pairSelector=createPairSelector(this.pairMethod,this.vehicles);
+      await this.pairEstimator.loadModel({useGpu});
+      return;
+    }
     if(this.id==='spline-cnn'){
       [this.tree,this.cnn]=await Promise.all([modelData('gbdt'),neuralRuntime('spline-cnn')]);
       if(useGpu&&!this.closed){
@@ -83,6 +93,7 @@ export class EchoComparison {
   close(){
     this.closed=true;
     this.model?.close?.();
+    this.pairEstimator?.close();
     if(this.cnn){this.cnn.closed=true;this.cnn.gpu?.close();}
     this.splineGpu?.destroy();
   }
@@ -126,7 +137,9 @@ export class EchoComparison {
     }else{
       wire=validateMeasuredSnapshot(wire);
       this.cnnConfigs?.push(...wire.configs);
-      if(this.fixedSpline){
+      if(this.pairEstimator){
+        result=this.pairEstimator.stepLeft(this.pairSelector(wire));
+      }else if(this.fixedSpline){
         const f=sharedFit??this.fixedSpline.step(wire,true);
         result=this.correctedMap(f,wire.configs.length);
       }else if(this.useGpu){
@@ -146,7 +159,9 @@ export class EchoComparison {
     this.lastT=wire.t;
     const finish=map=>{
       const calls=this.cnn?.gpu?.completedCalls??this.cnn?.gpuCallsBeforeLoss??0;
-      return {...map,ms:performance.now()-start,...(this.id==='spline-cnn'?{
+      return {...map,ms:performance.now()-start,
+        ...(this.pairEstimator?{selectedPairCount:this.pairSelector.selectedCount,availablePairCount:wire.configs.length}:{}),
+        ...(this.id==='spline-cnn'?{
         backend:this.cnn.gpu&&calls>cnnCallsBefore?'WebGPU + CPU':'CPU WASM',gpuCalls:calls,gpuCallsThisStep:calls-cnnCallsBefore}: {})};
     };
     return result?.then?result.then(finish):finish(result);
@@ -207,6 +222,8 @@ export async function estimateFinalMaps(input,domain,wires,stationaryCandidates)
       if(estimator.wmp){
         estimator.wmp.observe(wire);
         estimator.evidence.add(wire);
+      }else if(estimator.pairEstimator){
+        estimator.pairEstimator.spline.observe(estimator.pairSelector(wire));
       }else if(estimator.fixedSpline){
         if(!shared)estimator.fixedSpline.observe(wire);
       }else estimator.model.observe(wire);
@@ -217,6 +234,10 @@ export async function estimateFinalMaps(input,domain,wires,stationaryCandidates)
       const rows=selectGuarded(estimator.wmp,estimator.wmp.report(),estimator.protocol.guarded.threshold);
       guarded=wmpFrame(rows,performance.now(),true,estimator.evidence);
       delete guarded.ms;
+    }else if(estimator.pairEstimator){
+      const pair=estimator.pairEstimator;
+      guarded=pair.splineGpu?await pair.fitOnGpu(false):pair.spline.estimate();
+      guarded={...guarded,candidates:[],selectedPairCount:estimator.pairSelector.selectedCount,availablePairCount:wires.at(-1).configs.length};
     }else if(estimator.fixedSpline){
       guarded=await estimator.correctedMap(shared?fit:estimator.fixedSpline.estimate(true),wires.at(-1).configs.length);
     }else guarded=estimator.useGpu?await estimator.model.estimateAsync():estimator.model.estimate();

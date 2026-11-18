@@ -1,4 +1,4 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-cnn-range-gpu';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-pair-selection';
 import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-compact-results';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
@@ -9,11 +9,11 @@ import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.m
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
-import { rightMethods } from './right-methods.mjs?v=20261118-cnn-range-gpu';
-import { echoProtocol } from './echo-comparison.mjs?v=20261118-cnn-range-gpu';
+import { rightMethods } from './right-methods.mjs?v=20261118-pair-selection';
+import { echoProtocol } from './echo-comparison.mjs?v=20261118-pair-selection';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-cnn-range-gpu';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-pair-selection';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-spline-fields';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
@@ -122,7 +122,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261118-cnn-range-gpu';
+  const revision = '20261118-pair-selection';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -579,7 +579,7 @@ function renderSelected() {
       if(Number.isFinite(result?.ms)){
         label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
         if(result.backend){
-          if(method==='echoSpline'){
+          if(method==='echoSpline'||right.pairSelector){
             label.title+=` Estimator: ${result.backend}. GPU stationary-path searches: ${result.gpuCallsThisStep??0} this update, ${result.gpuCalls??0} total.`;
           }else label.title+=` Inference: ${result.backend}. WebGPU ${rightId==='spline-cnn'?'network forwards':'convolutions'} completed: ${result.gpuCalls}.`;
           if(result.gpuMode==='resident'){
@@ -590,6 +590,7 @@ function renderSelected() {
           if(result.gpuAdapter)label.title+=` Adapter: ${result.gpuAdapter}.`;
         }
       }
+      if(result?.selectedPairCount!=null)label.title+=` Selected pairs: ${result.selectedPairCount}/${result.availablePairCount}; selection updates every 10 snapshots.`;
       const stages=result?.stageTotalsMs;
       if(stages)label.title+=` GAT inference: ${(stages.gat/1000).toFixed(3)} s. GPR fit and prediction: ${(stages.gpr/1000).toFixed(3)} s. Other processing: ${(Math.max(0,ms-stages.gat-stages.gpr)/1000).toFixed(3)} s.`;
     }
