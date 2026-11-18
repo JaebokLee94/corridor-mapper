@@ -1,5 +1,5 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-method-order2';
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-compact-results';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-method-order3';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
@@ -14,7 +14,7 @@ import { echoProtocol } from './echo-comparison.mjs?v=20261118-method-order2';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-method-order2';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261117-spline-fields';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261118-method-order3';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';

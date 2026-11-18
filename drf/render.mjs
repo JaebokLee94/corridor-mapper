@@ -1,6 +1,6 @@
 import {confirmedExtensions} from './checked-centre.mjs?v=20261112-chain-tips';
 import { centreSpline } from './centre-spline.mjs';
-import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261115-four-methods';
+import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261118-method-order3';
 import { boundsOf } from "../surf/map.mjs";
 import { drawTex, measureTex, prepareCanvasMath } from "./latex.mjs";
 
