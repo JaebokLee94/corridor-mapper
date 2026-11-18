@@ -194,13 +194,15 @@ table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums;
 .comparison-table th { text-align:left; font-weight:400; }
 .comparison-table thead th { color:var(--color-ink-muted); font-weight:600; padding:7px 0; border-bottom:1px solid var(--color-line); }
 .comparison-table thead th:not(:first-child) { text-align:right; }
-#methodMetrics [data-method-col] { width:1%; white-space:nowrap; }
+#methodMetrics [data-method-col] { width:25%; white-space:normal; }
+#methodMetrics tbody th { white-space:nowrap; }
 #methodMetrics [data-method-col]:last-child { padding-inline-start:8px; }
 #methodMetrics [data-full-method-label] { width:32%; white-space:normal; }
 .comparison-table td { text-align:right; font-weight:400; white-space:nowrap; }
 #methodMetrics td { padding-inline-start:8px; }
-.comparison-table tbody th,.comparison-table tbody td { padding:7px 0; vertical-align:middle; line-height:1.4; }
-.comparison-table tbody th { color:var(--color-ink-muted); padding-right:8px; }
+.comparison-table :is(tbody,tfoot) th,.comparison-table :is(tbody,tfoot) td { padding:7px 0; vertical-align:middle; line-height:1.4; }
+.comparison-table :is(tbody,tfoot) th { color:var(--color-ink-muted); padding-right:8px; }
+.comparison-table .timing-row>* { border-top:1px solid var(--color-line); }
 .comparison-table .major-metric td { font-weight:700; }
 .comparison-table .major-metric th { color:var(--color-ink); }
 #interpolationMetrics { table-layout:auto; }
@@ -312,7 +314,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 @media(max-width:1000px) {
   .main-grid { grid-template-columns:minmax(0,1fr); }
   .results-panel { padding:18px; }
-  .comparison-table tbody th,.comparison-table tbody td { padding:6px 0; }
+  .comparison-table :is(tbody,tfoot) th,.comparison-table :is(tbody,tfoot) td { padding:6px 0; }
   .results-heading { display:flex; justify-content:space-between; gap:12px; }
   .map-heading { flex-wrap:wrap; }
   .method-switch .view-meta { width:auto; margin:0 0 0 auto; }
@@ -392,11 +394,8 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .map-pair:not([data-mode="compare"]) { grid-template-columns:minmax(0,1fr); }
 .map-pane { min-width:0; min-height:0; display:grid; grid-template-rows:minmax(28px,auto) minmax(0,1fr); }
 .map-pane+.map-pane { border-left:1px solid var(--color-line); }
-.map-pane-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; min-width:0; padding:3px var(--plot-right-inset,16px) 3px calc(var(--heading-inset) + var(--method-button-inset) + 1px); }
+.map-pane-heading { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:8px; min-width:0; padding:3px var(--plot-right-inset,16px) 3px calc(var(--heading-inset) + var(--method-button-inset) + 1px); }
 .map-heading-details { display:flex; flex-wrap:wrap; align-items:center; gap:0 8px; min-width:0; }
-/* Move the readout into the empty margin above the map's top gridline. */
-.compute-timer { align-self:end; position:relative; top:13px; z-index:1; font-size:15px; line-height:1; }
-.compute-timer { color:var(--color-ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .method-progress { margin-right:auto; font-size:12px; color:var(--color-ink-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .map-name { max-width:100%; margin:0; font-size:18px; color:var(--color-accent); }
 .baseline-name { color:var(--color-baseline); }
@@ -467,7 +466,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .results-heading h2 { font-size:15px; margin:0; }
   #evaluationNote { margin:4px 0; font-size:13px; }
   .comparison-table thead th { padding:3px 0; font-size:13px; }
-  .comparison-table tbody th,.comparison-table tbody td { padding:4px 0; font-size:13px; line-height:1.4; }
+  .comparison-table :is(tbody,tfoot) th,.comparison-table :is(tbody,tfoot) td { padding:4px 0; font-size:13px; line-height:1.4; }
   .playback-bar { padding:0; gap:12px; }
   .timeline { gap:10px; }
   .timeline button,.speed-label select { min-height:30px; height:30px; padding:4px 8px; }

@@ -9,6 +9,7 @@ import { METHOD_PROTOCOL } from '../../drf/comparison.mjs';
 import { LEGACY_RUN_PROTOCOL } from '../../drf/legacy-run-protocol.mjs';
 import { interpolationResult } from '../../drf/interpolation-panel.mjs';
 import { createDiagnosticView } from '../../drf/diagnostic-ui.mjs';
+import { percentile } from '../../drf/statistics.mjs';
 
 import { setMethodLabel } from '../../drf/method-label.mjs';
 import { rightMethods } from '../../drf/right-methods.mjs';
@@ -316,7 +317,7 @@ test('view reset preserves simulation, selection and replay, and clearing a run 
     history:{replaceState(_state,_title,url){context.location=url;}},
     document,createDiagnosticView,interpolationResult,renderInterpolationPanel(){},setMathText:(node,parts)=>{node.textContent=parts.map(part=>typeof part==='string'?part:part.tex).join('');},
     map:{set(){},fit(){fitCalls++;}},baselineMap:{set(){},fit(){fitCalls++;}},densityMap:{set(){},fit(){fitCalls++;}},contrastMap:{set(){},fit(){fitCalls++;}},previewWalls:()=>[],previewBounds:undefined,previewDomain:undefined,
-    fmt:v=>Number.isFinite(v) ? String(v) : '—',percentile:values=>values[0]??null,
+    fmt:v=>Number.isFinite(v) ? String(v) : '—',percentile,
     requestAnimationFrame:fn=>{const id=++nextFrame;pending.set(id,fn);return id;},cancelAnimationFrame:id=>pending.delete(id),clearTimeout(){},
     drawComparisonHistory:(canvas,data)=>charts.set(canvas.id,data),drawHistogram:(canvas,data)=>charts.set(canvas.id,data),
     drawProfile:(canvas,data)=>charts.set(canvas.id,data),drawCounts:(canvas,a,b)=>charts.set(canvas.id,[a,b]),
@@ -613,7 +614,7 @@ test('both fields and their vehicle tracks follow EchoSpline live, in replay and
     for(const name of ['map','baselineMap','densityMap','contrastMap'])maps[name]={set(value){this.state=value;}};
     const context=vm.createContext({$,document,form:$('settings'),state,rightMethods,setMethodLabel,
       ...maps,hoverGeneration:0,LAYERED_DOMAIN,interpolationResult,fmt:String,
-      percentile(){},renderInterpolationPanel(){},drawComparisonHistory(){},renderDiagnostics(){}});
+      percentile,renderInterpolationPanel(){},drawComparisonHistory(){},renderDiagnostics(){}});
     vm.runInContext(section('function renderSelected()','// Sweep diagnostics'),context);
     function check(t,field) {
       context.renderSelected();
@@ -635,20 +636,47 @@ test('both fields and their vehicle tracks follow EchoSpline live, in replay and
   } finally {dom.window.close();}
 });
 
-test('map timers follow each estimator through completion and retain totals on replay',async()=>{
+test('table timings follow each estimator through completion and retain the full run on replay',async()=>{
   const {context,state,$,errors}=runUiContext(2);
-  context.document.hidden=true;
+  context.document.hidden=true;context.percentile=percentile;
   vm.runInContext(section('function renderComputeTimes','// Sweep diagnostics'),context);
-  const values=()=>['primaryTimer','secondaryTimer'].map(id=>$(id).textContent);
+  const values=()=>['computeTimeValue','bComputeTimeValue','updateP95Value','bUpdateP95Value'].map(id=>$(id).textContent);
   const show=(selected='echoSpline')=>context.renderComputeTimes('echoSpline','guarded',selected,true);
   const frame=(side,t,ms)=>context.receiveRunMessage({type:'method-frame',requestId:1,side,t,result:{ms}},1);
   await frame('echoSpline',1,12);await frame('guarded',1,50);await frame('echoSpline',2,18);
-  show();assert.deepEqual(values(),['0.030 s','0.050 s']);
+  show();assert.deepEqual(values(),['0.030','0.050','18.0','50.0']);
   await frame('guarded',2,70);
   state.replay=true;state.selected=1;show();
-  assert.deepEqual(values(),['0.030 s','0.120 s']);
-  show('guarded');assert.equal(values()[0],'0.120 s');
+  assert.deepEqual(values(),['0.030','0.120','18.0','70.0']);
+  show('guarded');
+  assert.equal($('interpolationComputeTimeValue').textContent,'0.120');
+  assert.equal($('interpolationUpdateP95Value').textContent,'70.0');
   assert.deepEqual(errors,[]);
+});
+
+test('timing summaries use nearest-rank P95 and keep empty or incomplete measurements explicit',()=>{
+  const {context,state,$}=runUiContext(20);context.percentile=percentile;
+  vm.runInContext(section('function renderComputeTimes','// Sweep diagnostics'),context);
+  const values=()=>['computeTimeValue','bComputeTimeValue','updateP95Value','bUpdateP95Value'].map(id=>$(id).textContent);
+  const samples=times=>times.map((ms,i)=>({result:{ms},totalMs:times.slice(0,i+1).reduce((sum,v)=>sum+v,0)}));
+  const first=Array.from({length:20},(_,i)=>i+1),second=first.map(v=>v*2).reverse();
+  for(const independent of [true,false]){
+    const [left,right]=independent?['echoSpline','guarded']:['guarded','baseline'];
+    const load=(a,b)=>{
+      state.methodFrames=independent?{[left]:samples(a),[right]:samples(b)}:null;
+      state.frames=independent?[]:a.map((ms,i)=>({methods:{[left]:{ms},[right]:{ms:b[i]}}}));
+      state.joinedComputeMs={[left]:a.reduce((sum,v)=>sum+v,0),[right]:b.reduce((sum,v)=>sum+v,0)};
+      context.renderComputeTimes(left,right,right,independent);
+    };
+    load([],[]);assert.deepEqual(values(),['0.000','0.000','—','—']);
+    load(first,second);assert.deepEqual(values(),['0.210','0.420','19.0','38.0']);
+    assert.equal($('interpolationComputeTimeValue').textContent,'0.420');
+    assert.equal($('interpolationUpdateP95Value').textContent,'38.0');
+    if(independent)assert.deepEqual(state.methodFrames[right].map(s=>s.result.ms),second,'Quantile computation must preserve snapshot order');
+    for(const invalid of [undefined,null,NaN,Infinity,-1]){
+      load([1,invalid],[2,4]);assert.deepEqual(values(),['—','0.006','—','4.0']);
+    }
+  }
 });
 
 test('generation progress fills the rear bar before computation fills the foreground bar',async()=>{

@@ -6,6 +6,7 @@ import { setMathText } from './dom-math.mjs';
 import { createDiagnosticView } from './diagnostic-ui.mjs?v=20261112-upper-wmp';
 import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
+import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs';
 import { rightMethods } from './right-methods.mjs?v=20261117-cnn-path';
@@ -628,12 +629,22 @@ function renderSelected() {
 function renderComputeTimes(first,second,selected,independently){
   const computeTimes={};
   for(const method of [first,second]){
+    const times=independently ? state.methodFrames[method].map(frame=>frame.result?.ms)
+      : state.frames.map(frame=>frame.methods?.[method]?.ms);
     const ms=independently ? state.methodFrames[method].at(-1)?.totalMs??0
       : state.frames.length ? state.joinedComputeMs?.[method] : 0;
-    computeTimes[method]=Number.isFinite(ms) ? (ms/1000).toFixed(3)+' s' : '—';
+    const valid=times.every(time=>Number.isFinite(time) && time>=0);
+    computeTimes[method]={
+      total:valid && Number.isFinite(ms) && ms>=0 ? (ms/1000).toFixed(3) : '—',
+      p95:valid && times.length ? percentile(times,.95).toFixed(1) : '—'
+    };
   }
-  $('primaryTimer').textContent=computeTimes[selected];
-  $('secondaryTimer').textContent=computeTimes[second];
+  $('computeTimeValue').textContent=computeTimes[first].total;
+  $('bComputeTimeValue').textContent=computeTimes[second].total;
+  $('updateP95Value').textContent=computeTimes[first].p95;
+  $('bUpdateP95Value').textContent=computeTimes[second].p95;
+  $('interpolationComputeTimeValue').textContent=computeTimes[selected].total;
+  $('interpolationUpdateP95Value').textContent=computeTimes[selected].p95;
 }
 
 // Sweep diagnostics are post-hoc only; this separate worker never feeds an estimator.
