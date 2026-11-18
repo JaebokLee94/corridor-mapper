@@ -1,12 +1,12 @@
-import { rightMethods } from './right-methods.mjs?v=20261118-rugged-recovery';
-import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-rugged-recovery';
-import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-rugged-recovery';
-import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-rugged-recovery';
+import { rightMethods } from './right-methods.mjs?v=20261118-rugged-canonical';
+import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-rugged-canonical';
+import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-rugged-canonical';
+import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-rugged-canonical';
 import { correctFit } from './echospline-gbdt.mjs';
 import { GatGpr } from './gat-gpr.mjs';
-import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-rugged-recovery';
+import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-rugged-canonical';
 import { createSplineGpu } from './spline-gpu.mjs?v=20261117-spline-gpu';
-import { EchoSpline } from './echospline.mjs?v=20261118-rugged-recovery';
+import { EchoSpline } from './echospline.mjs?v=20261118-rugged-canonical';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
 import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261112-upper-wmp';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
@@ -33,8 +33,8 @@ export function echoProtocol(input={}) {
     guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded
       : {...rightMethods[input.rightMethod],id:input.rightMethod,threshold:input.rightMethod==='arc'?0.7:null,
         ...(rightMethods[input.rightMethod].pairSelector?{parameters:{maxSelectedPairs:10,selectionInterval:10,trainedFleets:[3,5,7,10]}}:{}),
-        training:rightMethods[input.rightMethod].pairSelector?'Frozen pair-subset scorer trained on 48 training wall scenes from eight seed groups, with 3, 5, 7 and 10 vehicles; features use current and past observations only':input.rightMethod==='spline-cnn'?'Frozen upper-wall checkpoint trained on 1,664 independent walls with 3- and 10-vehicle measured prefixes':'Frozen three-vehicle upper-wall checkpoint',
-        revision:rightMethods[input.rightMethod].pairSelector?'20261118-pair-selection':input.rightMethod==='spline-cnn'?'20261118-rugged-recovery':'20261115'}};
+        training:rightMethods[input.rightMethod].pairSelector?'Frozen pair-subset scorer trained on 48 training wall scenes from eight seed groups, with 3, 5, 7 and 10 vehicles; features use current and past observations only':input.rightMethod==='spline-cnn'?'Frozen upper-wall checkpoint refined on 4,736 independent walls with 3- and 10-vehicle measured prefixes':'Frozen three-vehicle upper-wall checkpoint',
+        revision:rightMethods[input.rightMethod].pairSelector?'20261118-pair-selection':input.rightMethod==='spline-cnn'?'20261118-rugged-canonical':'20261115'}};
 }
 
 export class EchoComparison {
@@ -67,7 +67,7 @@ export class EchoComparison {
     }
     if(this.side==='echoSpline' || this.closed)return;
     if(this.pairEstimator){
-      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261118-rugged-recovery');
+      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261118-rugged-canonical');
       if(this.closed)return;
       this.pairSelector=createPairSelector(this.pairMethod,this.vehicles);
       await this.pairEstimator.loadModel({useGpu});

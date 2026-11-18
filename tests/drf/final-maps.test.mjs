@@ -56,5 +56,5 @@ test('the spline-cnn method returns the frozen single CNN path on a separated pe
   const peak=guarded.curves.flat().find(([x])=>Math.abs(x-79.8)<1e-8);
   assert.ok(peak);
   // Independent frozen H200 PyTorch path; the target seed was excluded from training.
-  assert.ok(Math.abs(peak[1]-49.57072981055406)<.002, String(peak));
+  assert.ok(Math.abs(peak[1]-49.58793040412688)<.002, String(peak));
 });

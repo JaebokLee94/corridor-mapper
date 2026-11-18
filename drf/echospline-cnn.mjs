@@ -1,4 +1,4 @@
-import {splineRangeImage} from './spline-cnn-range.mjs?v=20261118-rugged-recovery';
+import {splineRangeImage} from './spline-cnn-range.mjs?v=20261118-rugged-canonical';
 
 // Measured-prefix fit: x [N,m], multiscale inverse points [P,(x,y,dy/dx)],
 // configurations and a GBDT anchor. Scores [81,N] span ±16 m at 0.4 m spacing.
@@ -143,7 +143,7 @@ export function splineCnnProposal(rt,fit,gbdtCurves,evidence) {
     };
     return rt.gpu?rt.gpu.estimate(input,n).then(finish):finish(logitsFromVotes(rt,input,n));
   };
-  const range=channels===26?splineRangeImage(rt,x,anchor,evidence.configs,evidence.links,evidence.sign,rt.gpu):null;
+  const range=channels===26?splineRangeImage(rt,x,anchor,evidence.configs,evidence.links,evidence.sign):null;
   if(rt.gpu)return Promise.resolve(range).then(infer).catch(error=>{
     if(rt.closed)throw error;
     rt.gpuCallsBeforeLoss=rt.gpu?.completedCalls??0;rt.gpu?.close();rt.gpu=null;

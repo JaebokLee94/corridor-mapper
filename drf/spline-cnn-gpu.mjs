@@ -1,42 +1,7 @@
-import {convolutionShader} from './arc-gpu.mjs?v=20261118-rugged-recovery';
+import {convolutionShader} from './arc-gpu.mjs?v=20261118-rugged-canonical';
 
 const HEIGHT=81;
 const originalDilations=[[1,2],[1,4],[2,8],[3,12]];
-
-// One invocation per candidate cell; preserve configuration/path summation order.
-const rangeShader=`
-@group(0) @binding(0) var<storage,read> xy: array<vec2f>;
-@group(0) @binding(1) var<storage,read> configs: array<f32>;
-@group(0) @binding(2) var<storage,read> paths: array<f32>;
-@group(0) @binding(3) var<storage,read_write> result: array<f32>;
-@group(0) @binding(4) var<uniform> cfg: vec4u;
-@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) gid: vec3u) {
-  let j=gid.x;if(j>=cfg.x){return;}
-  var mass=0.;var first=0.;var second=0.;
-  for(var c=0u;c<cfg.y;c++){
-    let p=c*13u;
-    var a=xy[j]-vec2f(configs[p],configs[p+1u]);
-    var b=xy[j]-vec2f(configs[p+2u],configs[p+3u]);
-    let ra=max(1e-9,sqrt(a.x*a.x+a.y*a.y));let rb=max(1e-9,sqrt(b.x*b.x+b.y*b.y));
-    a/=ra;b/=rb;let g=a+b;let norm=max(1e-9,sqrt(g.x*g.x+g.y*g.y));
-    let variance=configs[p+4u]*a.x*a.x+2.*configs[p+5u]*a.x*a.y+configs[p+6u]*a.y*a.y+
-      configs[p+7u]*b.x*b.x+2.*configs[p+8u]*b.x*b.y+configs[p+9u]*b.y*b.y;
-    let rho=ra+rb;let lower=rho-configs[p+12u];let upper=rho+configs[p+12u];
-    let start=u32(configs[p+10u]);let end=start+u32(configs[p+11u]);
-    var lo=start;var hi=end;
-    while(lo<hi){let mid=(lo+hi)/2u;if(paths[3u*mid]<lower){lo=mid+1u;}else{hi=mid;}}
-    var total=0.;
-    for(var k=lo;k<end;k++){
-      let i=3u*k;if(paths[i]>upper){break;}
-      let sd=sqrt(max(1e-12,paths[i+1u]+variance));let residual=(rho-paths[i])/sd;
-      total+=exp(-.5*residual*residual)*paths[i+2u]/sd;
-    }
-    total*=norm/2.5066282746310005;let nx=g.x/norm;
-    mass+=total;first+=total*nx;second+=total*nx*nx;
-  }
-  result[3u*j]=log(1.+(3./f32(max(1u,cfg.z)))*mass);
-  result[3u*j+1u]=first/max(1e-12,mass);result[3u*j+2u]=second/max(1e-12,mass);
-}`;
 
 function activationShader(channels,residual) {
   return `
@@ -56,8 +21,8 @@ ${residual?'@group(0) @binding(1) var<storage,read> update: array<f32>;':''}
 export function createSplineCnnGpu(runtime) {
   const gpu=globalThis.navigator?.gpu;
   if(!gpu)return null;
-  let device,closed=false,lost=false,failure,resident,rangePipeline,rangeChecked=false,adapterInfo={};
-  let completedCalls=0,completedRangeCalls=0,inputBytes=0,outputBytes=0,tail=Promise.resolve();
+  let device,closed=false,lost=false,failure,resident,adapterInfo={};
+  let completedCalls=0,inputBytes=0,outputBytes=0,tail=Promise.resolve();
   const owned=new Set(),layers=[],pipelines=new Map();
   const unavailable=()=>failure??new Error(lost?'EchoSpline GPU device lost':'EchoSpline GPU is closed');
   function available(){if(closed||lost)throw unavailable();}
@@ -154,28 +119,6 @@ export function createSplineCnnGpu(runtime) {
   const ready=initialize().catch(error=>{failure=error;close();throw error;});
   // A caller may close while adapter creation is pending and never await ready.
   ready.catch(()=>{});
-  async function rangeImage(xy,packed,links){
-    available();
-    rangePipeline??=device.createComputePipelineAsync({layout:'auto',compute:{module:device.createShaderModule({label:'EchoSpline range votes',code:rangeShader}),entryPoint:'main'}});
-    const pipeline=await rangePipeline;available();
-    const cells=xy.length/2,bytes=cells*3*4,temporary=[];
-    if(Math.max(xy.byteLength,packed.configs.byteLength,packed.paths.byteLength,bytes)>device.limits.maxStorageBufferBindingSize)
-      throw new Error('EchoSpline range GPU storage limit exceeded');
-    const make=(size,usage)=>{const b=buffer(Math.max(4,size),usage);temporary.push(b);return b;};
-    try{
-      const inputs=[xy,packed.configs,packed.paths].map(values=>{
-        const b=make(values.byteLength,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);
-        if(values.length)device.queue.writeBuffer(b,0,values);return b;
-      });
-      const output=make(bytes,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);
-      const readback=make(bytes,GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST);
-      const params=make(16,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
-      device.queue.writeBuffer(params,0,new Uint32Array([cells,packed.configs.length/13,links,0]));
-      const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();
-      dispatch(pass,pipeline,bind(pipeline.getBindGroupLayout(0),[...inputs,output,params]),cells);pass.end();
-      return await read(encoder,output,readback,bytes);
-    }finally{for(const b of temporary)if(owned.has(b))release(b);}
-  }
   function workspace(n,configuration){
     if(resident?.n===n)return resident;
     if(resident){for(const b of resident.buffers)release(b);resident=undefined;}
@@ -204,32 +147,11 @@ export function createSplineCnnGpu(runtime) {
     ready,
     get adapterInfo(){return adapterInfo;},
     get completedCalls(){return completedCalls;},
-    get completedRangeCalls(){return completedRangeCalls;},
     get completedReadbacks(){return completedCalls;},
     get inputBytes(){return inputBytes;},
     get outputBytes(){return outputBytes;},
     get closed(){return closed;},
     close,
-    rangeImage(xy,packed,links){
-      const result=tail.then(async()=>{
-        await ready;available();
-        if(!(xy instanceof Float32Array)||!xy.length||xy.length%2||!(packed.configs instanceof Float32Array)||
-          packed.configs.length%13||!(packed.paths instanceof Float32Array)||packed.paths.length%3||!Number.isSafeInteger(links)||links<0)
-          throw new Error('Invalid EchoSpline range GPU input');
-        if(!rangeChecked){
-          const probe=new Float32Array([0,5,3,4,0,6,2,-3]);
-          const data={configs:new Float32Array([0,0,0,0,.01,.002,.02,.02,-.003,.03,0,2,8]),
-            paths:new Float32Array([10,.16,1/(10*Math.PI),13,.36,1/(13*Math.PI)])};
-          const expected=runtime.call('rangeVotes',[probe,data.configs,data.paths],12,[4,1,3]);
-          const actual=await rangeImage(probe,data,3);
-          if(!expected.every((v,i)=>Number.isFinite(actual[i])&&Math.abs(v-actual[i])<1e-5))
-            throw new Error('GPU range likelihood calibration failed');
-          rangeChecked=true;
-        }
-        const values=await rangeImage(xy,packed,links);completedRangeCalls++;return values;
-      });
-      tail=result.catch(()=>{});return result;
-    },
     estimate(input,n){
       const result=tail.then(async()=>{
         const configuration=await ready;available();

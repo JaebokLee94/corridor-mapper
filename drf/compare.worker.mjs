@@ -1,4 +1,4 @@
-import { EchoComparison } from './echo-comparison.mjs?v=20261118-rugged-recovery';
+import { EchoComparison } from './echo-comparison.mjs?v=20261118-rugged-canonical';
 // Only declared range noise and measured snapshots cross the inference boundary.
 let estimator,side;
 globalThis.onmessage=async ({data})=>{

@@ -7,6 +7,7 @@ import {convolutionShader} from '../../drf/arc-gpu.mjs';
 import {createSplineCnnGpu} from '../../drf/spline-cnn-gpu.mjs';
 import {splineCnnProposal} from '../../drf/echospline-cnn.mjs';
 import {EchoComparison} from '../../drf/echo-comparison.mjs';
+import {neuralRuntime} from '../../drf/model-runtime.mjs';
 
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 function environment(gpu){
@@ -89,26 +90,6 @@ test('close during adapter/device initialization disposes a late-created device'
   }finally{backend.close();restore();}
 });
 
-test('range GPU calibrates once, releases temporary buffers and rejects invalid input',async()=>{
-  const f=fakeGpu(),restore=environment(f.gpu),backend=createSplineCnnGpu(runtime());
-  try{
-    await backend.ready;const start=f.state.buffers.length,submits=f.state.submissions;
-    const xy=new Float32Array([0,5,3,4]),packed={configs:new Float32Array(),paths:new Float32Array()};
-    assert.equal((await backend.rangeImage(xy,packed,3)).length,6);
-    await backend.rangeImage(xy,packed,3);
-    assert.equal(backend.completedRangeCalls,2);assert.equal(backend.completedCalls,0);
-    assert.equal(f.state.submissions-submits,3,'one calibration and two measured range kernels');
-    assert(f.state.buffers.slice(start).every(b=>b.destroyed));
-    await assert.rejects(backend.rangeImage(new Float32Array(3),packed,3),/Invalid/);
-    assert.equal(backend.completedRangeCalls,2);
-    const gate=deferred();f.state.blockMap=gate;
-    const pending=backend.rangeImage(xy,packed,3);
-    await f.state.mapBlocked.promise;backend.close();gate.resolve();
-    await assert.rejects(pending,/destroyed|closed/);assert.equal(backend.completedRangeCalls,2);
-    assert(f.state.buffers.every(b=>b.destroyed));
-  }finally{backend.close();restore();}
-});
-
 test('close before an adapter arrives never creates a device',async()=>{
   const f=fakeGpu(),gate=deferred();f.gpu.requestAdapter=()=>gate.promise;
   const restore=environment(f.gpu),backend=createSplineCnnGpu(runtime());
@@ -168,15 +149,27 @@ test('cancelling a pending CNN readback propagates rejection without CPU recompu
   assert.equal(calls.filter(k=>k==='convolutionXY').length,0);
 });
 
-test('range GPU failure recomputes features on CPU before one network fallback',async()=>{
-  const rt=runtime(),calls=[];rt.data.penalty=.25;
-  rt.call=(name,_inputs,n)=>{calls.push(name);return new Float32Array(n);};
-  rt.gpu={completedCalls:0,rangeImage:()=>Promise.reject(new Error('range lost')),
-    estimate(){throw new Error('must not run after range failure');},close(){}};
-  const actual=await splineCnnProposal(rt,fitFixture(),anchorFixture,evidenceFixture);
-  assert.equal(rt.gpu,null);assert.equal(calls.filter(k=>k==='rangeVotes').length,1);
-  assert.equal(calls.filter(k=>k==='convolutionXY').length,8);
-  assert.deepEqual(Array.from(actual.base),[4,4,4]);
+test('GPU CNN receives the same canonical WASM range features as CPU CNN',async()=>{
+  const rt=await neuralRuntime('spline-cnn'),call=rt.call;
+  let cpuInput,gpuInput,rangeCalls=0,convolutionCalls=0;
+  rt.call=(name,inputs,...args)=>{
+    if(name==='rangeVotes')rangeCalls++;
+    if(name==='convolutionXY'){convolutionCalls++;cpuInput??=inputs[0].slice();}
+    return call(name,inputs,...args);
+  };
+  const evidence={...evidenceFixture,configs:[{pHat_i:[0,0],pHat_j:[0,0],Sigma_i:[0,0,0],Sigma_j:[0,0,0],
+    paths:[{dHat:8,sigmaD:.4}]}]};
+  splineCnnProposal(rt,fitFixture(),anchorFixture,evidence);
+  const gpu={
+    get rangeImage(){throw new Error('GPU range arithmetic must not influence CNN input');},
+    async estimate(input,n){assert.equal(n,3);gpuInput=input.slice();return new Float32Array(81*n);},
+    close(){assert.fail('canonical range features must not trigger GPU fallback');},
+  };
+  rt.gpu=gpu;
+  await splineCnnProposal(rt,fitFixture(),anchorFixture,evidence);
+  assert.equal(rt.gpu,gpu);assert.equal(rangeCalls,2);assert.equal(convolutionCalls,8);
+  assert.ok(cpuInput[(40*3)*26+18]>0,'the range evidence must be nonzero');
+  assert.deepEqual(gpuInput,cpuInput,'changing CNN backend must not change any input channel');
 });
 
 test('stepRight keeps causal configurations and records the completed CNN invocation',async()=>{

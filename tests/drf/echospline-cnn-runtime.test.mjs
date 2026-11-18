@@ -18,7 +18,7 @@ test('frozen EchoSpline-CNN reproduces the H200 path on two supported intervals'
   const result=splineCnnProposal(rt,{x,heights,points},curves,
     {points:[pointsWide3,pointsWide5],configs:wires.flatMap(w=>w.configs),links,sign});
   for(let i=18;i<22;i++)assert.ok(Number.isNaN(result.base[i]));
-  // Independent H200 PyTorch FP32 reference; CPU/CUDA logit discrepancy was 1.34e-5.
+  // Independent H200 PyTorch FP32 reference; tolerances cover backend rounding.
   for(const [c,z,j,value] of ref.expectedFeatureProbes)assert.ok(Math.abs(input[(z*x.length+j)*26+c]-value)<.001);
   for(const [z,j,value] of ref.expectedLogits)assert.ok(Math.abs(result.logits[z*x.length+j]-value)<.002,`logit ${z},${j}`);
   for(const [i,value] of ref.expectedHeights){
