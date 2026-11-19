@@ -119,7 +119,7 @@ details[open]>.prop-grid,details[open]>.toggle-list { margin-top:12px; }
 .field { display:flex; flex-direction:column; min-width:0; gap:6px; }
 .run-section > label.field { flex-direction:row; align-items:center; gap:4px; margin-bottom:8px; }
 .run-section > label.field > span:first-child { flex:none; white-space:nowrap; font-size:13px; }
-.run-section #computeDevice { flex:none; width:92px; font-size:12px; padding-inline:3px; text-align:center; text-align-last:center; }
+.run-section #computeDevice { flex:none; width:92px; margin-inline-start:auto; font-size:12px; padding-inline:3px; text-align:center; text-align-last:center; }
 @supports (appearance:base-select) {
   #computeDevice,#computeDevice::picker(select) { appearance:base-select; }
   .run-section #computeDevice { position:relative; display:flex; align-items:center; justify-content:center; padding-inline:18px; }
