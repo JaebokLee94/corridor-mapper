@@ -122,7 +122,7 @@ details[open]>.prop-grid,details[open]>.toggle-list { margin-top:12px; }
 .run-section #computeDevice { flex:none; width:92px; margin-inline-start:auto; font-size:12px; padding-inline:3px; text-align:center; text-align-last:center; }
 @supports (appearance:base-select) {
   #computeDevice,#computeDevice::picker(select) { appearance:base-select; }
-  .run-section #computeDevice { position:relative; display:flex; align-items:center; justify-content:center; padding-inline:6px 24px; }
+  .run-section #computeDevice { position:relative; display:flex; align-items:center; justify-content:center; padding-inline:12px 21px; }
   #computeDevice::picker-icon { position:absolute; right:6px; }
   #computeDevice::picker(select) { width:anchor-size(width); border:1px solid var(--color-line); border-radius:5px; background:var(--color-surface-1); color:var(--color-ink); font:inherit; }
   #computeDevice option { position:relative; justify-content:center; min-height:32px; padding:6px 18px; }
