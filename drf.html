@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261119-device-center" />
+  <link rel="stylesheet" href="drf/style.css?v=20261119-device-picker" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -35,7 +35,7 @@
           </div>
           <h2>Experiment</h2><button id="newMapRun" class="ghost" type="button" disabled title="Draw a new seed and wall geometry. With EchoSpline-CNN, each new map has a 50% chance of large, closely spaced bends and roughness.">New map &amp; run</button>
         </div>
-        <label class="field"><span>Computation device</span><select id="computeDevice" name="computeDevice" form="settings" title="Auto uses browser measurements on Apple M4 / Chrome. CPU forces all estimator stages to CPU; WebGPU uses supported stages with CPU fallback."><option value="auto" selected>Auto</option><option value="cpu">CPU</option><option value="gpu">WebGPU + CPU</option></select></label>
+        <label class="field"><span>Computation device</span><select id="computeDevice" name="computeDevice" form="settings" title="Auto uses browser measurements on Apple M4 / Chrome. CPU forces all estimator stages to CPU; WebGPU uses supported stages with CPU fallback."><option value="auto" selected>Auto</option><option value="cpu">CPU</option><option value="gpu">WebGPU</option></select></label>
         <div id="runActions" class="run-actions" data-mode="idle"><button id="runButton" class="primary run-button" type="button" disabled>Run comparison</button><button id="completedReplayButton" type="button" disabled hidden title="Replay saved snapshots from the beginning">Replay</button><button id="pauseButton" type="button" disabled hidden>Pause</button><button id="stepButton" type="button" disabled hidden>Step</button><button id="cancelButton" type="button" disabled hidden>Cancel</button></div>
         <p id="status" class="status" role="status" aria-live="polite">Press Run comparison to start.</p>
         <div id="runProgressTrack" class="run-progress">
@@ -70,7 +70,7 @@
           <label class="field"><span>Merge <span data-tex="\varepsilon_{\mathrm{res}}">εres</span> <small>m</small></span><input name="resolution" type="number" min="0" max="2" step="0.01" value="0.6" required /></label>
         </div></details>
         <details class="sidebar-section" id="echoSettings"><summary>EchoSpline</summary><div class="prop-grid">
-          <label class="field span-2"><span>Spline stage override</span><select name="echoBackend"><option value="auto" selected>Follow computation device</option><option value="cpu">CPU</option><option value="gpu">WebGPU + CPU</option></select></label>
+          <label class="field span-2"><span>Spline stage override</span><select name="echoBackend"><option value="auto" selected>Follow computation device</option><option value="cpu">CPU</option><option value="gpu">WebGPU</option></select></label>
           <label class="field"><span>Knot spacing <small>m</small></span><select name="echoKnotM" title="Distance between spline knots"><option value="2" selected>2</option><option value="4">4</option></select></label>
           <label class="field"><span>Support reach <small>m</small></span><input name="echoSupportM" type="number" value="8" min="1" max="12" step="0.5" required title="Maximum horizontal distance from an estimated reflection point for drawing the fitted wall" /></label>
         </div></details>

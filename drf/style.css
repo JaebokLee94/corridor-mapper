@@ -119,7 +119,17 @@ details[open]>.prop-grid,details[open]>.toggle-list { margin-top:12px; }
 .field { display:flex; flex-direction:column; min-width:0; gap:6px; }
 .run-section > label.field { flex-direction:row; align-items:center; gap:4px; margin-bottom:8px; }
 .run-section > label.field > span:first-child { flex:none; white-space:nowrap; font-size:13px; }
-.run-section #computeDevice { font-size:12px; padding-inline:3px; text-align:center; text-align-last:center; }
+.run-section #computeDevice { flex:none; width:92px; font-size:12px; padding-inline:3px; text-align:center; text-align-last:center; }
+@supports (appearance:base-select) {
+  #computeDevice,#computeDevice::picker(select) { appearance:base-select; }
+  .run-section #computeDevice { position:relative; display:flex; align-items:center; justify-content:center; padding-inline:18px; }
+  #computeDevice::picker-icon { position:absolute; right:6px; }
+  #computeDevice::picker(select) { width:anchor-size(width); border:1px solid var(--color-line); border-radius:5px; background:var(--color-surface-1); color:var(--color-ink); font:inherit; }
+  #computeDevice option { position:relative; justify-content:center; min-height:32px; padding:6px 18px; }
+  #computeDevice option::checkmark { position:absolute; left:5px; }
+  #computeDevice option:checked { background:var(--color-surface-3); font-weight:600; }
+  #computeDevice option:hover { background:var(--color-surface-2); }
+}
 .field>span:first-child { color:var(--color-ink-muted); font-size:14px; line-height:1.35; }
 .field>span small { white-space:nowrap; }
 .seed-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; }
