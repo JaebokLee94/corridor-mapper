@@ -1,9 +1,9 @@
-import { EchoComparison } from './echo-comparison.mjs?v=20261118-cnn-current';
+import { EchoComparison } from './echo-comparison.mjs?v=20261119-cnn-stride4';
 // Only declared range noise and measured snapshots cross the inference boundary.
 let estimator,side;
 globalThis.onmessage=async ({data})=>{
   try {
-    const allowed=data.type==='init' ? ['type','requestId','sigmaR','vehicles','domain','scene','echoKnotM','echoSupportM','echoBackend','computeDevice','rightMethod','side'] : ['type','requestId','snapshot'];
+    const allowed=data.type==='init' ? ['type','requestId','sigmaR','vehicles','domain','scene','echoKnotM','echoSupportM','echoBackend','computeDevice','rightMethod','side','snapshots'] : ['type','requestId','snapshot'];
     if (Object.keys(data).some(k=>!allowed.includes(k))) throw new Error('Non-measurement worker input');
     if (data.type==='init') {
       side=data.side;

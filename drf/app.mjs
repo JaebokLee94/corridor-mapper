@@ -1,5 +1,5 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-cnn-current';
-import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261118-cnn-current';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261119-cnn-stride4';
+import { renderInterpolationPanel, interpolationResult } from './interpolation-panel.mjs?v=20261119-cnn-stride4';
 import { PAPER_SETTINGS } from './paper-preset.mjs';
 import { renderMath } from './latex.mjs';
 import { setMathText } from './dom-math.mjs';
@@ -8,16 +8,16 @@ import { sweepCsv } from './sweep-export.mjs';
 import { DEFAULT_INPUT, LAYERED_DOMAIN, createSceneGeometry } from './scenario.mjs?v=20261114-wall-geometry';
 import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
-import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261118-cnn-current';
-import { rightMethods, activeRightMethods, canonicalRightMethod } from './right-methods.mjs?v=20261118-cnn-current';
-import { echoProtocol } from './echo-comparison.mjs?v=20261118-cnn-current';
+import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261119-cnn-stride4';
+import { rightMethods, activeRightMethods, canonicalRightMethod } from './right-methods.mjs?v=20261119-cnn-stride4';
+import { echoProtocol } from './echo-comparison.mjs?v=20261119-cnn-stride4';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261118-cnn-current';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261118-cnn-current';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261119-cnn-stride4';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261119-cnn-stride4';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
-import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261118-cnn-current';
+import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261119-cnn-stride4';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 
 renderMath();
@@ -123,7 +123,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261118-cnn-current';
+  const revision = '20261119-cnn-stride4';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {

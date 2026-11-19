@@ -18,8 +18,8 @@ export function workerMethod(worker,side,input,domain) {
     if(failure)return Promise.reject(failure);
     return new Promise((resolve,reject)=>{pending={resolve,reject};worker.postMessage(message);});
   }
-  const {vehicles,scene,rightMethod,echoKnotM,echoSupportM,sigmaD}=input;
-  return {ready:request({type:'init',side,vehicles,scene,rightMethod,domain,echoKnotM,echoSupportM,...(input.echoBackend?{echoBackend:input.echoBackend}:{}),...(input.computeDevice?{computeDevice:input.computeDevice}:{}),sigmaR:sigmaD}),
+  const {vehicles,scene,rightMethod,echoKnotM,echoSupportM,sigmaD,snapshots}=input;
+  return {ready:request({type:'init',side,vehicles,scene,rightMethod,domain,echoKnotM,echoSupportM,snapshots,...(input.echoBackend?{echoBackend:input.echoBackend}:{}),...(input.computeDevice?{computeDevice:input.computeDevice}:{}),sigmaR:sigmaD}),
     step:snapshot=>request({type:'step',snapshot}),
     close(){closed=true;reject(new Error('Cancelled'));worker.terminate();}};
 }

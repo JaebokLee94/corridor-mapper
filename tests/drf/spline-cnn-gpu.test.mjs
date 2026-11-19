@@ -176,11 +176,13 @@ for(const [id,channels] of [['spline-cnn',26],['spline-cnn-fast',23]])test(`${id
 for(const rightMethod of ['spline-cnn','spline-cnn-fast'])test(`${rightMethod} records the completed invocation and retains only needed configurations`,async()=>{
   const model=new EchoComparison({scene:'paper-upper',vehicles:3,rightMethod},[0,100,-20,50],'guarded');
   const wire=t=>({t,configs:[[1,2],[1,3],[2,3]].map(([i,j])=>({i,j,pHat_i:[i,0],pHat_j:[j,0],Sigma_i:[0,0,0],Sigma_j:[0,0,0],paths:[{dHat:10,sigmaD:.4}]}))});
-  model.cnn={gpu:{completedCalls:0,close(){}}};model.fixedSpline={step:()=>({fit:{}})};
+  let observed=0;
+  model.cnn={gpu:{completedCalls:0,close(){}}};model.fixedSpline={step:()=>({fit:{}}),observe:()=>{observed++;}};
   model.correctedMap=async()=>{model.cnn.gpu.completedCalls++;return {curves:[],candidates:[]};};
   const first=await model.stepRight(wire(1)),second=await model.stepRight(wire(2));
   assert.equal(first.backend,'WebGPU + CPU');assert.equal(first.gpuCallsThisStep,1);assert.equal(first.gpuCalls,1);
-  assert.equal(second.gpuCallsThisStep,1);assert.equal(second.gpuCalls,2);
+  // Stride-4 cadence: t=2 records the observation and holds the t=1 map without a CNN call.
+  assert.equal(observed,1);assert.equal(second.gpuCallsThisStep,0);assert.equal(second.gpuCalls,1);
   assert.equal(model.id,'spline-cnn-fast');assert.equal(model.protocol.guarded.id,'spline-cnn-fast');
   assert.equal(model.cnnConfigs,undefined);assert.equal(model.lastT,2);
   assert.throws(()=>model.stepRight(wire(2)),/consecutive/);assert.equal(model.cnnConfigs,undefined);

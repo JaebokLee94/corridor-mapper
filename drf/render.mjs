@@ -1,4 +1,4 @@
-import { rightMethods } from './right-methods.mjs?v=20261118-cnn-current';
+import { rightMethods } from './right-methods.mjs?v=20261119-cnn-stride4';
 import {confirmedExtensions} from './checked-centre.mjs?v=20261112-chain-tips';
 import { centreSpline } from './centre-spline.mjs';
 import { centreMetricNames, interpolationResult, interpolationPair } from './interpolation-panel.mjs?v=20261118-device-selection-final';

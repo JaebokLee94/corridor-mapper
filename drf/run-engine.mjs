@@ -1,7 +1,7 @@
-import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261118-cnn-current';
+import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261119-cnn-stride4';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
-import { createGrid, createField } from './field.mjs?v=20261118-cnn-current';
-import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261118-cnn-current';
+import { createGrid, createField } from './field.mjs?v=20261119-cnn-stride4';
+import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261119-cnn-stride4';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 
 /** Yield within the worker so pause/cancel commands run between snapshots.

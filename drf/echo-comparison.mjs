@@ -1,16 +1,16 @@
-import { rightMethods, canonicalRightMethod } from './right-methods.mjs?v=20261118-cnn-current';
-import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261118-cnn-current';
-import { splineCnnProposal } from './echospline-cnn.mjs?v=20261118-cnn-current';
-import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261118-cnn-current';
+import { rightMethods, canonicalRightMethod } from './right-methods.mjs?v=20261119-cnn-stride4';
+import { modelData, neuralRuntime } from './model-runtime.mjs?v=20261119-cnn-stride4';
+import { splineCnnProposal } from './echospline-cnn.mjs?v=20261119-cnn-stride4';
+import { createSplineCnnGpu } from './spline-cnn-gpu.mjs?v=20261119-cnn-stride4';
 import { correctFit } from './echospline-gbdt.mjs';
-import { GatGpr } from './gat-gpr.mjs?v=20261118-cnn-current';
-import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261118-cnn-current';
-import { createSplineGpu } from './spline-gpu.mjs?v=20261118-cnn-current';
-import { EchoSpline } from './echospline.mjs?v=20261118-cnn-current';
+import { GatGpr } from './gat-gpr.mjs?v=20261119-cnn-stride4';
+import { EchoArcCNN } from './echoarc-cnn.mjs?v=20261119-cnn-stride4';
+import { createSplineGpu } from './spline-gpu.mjs?v=20261119-cnn-stride4';
+import { EchoSpline } from './echospline.mjs?v=20261119-cnn-stride4';
 import { GapRangeEvidence } from './bridge-evidence.mjs?v=20261112-chain-tips';
-import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261118-cnn-current';
+import { PSPT, validateMeasuredSnapshot } from './pspt.mjs?v=20261119-cnn-stride4';
 import { protocolForFleet, selectGuarded, wmpFrame } from './comparison.mjs?v=20261112-upper-wmp';
-import { computationDevice } from './compute-device.mjs?v=20261118-cnn-current';
+import { computationDevice } from './compute-device.mjs?v=20261119-cnn-stride4';
 
 const paperSettings = new Map([
   [3, {threshold:6, parameters:{K:8, ext:1.1}}],
@@ -44,6 +44,9 @@ export class EchoComparison {
     this.protocol=echoProtocol(input);this.side=side;
     this.id=input.rightMethod; this.vehicles=input.vehicles; this.lastT=0;this.leftT=0;
     this.isSplineCnn=this.id==='spline-cnn-fast';
+    // EchoSpline-CNN map cadence: every snapshot still updates the measured tracks, but the GBDT/CNN map
+    // is recomputed only at t=1,5,9,... and at the last configured snapshot; other steps hold the last map.
+    this.cnnStride=this.isSplineCnn?4:1;this.finalT=input.snapshots;
     this.leftDeviceChoice=computationDevice(input,'echoSpline');
     this.deviceChoice=side==='echoSpline'?this.leftDeviceChoice:computationDevice(input,this.id);
     this.echoBackend=this.deviceChoice.spline?'gpu':'cpu';
@@ -74,7 +77,7 @@ export class EchoComparison {
     }
     if(this.side==='echoSpline' || this.closed)return;
     if(this.pairEstimator){
-      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261118-cnn-current');
+      const {createPairSelector}=await import('./echo-pair-selection/selector.mjs?v=20261119-cnn-stride4');
       if(this.closed)return;
       this.pairSelector=createPairSelector(this.pairMethod,this.vehicles);
       await this.pairEstimator.loadModel({useGpu});
@@ -161,6 +164,10 @@ export class EchoComparison {
       wire=validateMeasuredSnapshot(wire);
       if(this.pairEstimator){
         result=this.pairEstimator.stepLeft(this.pairSelector(wire));
+      }else if(this.fixedSpline && this.cnnStride>1 && wire.t!==this.finalT && (wire.t-1)%this.cnnStride!==0){
+        // A shared fit already observed this snapshot on the left side.
+        if(!sharedFit)this.fixedSpline.observe(wire);
+        result={curves:this.heldCurves,candidates:[]};
       }else if(this.fixedSpline){
         let f=sharedFit;
         if(!f && this.fixedSplineGpu){
@@ -168,7 +175,9 @@ export class EchoComparison {
           f=this.fitOnGpu(true,this.fixedSpline,this.fixedSplineGpu);
         }
         f??=this.fixedSpline.step(wire,true);
-        result=f?.then?f.then(fit=>this.correctedMap(fit,wire.configs.length)):this.correctedMap(f,wire.configs.length);
+        const hold=map=>{this.heldCurves=map.curves;return map;};
+        const materialize=fit=>{const map=this.correctedMap(fit,wire.configs.length);return map?.then?map.then(hold):hold(map);};
+        result=f?.then?f.then(materialize):materialize(f);
       }else if(this.id==='gat'&&this.model.gpu){
         result=this.model.stepAsync(wire);
       }else if(this.useGpu){

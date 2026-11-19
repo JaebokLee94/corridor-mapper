@@ -1,9 +1,9 @@
-import { experimentSettings } from './experiment-settings.mjs?v=20261118-cnn-current';
+import { experimentSettings } from './experiment-settings.mjs?v=20261119-cnn-stride4';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { workerMethod } from './method-client.mjs?v=20261118-cnn-current';
-import { createGrid } from './field.mjs?v=20261118-cnn-current';
+import { workerMethod } from './method-client.mjs?v=20261119-cnn-stride4';
+import { createGrid } from './field.mjs?v=20261119-cnn-stride4';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
-import { activeRightMethods } from './right-methods.mjs?v=20261118-cnn-current';
+import { activeRightMethods } from './right-methods.mjs?v=20261119-cnn-stride4';
 import { percentile } from './statistics.mjs';
 
 export const benchmarkMethods = ['echoSpline', ...activeRightMethods];
@@ -160,7 +160,7 @@ export function expectedGpuStages(method, variant) {
 }
 const abortError = () => new DOMException('Benchmark cancelled', 'AbortError');
 function productionMethod(method, input, domain) {
-  const worker = globalThis.__drfOffline?.worker('compare') ?? new Worker(new URL('./compare.worker.mjs?v=20261118-cnn-current', import.meta.url), { type: 'module' });
+  const worker = globalThis.__drfOffline?.worker('compare') ?? new Worker(new URL('./compare.worker.mjs?v=20261119-cnn-stride4', import.meta.url), { type: 'module' });
   return workerMethod(worker, method === 'echoSpline' ? 'echoSpline' : 'guarded', input, domain);
 }
 
