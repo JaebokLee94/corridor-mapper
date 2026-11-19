@@ -39,7 +39,7 @@ test('the map heading owns the ordered selector; its form still saves/defaults t
   assert.equal(rightMethods['spline-cnn'].name,'이전 EchoSpline-CNN');
   assert.equal(rightMethods['spline-cnn'].deprecated,true);
   assert.equal(experimentSettings({rightMethod:'wmf'}).rightMethod,undefined);
-  for(const option of select.options)assert.equal(option.text,rightMethods[option.value].name);
+  for(const option of select.options)assert.equal(option.text,option.value==='spline-cnn-fast'?'EchoSpline-CNN (Rugged Wall Recovery)':rightMethods[option.value].name);
   assert.equal(select.value,'wmp');assert.equal(doc.querySelector('#showInterpolation').checked,true);
   select.value='gbdt';assert.equal(new dom.window.FormData(select.form).get('rightMethod'),'gbdt');
   select.value='arc';assert.equal(new dom.window.FormData(select.form).get('rightMethod'),'arc');

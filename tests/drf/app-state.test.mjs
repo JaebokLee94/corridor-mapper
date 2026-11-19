@@ -118,7 +118,7 @@ test('old CNN URLs migrate once to the current model without changing physical o
     const restored=JSON.parse(decodeURIComponent(window.location.hash.slice(4)));
     assert.deepEqual(restored,{...previous,rightMethod:'spline-cnn-fast'});
     assert.deepEqual({...window.settings()},restored);
-    assert.equal($('rightMethod').selectedOptions[0].textContent,'EchoSpline-CNN');
+    assert.equal($('rightMethod').selectedOptions[0].textContent,'EchoSpline-CNN (Rugged Wall Recovery)');
     assert.equal(protocols.at(-1).guarded.id,'spline-cnn-fast');
     assert.equal(notices.length,1);assert.match(notices[0],/이전 EchoSpline-CNN.*현재 EchoSpline-CNN/);
     window.eval(section('const pageDefaults =','(globalThis.__drfOffline ?'));
@@ -148,7 +148,7 @@ test('method selectors expose only active methods and filling saved settings pre
     assert.deepEqual([...$('deviceBenchmarkMethods').options].filter(option=>Object.hasOwn(rightMethods,option.value)).map(option=>option.value),activeRightMethods);
     for(const id of ['rightMethod','deviceBenchmarkMethods']){
       assert.equal($(id).querySelector('option[value="spline-cnn"]'),null);
-      assert.equal($(id).querySelector('option[value="spline-cnn-fast"]').textContent,'EchoSpline-CNN');
+      assert.equal($(id).querySelector('option[value="spline-cnn-fast"]').textContent,id==='rightMethod'?'EchoSpline-CNN (Rugged Wall Recovery)':'EchoSpline-CNN');
     }
   }finally{window.close();}
 });
