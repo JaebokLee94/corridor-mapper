@@ -799,7 +799,14 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 document.addEventListener('keydown', event => {
-  if (event.target.matches('input,select,textarea,button') || $('aboutDialog').open || $('shareDialog').open || $('analysisDialog').open) return;
+  if ($('aboutDialog').open || $('shareDialog').open || $('analysisDialog').open) return;
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.altKey) {
+    if (event.isComposing || event.defaultPrevented) return;
+    event.preventDefault();
+    if (!event.repeat) $(event.shiftKey ? 'newMapRun' : 'runButton').click();
+    return;
+  }
+  if (event.target.matches('input,select,textarea,button')) return;
   if (['running', 'paused'].includes(state.mode)) return;
   if (event.code === 'Space') { event.preventDefault(); toggleReplay(); }
   if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.frames.length) {

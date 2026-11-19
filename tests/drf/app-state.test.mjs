@@ -661,6 +661,40 @@ test('reset-and-run clears the completed result and replay but preserves current
   assert.equal($('runButton').hidden,true);assert.equal($('completedReplayButton').hidden,true);assert.deepEqual(errors,[]);
 });
 
+test('run shortcuts use the existing buttons from focused controls and respect disabled, modal and IME states',async()=>{
+  const {JSDOM}=await import('jsdom');
+  const {window}=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{runScripts:'outside-only'});
+  try {
+    const document=window.document,$=id=>document.getElementById(id),calls=[];
+    Object.assign(window,{$,state:{mode:'idle',frames:[]}});
+    for(const id of ['runButton','newMapRun']) {$(id).disabled=false;$(id).onclick=()=>calls.push(id);}
+    window.eval(section("document.addEventListener('keydown'","for (const id of ['showInterpolation'"));
+    const key=(target,options={})=>{
+      const event=new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true,...options});
+      target.dispatchEvent(event);return event;
+    };
+    for(const modifier of ['metaKey','ctrlKey']) for(const shiftKey of [false,true]) {
+      for(const target of [document.body,document.querySelector('input'),$('computeDevice'),$('runButton')]) {
+        const before=calls.length,event=key(target,{[modifier]:true,shiftKey});
+        assert.equal(calls.length,before+1);assert.equal(calls.at(-1),shiftKey?'newMapRun':'runButton');
+        assert.equal(event.defaultPrevented,true);
+      }
+    }
+    calls.length=0;
+    for(const options of [{},{ctrlKey:true,altKey:true},{metaKey:true,repeat:true},{ctrlKey:true,isComposing:true}]) key(document.body,options);
+    const prevented=new window.KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true});
+    prevented.preventDefault();document.body.dispatchEvent(prevented);
+    for(const id of ['aboutDialog','shareDialog','analysisDialog']) {
+      $(id).open=true;
+      key(document.body,{metaKey:true});key(document.body,{ctrlKey:true,shiftKey:true});
+      $(id).open=false;
+    }
+    $('runButton').disabled=true;$('newMapRun').disabled=true;
+    key(document.body,{ctrlKey:true});key(document.body,{metaKey:true,shiftKey:true});
+    assert.deepEqual(calls,[]);
+  } finally {window.close();}
+});
+
 test('timeline and replay stay locked until the run ends, including paused and preparing states',async()=>{
   const {context,state,$,posted,errors}=runUiContext(5),events=new Map(),pending=new Map();let frameId=0;
   context.document.addEventListener=(name,callback)=>events.set(name,callback);
