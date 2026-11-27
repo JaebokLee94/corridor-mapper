@@ -1,5 +1,5 @@
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { runExperiment } from './sweep.mjs?v=20261119-cnn-stride4';
+import { runExperiment } from './sweep.mjs?v=20261127-cnn-display';
 self.onmessage = async ({ data }) => {
   if (data.type !== 'run') return;
   try {

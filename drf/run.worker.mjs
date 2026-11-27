@@ -19,7 +19,7 @@ const engine = createRunEngine({ prepare:preparePublicScenario,
   },
   createMethod(side,input,domain){
     const worker=globalThis.__echoMethodUrl?new Worker(globalThis.__echoMethodUrl):
-      new Worker(new URL('./compare.worker.mjs?v=20261119-cnn-stride4',import.meta.url),{type:'module'});
+      new Worker(new URL('./compare.worker.mjs?v=20261127-cnn-display',import.meta.url),{type:'module'});
     return workerMethod(worker,side,input,domain);
   },
   emit(message) {

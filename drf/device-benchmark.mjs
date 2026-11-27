@@ -160,7 +160,7 @@ export function expectedGpuStages(method, variant) {
 }
 const abortError = () => new DOMException('Benchmark cancelled', 'AbortError');
 function productionMethod(method, input, domain) {
-  const worker = globalThis.__drfOffline?.worker('compare') ?? new Worker(new URL('./compare.worker.mjs?v=20261119-cnn-stride4', import.meta.url), { type: 'module' });
+  const worker = globalThis.__drfOffline?.worker('compare') ?? new Worker(new URL('./compare.worker.mjs?v=20261127-cnn-display', import.meta.url), { type: 'module' });
   return workerMethod(worker, method === 'echoSpline' ? 'echoSpline' : 'guarded', input, domain);
 }
 

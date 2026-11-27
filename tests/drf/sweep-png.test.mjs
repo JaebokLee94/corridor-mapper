@@ -12,7 +12,7 @@ function canvasEnvironment() {
       drawImage(image,...rect){calls.push({type:'image',image,rect});},
       arc(...args){calls.push({type:'point',args});},
       strokeRect(...args){calls.push({type:'axes',args});},
-      scale(...args){calls.push({type:'scale',args});},
+      setTransform(...args){calls.push({type:'setTransform',args});},
     },{get:(target,key)=>key in target ? target[key] : (...args)=>{
       if(['moveTo','lineTo','translate','fillRect'].includes(key)) calls.push({type:key,args});
     }});
@@ -43,7 +43,7 @@ test('sweep PNG renders both actual aggregate methods at 300 dpi independently o
     assert.equal(out.height,1675,'536 CSS-pixel height is rasterized at 300/96');
     assert.equal(env.canvases.length,3,'Two offscreen plot panels and one output canvas are sufficient');
     assert.equal(left.clientWidth,0,'Export works without attaching plot canvases to the DOM');
-    assert.deepEqual(left.calls.find(c=>c.type==='scale').args,[300/96,300/96]);
+    assert.deepEqual(left.calls.find(c=>c.type==='setTransform').args,[300/96,0,0,300/96,0,0]);
     assert.equal(left.width,right.width);assert.equal(left.height,right.height);
     const labels=out.calls.filter(c=>c.type==='text').map(c=>c.text);
     assert.ok(labels.includes('WM-P'));assert.ok(labels.includes('WM-F'));

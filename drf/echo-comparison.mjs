@@ -16,7 +16,6 @@ const paperSettings = new Map([
   [3, {threshold:6, parameters:{K:8, ext:1.1}}],
   [10, {threshold:6.5, parameters:{frac:.08, sep:1, dup:.7}}],
 ]);
-const SPLINE_CNN_STRIDE = 4;
 
 export function echoProtocol(input={}) {
   if(input.rightMethod!=null&&!Object.hasOwn(rightMethods,input.rightMethod))throw new RangeError('Unknown right-hand comparison method');
@@ -34,7 +33,7 @@ export function echoProtocol(input={}) {
     score:'robust one-to-one multi-echo range fit',tuning:{id:'single-wall-multiecho',certified:false}},
     guarded:!input.rightMethod || input.rightMethod==='wmp' ? guarded
       : {...rightMethods[input.rightMethod],id:input.rightMethod,threshold:input.rightMethod==='arc'?0.7:null,
-        ...(input.rightMethod==='spline-cnn-fast' ? {mapUpdateStride:SPLINE_CNN_STRIDE} : {}),
+        ...(input.rightMethod==='spline-cnn-fast' ? {mapUpdateStride:4} : {}),
         ...(rightMethods[input.rightMethod].pairSelector?{parameters:{maxSelectedPairs:10,selectionInterval:10,trainedFleets:[3,5,7,10]}}:{}),
         training:rightMethods[input.rightMethod].pairSelector?'Frozen pair-subset scorer trained on 48 training wall scenes from eight seed groups, with 3, 5, 7 and 10 vehicles; features use current and past observations only':input.rightMethod==='spline-cnn'?'Frozen upper-wall checkpoint refined on 4,736 independent walls with 3- and 10-vehicle measured prefixes':input.rightMethod==='spline-cnn-fast'?'이전 EchoSpline-CNN을 교사로 증류한 고정 체크포인트':'Frozen three-vehicle upper-wall checkpoint',
         revision:rightMethods[input.rightMethod].pairSelector?'20261118-pair-selection':input.rightMethod==='spline-cnn'?'20261118-rugged-canonical':input.rightMethod==='spline-cnn-fast'?'20261118-cnn-integrated':'20261115'}};
@@ -48,7 +47,7 @@ export class EchoComparison {
     this.isSplineCnn=this.id==='spline-cnn-fast';
     // EchoSpline-CNN map cadence: every snapshot still updates the measured tracks, but the GBDT/CNN map
     // is recomputed only at t=1,5,9,... and at the last configured snapshot; other steps hold the last map.
-    this.cnnStride=this.isSplineCnn?SPLINE_CNN_STRIDE:1;this.finalT=input.snapshots;
+    this.cnnStride=this.protocol.guarded.mapUpdateStride??1;this.finalT=input.snapshots;
     this.leftDeviceChoice=computationDevice(input,'echoSpline');
     this.deviceChoice=side==='echoSpline'?this.leftDeviceChoice:computationDevice(input,this.id);
     this.echoBackend=this.deviceChoice.spline?'gpu':'cpu';

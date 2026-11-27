@@ -13,11 +13,11 @@ import { rightMethods, activeRightMethods, canonicalRightMethod } from './right-
 import { echoProtocol } from './echo-comparison.mjs?v=20261127-cnn-display';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
-import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261119-cnn-stride4';
+import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261127-cnn-display';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261127-cnn-display';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
-import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261127-independent-field';
+import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261127-cnn-display';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 
 renderMath();
