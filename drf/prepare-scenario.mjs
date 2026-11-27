@@ -32,11 +32,12 @@ function yieldGeneration() {
  * Input: normalized settings. Output: unchanged geometry/truth/wire contract.
  * Work and memory are unchanged; generateSnapshot owns all numerical operations.
  */
-async function prepareUncached(input, progress, yieldTask) {
+async function prepareUncached(input, progress, yieldTask, onMeasured) {
   const started = performance.now(), geometry = createSceneGeometry(input), truth = [], wire = [];
   for (let t = 1; t <= input.snapshots; t++) {
     const result = generateSnapshot(input, geometry.spans, t, geometry.wallModel);
     truth.push(result.truth); wire.push(result.wire); progress(t, input.snapshots);
+    onMeasured?.(wire, geometry.domain);
     await yieldTask();
   }
   return { input, ...geometry, truth, wire, simulatorMs: performance.now() - started };
@@ -63,12 +64,12 @@ export async function buildTruthBundle(raw, progress = () => {}) {
  * onCache is an optional diagnostic callback, not part of the scenario schema.
  */
 export function createScenarioPreparer({ cache = { getTruthBundle }, yieldTask = yieldGeneration } = {}) {
-  return async function prepare(raw, progress = () => {}, { onCache = () => {}, onPhase = () => {} } = {}) {
+  return async function prepare(raw, progress = () => {}, { onCache = () => {}, onPhase = () => {}, onMeasured } = {}) {
     const started = performance.now(), input = normalizeInput(raw);
     if (!eligible(input)) {
       onPhase('generating');
       onCache({ source: 'uncached', vehicles: input.vehicles, snapshots: input.snapshots });
-      return prepareUncached(input, progress, yieldTask);
+      return prepareUncached(input, progress, yieldTask, onMeasured);
     }
     let latest = 0;
     const report = t => { latest = Math.max(latest, t); progress(latest, input.snapshots); };
@@ -85,6 +86,7 @@ export function createScenarioPreparer({ cache = { getTruthBundle }, yieldTask =
       report(t);
       const measured = measureTruthSnapshot(input, bundle.truth[t - 1]);
       truth.push(measured.truth); wire.push(measured.wire);
+      onMeasured?.(wire, bundle.geometry.domain);
       if (t % 8 === 0) await yieldTask();
     }
     return { input, ...structuredClone(bundle.geometry), truth, wire, simulatorMs: performance.now() - started };

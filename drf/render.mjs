@@ -90,6 +90,22 @@ function plotContext(canvas,width,height,ratio) {
   return ctx;
 }
 
+// Each immutable measured snapshot is shared by the wall and field views.
+// A track uses the first recorded position for each vehicle in that snapshot.
+const trackPositions = new WeakMap();
+function measuredTrackPositions(snapshot) {
+  let positions = trackPositions.get(snapshot);
+  if (!positions) {
+    positions = new Map();
+    for (const config of snapshot.configs ?? []) {
+      if (!positions.has(config.i)) positions.set(config.i, config.pHat_i);
+      if (!positions.has(config.j)) positions.set(config.j, config.pHat_j);
+    }
+    trackPositions.set(snapshot, positions);
+  }
+  return positions;
+}
+
 /** Presentation only. Input field is iy*nx+ix with y ascending; canvas y is inverted.
  * O(nx*ny + history pairs + displayed paths) per field update; O(nx*ny) heatmap memory.
  * Scene geometry sets display bounds; truth overlays are optional and never sent to field.
@@ -102,7 +118,7 @@ export class DrfMap {
     this.auto = true;
     this.camera = null;
     this.defaultScale = null;
-    this.pending = false;
+    this.pending = null;
     this.pointer = null;
     this.heat = document.createElement("canvas");
     this.maxValue = 0;
@@ -138,14 +154,14 @@ export class DrfMap {
     });
     for (const name of ["pointerup","pointercancel","lostpointercapture"]) canvas.addEventListener(name,() => { this.pointer=null; });
   }
-  set(state) {
+  set(state, paintNow = false) {
     if (state.mode==='geometry') state={...state,aspectMode:'equal'};
     const previous=this.state;
     this.state=state;
     if (state.aspectMode !== previous.aspectMode) {this.auto=true;this.camera=null;}
     if (this.auto && (state.grid !== previous.grid || state.walls !== previous.walls)) this.camera=null;
     if (state.frame !== previous.frame || state.grid !== previous.grid || state.heatField !== previous.heatField || state.scaleMode !== previous.scaleMode) this.buildHeat();
-    this.draw();
+    this.draw(paintNow);
   }
   buildHeat(palette=fieldPalette(this.state.heatField)) {
     this.paletteKey=palette.key;this.heatPalette=palette.colors;
@@ -189,10 +205,18 @@ export class DrfMap {
     this.camera=zoomMap(this.camera,factor,anchor ?? [this.box.x+this.box.w/2,this.box.y+this.box.h/2],this.box);
     this.auto=false; this.draw();this.onCameraChange?.();
   }
-  draw() {
-    if (this.pending) return;
-    this.pending=true;
-    requestAnimationFrame(() => { this.pending=false; this.paint(this.canvas,window.devicePixelRatio || 1); });
+  draw(paintNow = false) {
+    if (paintNow) {
+      // Live and replay updates already run in an animation frame.
+      if (this.pending !== null) cancelAnimationFrame(this.pending);
+      this.pending = null;
+      this.paint(this.canvas, window.devicePixelRatio || 1);
+    } else if (this.pending === null) {
+      this.pending = requestAnimationFrame(() => {
+        this.pending = null;
+        this.paint(this.canvas, window.devicePixelRatio || 1);
+      });
+    }
   }
   paint(target,ratio) {
     const width=this.canvas.clientWidth,height=this.canvas.clientHeight;
@@ -331,16 +355,18 @@ export class DrfMap {
     }
     if (layers.showVehicles) {
       const tracks=new Map();
-      for (const snapshot of history.filter(s => s.t <= (this.state.frame?.t ?? 0))) for (const config of snapshot.configs ?? []) for (const [id,p] of [[config.i,config.pHat_i],[config.j,config.pHat_j]]) {
-        if (!tracks.has(id)) tracks.set(id,[]);
-        const track=tracks.get(id); if (track.at(-1)?.t !== snapshot.t) track.push({t:snapshot.t,p});
+      for (const snapshot of history) {
+        if (snapshot.t > (this.state.frame?.t ?? 0)) continue;
+        for (const [id,p] of measuredTrackPositions(snapshot)) {
+          if (!tracks.has(id)) tracks.set(id,[]);
+          tracks.get(id).push(p);
+        }
       }
       const current=new Map();
       for (const config of wire?.configs ?? []) { current.set(config.i,config.pHat_i);current.set(config.j,config.pHat_j); }
       // A casing separates tracks from ellipses and heat cells.
       const color=geometry ? trackColor : token("field-track",ink),casing=geometry ? background : token("field-casing",background);
-      for (const track of tracks.values()) {
-        const points=track.map((q) => q.p);
+      for (const points of tracks.values()) {
         path(points,casing,geometry ? 5.5 : 4.5,[],geometry ? .9 : .7);path(points,color,geometry ? 2.5 : 1.75);
         if (points.length>1) square(points[0],geometry ? 7 : 6,color);
       }

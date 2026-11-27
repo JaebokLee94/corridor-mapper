@@ -14,8 +14,8 @@ import { echoProtocol } from './echo-comparison.mjs?v=20261127-cnn-display';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261127-cnn-display';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261128-viewport-field';
-import { createViewportReadout } from './viewport-readout.mjs?v=20261128-fast-viewport';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261127-field-prefetch';
+import { createViewportReadout } from './viewport-readout.mjs?v=20261127-field-prefetch';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261128-viewport-field';
 import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261127-cnn-display';
@@ -124,7 +124,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261128-independent-wall';
+  const revision = '20261127-field-lead';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -195,7 +195,10 @@ function controls() {
   const savedSweep = state.server?.savedSweep ?? state.server?.job;
   $('loadSavedSweep').hidden = !(savedSweep?.mode === 'sweep' && ['done', 'cancelled'].includes(savedSweep.status) && savedSweep.next > 0);
   $('loadSavedSweep').disabled = active || sweeping || !!state.connecting;
-  $('timeSlider').max = Math.max(1, state.frames.length); $('timeSlider').value = state.selected; $('timeSlider').disabled = active || !state.frames.length;
+  const liveField = active && state.methodFrames;
+  $('timeSlider').max = Math.max(1, liveField ? state.scenario.input.snapshots : state.frames.length);
+  $('timeSlider').value = liveField ? state.displayedFieldT ?? 0 : state.selected;
+  $('timeSlider').disabled = active || !state.frames.length;
   $('replayButton').disabled = active || !state.frames.length;
   updateRunProgress();
   $('firstSnapshot').disabled = false;
@@ -264,6 +267,7 @@ function cancel(clear = false) {
     state.measurementLabel=''; state.generatedSnapshots = 0; state.measurementTotal = 0;
     state.followLive = true;
     $('mapCanvas').removeAttribute('data-field-hash');
+    $('snapshotLabel').title='';
     for (const view of [map,baselineMap,densityMap,contrastMap]) view.fit();
   } else if (state.frames.length && state.scenario) {
     // Preserve inspection of completed prefixes after cancellation; no future wire is supplied.
@@ -475,6 +479,11 @@ async function receiveRunMessage(data, generation) {
         const hash = await hashField(state.frames.at(-1));
         if (generation !== state.generation) return;
         $('mapCanvas').dataset.fieldHash = hash;
+        const samples=state.methodFrames?.echoSpline;
+        if(samples?.length && samples.every(s=>Number.isFinite(s.at) && Number.isFinite(s.fieldAt))){
+          const ready=samples.filter(s=>s.fieldAt<=s.at).length;
+          $('snapshotLabel').title=`Heatmaps were ready by the EchoSpline update for ${ready} / ${samples.length} snapshots in the original view.`;
+        }
         notice(`Complete · ${state.frames.length} snapshots`);
         renderSelected();
       }
@@ -638,7 +647,6 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
     fieldFrame=undefined;
     for (let t=methodT(first);t>0 && !fieldFrame;t--) {
       const sample=state.methodFrames.echoSpline[t-1];
-      if (state.replay && sample.fieldAt>state.replayPosition) continue;
       fieldFrame=sample.field ?? state.frames[t-1];
     }
   }
@@ -718,7 +726,7 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
     }
     view.set({...display,frame:paneFrame,truth:scenario?.truth[t-1],wire:scenario?.wire[t-1],
       history:scenario?.wire.slice(0,t),observed:methodEvaluation(method)?.observed,bridges:visibleBridges(method),
-      curves:result?.curves,candidates:result?.candidates??[],mode:'geometry',xRange:[-10,display.domain[1]+10]});
+      curves:result?.curves,candidates:result?.candidates??[],mode:'geometry',xRange:[-10,display.domain[1]+10]},framesOnly);
   }
   const previousGrid=densityMap.state?.frame?.grid, fieldGrid=fieldFrame?.grid;
   const fieldMoved=previousGrid && fieldGrid && (previousGrid.nx!==fieldGrid.nx || previousGrid.ny!==fieldGrid.ny ||
@@ -726,10 +734,16 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
   if (!framesOnly || densityMap.state?.grid!==display.grid || densityMap.state?.frame?.t!==fieldFrame?.t ||
       fieldMoved || !densityMap.state?.heatField) {
     const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
-    densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
-    contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
+    densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'},framesOnly);
+    contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'},framesOnly);
   }
-  $('snapshotLabel').textContent = `${frame?.t ?? 0} / ${scenario?.input.snapshots ?? form.elements.namedItem('snapshots').value}`;
+  const snapshotTotal=scenario?.input.snapshots ?? form.elements.namedItem('snapshots').value;
+  state.displayedFieldT=fieldT;
+  $('snapshotLabel').textContent = `${fieldT} / ${snapshotTotal}`;
+  if (independently && (state.replay || ['running','paused'].includes(state.mode))) {
+    $('timeSlider').max = state.replay ? Math.max(1,state.frames.length) : snapshotTotal;
+    $('timeSlider').value = fieldT;
+  }
   const visibleEvaluation=independently?{methods:{[first]:methodEvaluation(first),[second]:methodEvaluation(second)}}:evaluation;
   renderInterpolationPanel($, state.method, kind, visibleEvaluation, fmt, legacy, right.name, rightSolo);
   if(state.method==='compare' && independently && methodT(first)!==methodT(second))
@@ -851,8 +865,7 @@ function replayTick(time) {
   }
   const methodChanged=state.methodFrames && Object.values(state.methodFrames).some(list=>
     list.findLastIndex(s=>(s.displayAt??s.at)<=previousTime)!==list.findLastIndex(s=>(s.displayAt??s.at)<=state.replayPosition));
-  const fieldChanged=state.methodFrames?.echoSpline?.some(s=>s.fieldAt>previousTime && s.fieldAt<=state.replayPosition);
-  if (state.selected !== previous || methodChanged || fieldChanged) {
+  if (state.selected !== previous || methodChanged) {
     $('timeSlider').value = state.selected; renderSelected({framesOnly:true});
     // Start the unscaled hold after drawing the final metrics, even on a late repaint.
     if (state.selected === times.length) state.replayAt = performance.now();
@@ -906,7 +919,10 @@ $('computeDevice').addEventListener('change', () => form.dispatchEvent(new Event
 form.addEventListener('change', () => { state.sweepRuns = []; notice('Parameters changed. Run again to compare methods.'); cancel(true); renderSweep(); $('sweepStatus').textContent = 'No results yet.'; try { const input = settings(); renderThresholdProtocol(echoProtocol(input)); location.hash = `v1=${encodeURIComponent(JSON.stringify(input))}`; } catch (e) { notice(e.message); } });
 form.addEventListener('change', () => warmSelectedInput());
 $('timeSlider').oninput = () => {
-  if (['running', 'paused'].includes(state.mode)) { $('timeSlider').value = state.selected; return; }
+  if (['running', 'paused'].includes(state.mode)) {
+    $('timeSlider').value = state.methodFrames ? state.displayedFieldT ?? 0 : state.selected;
+    return;
+  }
   stopReplay(); state.followLive = false; state.selected = Number($('timeSlider').value); hoverGeneration++; renderSelected();
 };
 $('replayButton').onclick = toggleReplay;
@@ -1209,7 +1225,7 @@ if (location.search) {
 }
 fillSettings(initialInput);
 history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialInput))}`);
-(globalThis.__drfOffline ? Promise.resolve(globalThis.__drfOffline.metadata) : Promise.all([fetch(new URL('./provenance.json?v=20261128-fast-viewport', import.meta.url)).then(r => r.json()), fetch(new URL('./reference/octave/fixtures.json', import.meta.url)).then(r => r.json())]))
+(globalThis.__drfOffline ? Promise.resolve(globalThis.__drfOffline.metadata) : Promise.all([fetch(new URL('./provenance.json?v=20261127-field-prefetch', import.meta.url)).then(r => r.json()), fetch(new URL('./reference/octave/fixtures.json', import.meta.url)).then(r => r.json())]))
   .then(([p, f]) => { provenance = p; reference = f.statistics; $('provenanceCommit').textContent = `${p.baseCommit.slice(0, 8)}`;
     $('provenanceCore').textContent = `${p.coreHash.slice(0, 12)}`; renderSweep(); })
   .catch(error => notice(`Could not load validation metadata: ${error.message}`));

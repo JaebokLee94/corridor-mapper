@@ -1,4 +1,4 @@
-import { createField } from './field.mjs?v=20261128-fast-viewport';
+import { createField } from './field.mjs?v=20261127-field-prefetch';
 import { makeWire } from './wire.mjs';
 
 // Both perimeter methods give P >= π*dHat/2. With |grad rho| <= 2 and
@@ -124,7 +124,10 @@ export function createDisplayField(baseGrid, numerical = {}) {
     baseGrid = viewGrid(baseGrid, numerical.viewBounds);
     if (baseGrid.nx * baseGrid.ny <= MAX_TILE_CELLS) {
       const field = createField(baseGrid, numerical);
-      return {grid:baseGrid, step(snapshot) { return {...field.step(snapshot), grid:baseGrid}; }};
+      return {grid:baseGrid, step(snapshot, readFrame=true) {
+        const frame=field.step(snapshot,readFrame);
+        return readFrame ? {...frame,grid:baseGrid} : undefined;
+      }};
     }
   }
   const history = [];
@@ -135,7 +138,7 @@ export function createDisplayField(baseGrid, numerical = {}) {
   }
   let grid = baseGrid, margins = [0, 0, 0, 0], tiles = [];
   appendTiles(tiles, grid, null, margins, baseGrid, replay);
-  return {get grid() { return grid; }, step(snapshot) {
+  return {get grid() { return grid; }, step(snapshot, readFrame=true) {
     const started = performance.now(), wire = makeWire(snapshot);
     if (wire.t !== history.length + 1) throw new RangeError('Display snapshots must follow causal t=1,2,... order');
     let nextGrid = grid, nextTiles = tiles, nextMargins = margins;
@@ -155,7 +158,7 @@ export function createDisplayField(baseGrid, numerical = {}) {
     }
     let frames;
     try {
-      frames = nextTiles.map(tile => tile.field.step(wire));
+      frames = nextTiles.map(tile => tile.field.step(wire,readFrame));
     } catch (error) {
       // A rejected snapshot must not advance an earlier tile before a retry.
       for (const tile of tiles) if (tile.field.t === wire.t) tile.field = replay(tile.field.grid);
@@ -163,6 +166,7 @@ export function createDisplayField(baseGrid, numerical = {}) {
     }
     history.push(wire);
     grid = nextGrid; margins = nextMargins; tiles = nextTiles;
+    if (!readFrame) return;
     const first = frames[0];
     if (tiles.length === 1) return {...first, grid, ms:performance.now()-started};
     const epsilonA = Math.max(...frames.map(f => f.epsilonA));

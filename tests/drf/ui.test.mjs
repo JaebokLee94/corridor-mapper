@@ -109,6 +109,10 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
   const assertChartGrids=message=>rectangles.forEach(([x,y,w,h],k)=>assertGrid({x,y,w,h},`${message} subplot ${k}`));
   const saved={};
   const stubs={document:{createElement:()=>{const c=makeCanvas();created.push(c);return c;},documentElement:{}},window:{devicePixelRatio:2,dispatchEvent(){}},Image:class{set src(value){this._src=value;this.complete=true;queueMicrotask(()=>this.onload?.());}get src(){return this._src;}async decode(){}},getComputedStyle:()=>({getPropertyValue:name=>name==='--color-grid' ? gridColor : name==='--color-plot-bg' ? '#ffffff' : '#111111'}),ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},matchMedia:()=>({addEventListener(){}}),requestAnimationFrame:()=>1};
+  const scheduled=new Map();
+  let animationId=0;
+  stubs.requestAnimationFrame=callback=>{scheduled.set(++animationId,callback);return animationId;};
+  stubs.cancelAnimationFrame=id=>scheduled.delete(id);
   try {
     for (const [key,value] of Object.entries(stubs)) {saved[key]=globalThis[key];globalThis[key]=value;}
     const canvas=makeCanvas(),map=new DrfMap(canvas),frame={Dbar:new Float32Array([0,1,2,3]),betaHat:new Float32Array([0,.2,.5,1])};
@@ -117,6 +121,11 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
     assert.deepEqual([...snapshots.image.slice(4,7)],[184,41,20],'largest world y row must become top image row');
     assert.deepEqual([...snapshots.image.slice(8,12)],[255,255,255,0],'zero values are transparent in the bottom world row');
     assert.deepEqual([...frame.Dbar],[0,1,2,3],'presentation must not mutate field values');
+    assert.equal(scheduled.size,1);
+    map.set({...map.state,frame:{...frame,t:1}},true);
+    assert.equal(canvas.dataset.snapshot,'1','a ready raster paints in the current live animation frame');
+    assert.equal(scheduled.size,0,'the older pending redraw is coalesced');
+    gridSegments.length=0;
     map.paint(canvas,1);const cssView=JSON.parse(canvas.dataset.view);
     assertGrid(map.box,'density');
     assertMetreGrid(map,'density');

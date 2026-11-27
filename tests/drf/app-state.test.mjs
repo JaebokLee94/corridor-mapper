@@ -870,6 +870,7 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
         }
         assert.match($('primaryProgress').title,new RegExp('Snapshot '+left+'/3'));
         assert.match($('secondaryProgress').title,new RegExp('Snapshot '+right+'/3'));
+        assert.equal($('snapshotLabel').textContent,`${field} / 3`);
       }
       function live(left,right,field){
         assert.ok(state.livePaint,'a completed result schedules painting without waiting for the next pair');
@@ -903,9 +904,10 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
       context.toggleReplay();expectViews(0,0,0);
       assert.equal($('replayButton').textContent,'Stop');
       const tick=(time,...counts)=>{now=time;context.replayTick(time);expectViews(...counts);};
-      tick(4,2,0,0);tick(8,2,0,1);  // Only the delayed field changes at 8 ms.
-      tick(10,2,1,1);tick(14,2,3,1);tick(20,2,3,2);
-      tick(24,3,3,2);tick(59,3,3,2);tick(60,3,3,3);
+      // Replay has all exact prefixes and can display the field at the wall's timestamp.
+      tick(4,2,0,2);tick(8,2,0,2);
+      tick(10,2,1,2);tick(14,2,3,2);tick(20,2,3,2);
+      tick(24,3,3,3);tick(59,3,3,3);tick(60,3,3,3);
       assert.equal(state.selected,3);
     });
 
@@ -932,6 +934,8 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
           assert.deepEqual(view.state.history,snapshots.slice(0,t));
         }
         assert.equal(maps.densityMap.state.frame,maps.contrastMap.state.frame);
+        assert.equal($('snapshotLabel').textContent,`${heat} / 3`);
+        assert.equal(Number($('timeSlider').value),Math.max(1,heat));
         assert.match($('primaryProgress').title,new RegExp('Snapshot '+left+'/3'));
         assert.match($('secondaryProgress').title,new RegExp('Snapshot '+right+'/3'));
       }
@@ -954,9 +958,10 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
       now=30;await method('guarded',3,now);await join(3,16);live(3,3,3);
       assert.deepEqual(state.frameTimes,[8,15,30]);
       await send({type:'status',mode:'done'});
+      assert.match($('snapshotLabel').title,/1 \/ 3 snapshots/);
       $('playbackSpeed').value='1';context.toggleReplay();check(0,0,0);
       const start=now;
-      for(const [at,left,right,heat] of [[1,0,1,0],[3,1,1,0],[4,2,1,0],[8,2,1,1],[11,2,1,1],
+      for(const [at,left,right,heat] of [[1,0,1,0],[3,1,1,1],[4,2,1,2],[8,2,1,2],[11,2,1,2],
         [12,2,1,2],[15,2,2,2],[16,2,2,2],[18,3,2,3],[30,3,3,3]]){
         now=start+at;context.replayTick(now);check(left,right,heat);
       }

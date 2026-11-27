@@ -1,7 +1,7 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261119-cnn-stride4';
-import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
-import { createGrid } from './field.mjs?v=20261119-cnn-stride4';
-import { createDisplayField } from './display-field.mjs?v=20261128-fast-viewport';
+import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261127-field-prefetch';
+import { createGrid } from './field.mjs?v=20261127-field-prefetch';
+import { createDisplayField } from './display-field.mjs?v=20261127-field-prefetch';
 import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261127-cnn-display';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 
@@ -19,8 +19,9 @@ export function yieldWorkerTask() {
 }
 
 const sides=['echoSpline','guarded'];
-// Only retain a few camera rasters while the estimator models are initializing.
-const initialViewSteps=3;
+// Bound the two Float32 rasters kept ahead of a run during preparation.
+const prefetchBytes=8*1024*1024;
+const liveFieldLead=4;
 
 function localMethod(side,input,domain){
   const estimator=new EchoComparison(input,domain,side);
@@ -43,6 +44,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
   const status=(run,mode)=>send(run,'status',{mode,next:run.next,total:run.input.snapshots});
   function close(run){
     run.releaseFieldWait?.();
+    run.wakeField?.();
     for(const lane of Object.values(run.lanes)){
       lane.client.close(); lane.pending.clear();
     }
@@ -72,8 +74,33 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       side==='echoSpline'?{diagnostics:{}}:null,result.bridges,result.extendedBridges,result.checkedChains);
     lane.pending.set(t,{result,evaluation});
     const {diagnostics,...metrics}=evaluation;
-    const display=side==='echoSpline' && !run.lanes.guarded.pending.has(t) ? run.lanes.field.pending.get(t) : null;
+    // The ready camera raster travels with the wall even when the right map
+    // finished first; the next joined packet may arrive after a browser repaint.
+    const display=side==='echoSpline' && (run.viewBounds || !run.lanes.guarded.pending.has(t))
+      ? run.lanes.field.pending.get(t) : null;
     send(run,'method-frame',{side,t,at,result,evaluation:metrics,field:display?.field});
+  }
+
+  function openField(run,grid){
+    if(run.lanes.field)return run.lanes.field;
+    const client=createFieldClient(grid,{band:run.input.band,perimeter:run.input.perimeter,
+      ...(run.viewBounds ? {viewBounds:run.viewBounds} : {})});
+    const lane=run.lanes.field={client,pending:new Map(),next:0,limit:run.limit,prefetchLimit:1};
+    run.fieldStartup=Promise.resolve(client.ready).then(()=>{lane.initialized=true;}).catch(error=>fail(run,error));
+    return lane;
+  }
+
+  function prefetchView(run,wire,domain){
+    if(!current(run) || !run.viewBounds || createFieldClient===localField || run.target!=='running')return;
+    run.wire=wire;
+    run.grid??=createGrid(run.input.grid,run.input.grid,domain);
+    const lane=openField(run,run.grid);
+    if(lane.prefetching || lane.next>=lane.prefetchLimit || lane.next>=wire.length)return;
+    // Measurement generation only wakes the dedicated field worker. Neither
+    // generation nor estimator startup awaits the raster it is producing.
+    lane.prefetching=true;
+    run.fieldStartup=run.fieldStartup.then(()=>advance(run,'field',true))
+      .catch(error=>fail(run,error)).finally(()=>{lane.prefetching=false;});
   }
 
   async function advance(run,side,prefetch=false){
@@ -90,19 +117,33 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       await run.fieldStartup;
     }
     const canStep=()=>current(run)&&run.target==='running'&&lane.next<lane.limit &&
-      (!prefetch || !run.ready && lane.next<initialViewSteps);
+      (!prefetch || !run.ready && lane.next<run.wire.length && lane.next<lane.prefetchLimit);
     while(canStep()){
-      const wire=run.scenario.wire[lane.next],result=await lane.client.step(wire);
+      if(side==='field' && !prefetch && run.viewBounds && createFieldClient!==localField &&
+          lane.next>=run.lanes.echoSpline.next+liveFieldLead){
+        // The wall is never parked. Give it CPU time while ready rasters cover its next updates.
+        await new Promise(resolve=>{run.wakeField=resolve;});
+        run.wakeField=undefined;
+        continue;
+      }
+      const wire=run.wire[lane.next],result=await lane.client.step(wire);
       if(!current(run))return;
       // A field ready before the maps start is already available at replay time zero.
       const at=run.started==null ? 0 : run.elapsed+performance.now()-run.started,t=++lane.next;
       if(side==='field'){
+        if(prefetch && t===1){
+          const bytes=result.Dbar.byteLength+result.betaHat.byteLength;
+          lane.prefetchLimit=Math.max(1,Math.floor(prefetchBytes/bytes));
+        }
         lane.pending.set(t,{field:result,at});
-        if(run.lanes.echoSpline.pending.has(t)&&!run.lanes.guarded.pending.has(t))
+        if(run.ready && run.lanes.echoSpline.pending.has(t)&&!run.lanes.guarded.pending.has(t))
           send(run,'field-frame',{t,at,field:result});
-      }else recordMethod(run,side,t,at,result);
+      }else{
+        recordMethod(run,side,t,at,result);
+        if(side==='echoSpline')run.wakeField?.();
+      }
       if(!current(run))return;
-      join(run);
+      if(run.ready)join(run);
       if(canStep())await yieldTask();
     }
   }
@@ -136,26 +177,18 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       const scenario=await prepare(input,(t,total)=>{
         if(!current(run))throw new Error('Cancelled');
         send(run,'progress',{t,total});
-      },{onPhase:phase=>{if(current(run))send(run,'preparation',{phase});}});
+      },{onPhase:phase=>{if(current(run))send(run,'preparation',{phase});},
+        onMeasured:(wire,domain)=>prefetchView(run,wire,domain)});
       if(!current(run))return;
-      scenario.input=input;run.scenario=scenario;
-      const grid=createGrid(input.grid,input.grid,scenario.domain);
-      await Promise.all([...sides,'field'].map(async side=>{
-        const client=side==='field' ? createFieldClient(grid,{band:input.band,perimeter:input.perimeter,
-          ...(message.viewBounds ? {viewBounds:message.viewBounds} : {})})
-          : createMethod(side,input,scenario.domain);
+      scenario.input=input;run.scenario=scenario;run.wire=scenario.wire;
+      const grid=run.grid??createGrid(input.grid,input.grid,scenario.domain);
+      openField(run,grid);
+      prefetchView(run,scenario.wire,scenario.domain);
+      await Promise.all(sides.map(async side=>{
+        const client=createMethod(side,input,scenario.domain);
         const lane=run.lanes[side]={client,pending:new Map(),next:0,limit:run.limit};
-        if(side==='field'){
-          run.fieldStartup=Promise.resolve(client.ready).then(async()=>{
-            lane.initialized=true;
-            // The local fallback uses the coordinator's own thread. Only an
-            // independent field client can overlap model loading with computation.
-            if(run.viewBounds && !run.ready && createFieldClient!==localField)await advance(run,'field',true);
-          }).catch(error=>fail(run,error));
-          return;
-        }
         await client.ready;
-        if(side!=='field'&&current(run))lane.evaluator=createPSPTEvaluator(scenario,grid);
+        if(current(run))lane.evaluator=createPSPTEvaluator(scenario,grid);
       }));
       if(!current(run))return;
       run.ready=true;
@@ -168,7 +201,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
     const run=active;
     if(!run||message.requestId!==run.requestId||!current(run))return;
     if(message.type==='cancel'){run.target='cancelled';close(run);status(run,'cancelled');return;}
-    if(message.type==='pause'){run.target='paused';run.releaseFieldWait?.();if(run.ready&&!run.busy)status(run,'paused');return;}
+    if(message.type==='pause'){run.target='paused';run.releaseFieldWait?.();run.wakeField?.();if(run.ready&&!run.busy)status(run,'paused');return;}
     if(!['step','resume'].includes(message.type))throw new Error('Unknown run command');
     if(message.type==='step'&&(run.target!=='paused'||run.busy))return;
     run.limit=message.type==='step'?Math.min(run.next+1,run.input.snapshots):run.input.snapshots;

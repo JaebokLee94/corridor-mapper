@@ -304,23 +304,62 @@ test('model loading overlaps bounded viewport work without publishing a future f
     }});
   const finished=engine.command({type:'start',requestId:146,input:settings,viewBounds});
   try {
-    await waitUntil(()=>fieldSteps.length>=3,'the field should have a bounded head start during model loading');
-    assert.deepEqual(fieldSteps,[1,2,3]);
+    await waitUntil(()=>fieldSteps.length===5,'all five small rasters fit while the model is loading');
+    assert.deepEqual(fieldSteps,[1,2,3,4,5]);
     assert.ok(!messages.some(m=>m.type==='prepared'||m.type==='compute-clock'||m.type==='method-frame'||m.field||m.type==='frame'));
     now+=5000;model.resolve();
     await waitUntil(()=>messages.filter(m=>m.side==='echoSpline').length===5,'fast estimator should finish first');
     const left=messages.filter(m=>m.side==='echoSpline');
     assert.ok(left.every(m=>m.at>0&&m.at<100),'estimator clock excludes model loading and precomputed fields');
-    for(const m of left.slice(0,3))assert.equal(m.field.t,m.t);
+    for(const m of left)assert.equal(m.field.t,m.t);
     for(const [i,m] of messages.entries())if(m.field)
       assert.ok(messages.slice(0,i+1).some(e=>e.side==='echoSpline'&&e.t===m.field.t));
   } finally { model.resolve();right.resolve();await finished; }
   assert.deepEqual(fieldSteps,[1,2,3,4,5]);
   const joined=messages.filter(m=>m.type==='frame');
   assert.deepEqual(joined.map(m=>m.next),fieldSteps);
-  assert.deepEqual(joined.slice(0,3).map(m=>m.fieldAt),[0,0,0]);
-  assert.ok(joined.slice(3).every(m=>m.fieldAt>0));
+  assert.deepEqual(joined.map(m=>m.fieldAt),[0,0,0,0,0]);
   assert.equal(messages.at(-1).mode,'done');
+});
+
+test('the independent heatmap starts on measured prefixes and waits for the matching wall',async()=>{
+  const scene=await generateScenario(input), steps=[], messages=[];
+  const engine=createRunEngine({emit:m=>messages.push(m),
+    prepare:async(_,progress,{onMeasured})=>{
+      const wire=[];
+      for(const sample of scene.wire){
+        wire.push(sample);onMeasured(wire,scene.domain);
+        await waitUntil(()=>steps.at(-1)===sample.t,'heatmap should run while later measurements are unavailable');
+        assert.ok(!messages.some(m=>m.field || m.type==='prepared' || m.type==='frame'));
+      }
+      return scene;
+    },
+    createMethod:()=>({step:()=>({candidates:[],curves:[],ms:1}),close(){}}),
+    createFieldClient:(grid,numerical)=>{
+      const field=createDisplayField(grid,numerical);
+      return {step(wire){steps.push(wire.t);return field.step(wire);},close(){}};
+    }});
+  await engine.command({type:'start',requestId:150,input,viewBounds:[-6,16,-3,15]});
+  assert.deepEqual(steps,[1,2,3]);
+  assert.deepEqual(messages.filter(m=>m.type==='frame').map(m=>m.fieldAt),[0,0,0]);
+  assert.equal(messages.at(-1).mode,'done');
+});
+
+test('large camera rasters stop prefetching at the byte budget and resume with the walls',async()=>{
+  const model=Promise.withResolvers(), steps=[], messages=[];
+  const settings={...input,snapshots:6},scene=await generateScenario(settings);
+  const raster=new Float32Array(256*1024); // 1 MiB for each of the two outputs.
+  const engine=createRunEngine({emit:m=>messages.push(m),prepare:async()=>scene,
+    createMethod:()=>({ready:model.promise,step:()=>({candidates:[],curves:[],ms:1}),close(){}}),
+    createFieldClient:()=>({step({t}){steps.push(t);return {t,Dbar:raster,betaHat:raster};},close(){}})});
+  const finished=engine.command({type:'start',requestId:151,input:settings,viewBounds:[-6,16,-3,15]});
+  try {
+    await waitUntil(()=>steps.length>=4,'four prefetched rasters fit');
+    assert.deepEqual(steps,[1,2,3,4]);
+  } finally {model.resolve();await finished;}
+  const joined=messages.filter(m=>m.type==='frame');
+  assert.deepEqual(joined.map(m=>m.next),[1,2,3,4,5,6]);
+  assert.equal(joined.filter(m=>m.fieldAt===0).length,4);
 });
 
 test('obsolete viewport readiness cannot emit a field or fail a replacement run', async () => {
@@ -370,6 +409,31 @@ test('pausing a viewport prefetch keeps its in-flight prefix and a single step c
   assert.deepEqual(steps,[1]);
   await engine.command({type:'resume',requestId:149});
   assert.deepEqual(steps,[1,2,3]);assert.equal(messages.at(-1).mode,'done');
+});
+
+test('only the field parks when its next four rasters are ready, and pause releases it',async()=>{
+  const wall=Promise.withResolvers(),steps=[],messages=[], settings={...input,snapshots:8};
+  const scene=await generateScenario(settings);
+  const engine=createRunEngine({emit:m=>messages.push(m),prepare:async()=>scene,
+    createMethod:side=>({async step(wire){
+      if(side==='echoSpline' && wire.t===1)await wall.promise;
+      return {candidates:[],curves:[],ms:1};
+    },close(){}}),
+    createFieldClient:(grid,numerical)=>{
+      const field=createDisplayField(grid,numerical);
+      return {step(wire){steps.push(wire.t);return field.step(wire);},close(){}};
+    }});
+  const finished=engine.command({type:'start',requestId:152,input:settings,viewBounds:[-6,16,-3,15]});
+  try {
+    await waitUntil(()=>steps.length>=4 && messages.filter(m=>m.side==='guarded').length===8,'right wall continues while the field parks');
+    assert.deepEqual(steps,[1,2,3,4]);
+    engine.command({type:'pause',requestId:152});
+  } finally {wall.resolve();await finished;}
+  assert.equal(messages.at(-1).mode,'paused');
+  assert.deepEqual(steps,[1,2,3,4]);
+  await engine.command({type:'resume',requestId:152});
+  assert.deepEqual(steps,[1,2,3,4,5,6,7,8]);
+  assert.equal(messages.at(-1).mode,'done');
 });
 
 test('a field that finishes before both estimators first appears with its matching EchoSpline snapshot', async () => {

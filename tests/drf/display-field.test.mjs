@@ -231,5 +231,13 @@ test('a fixed multi-tile worker sends the selected grid and cumulative fields wi
       for (const key of ['t','Q','admitted','rejected','Dbar','betaHat','epsilonA']) assert.deepEqual(frame[key], ref[key], key);
     }
     assert.equal(messages.at(-1).Q, 46);
+    const prefix={t:3,configs:[config([-20,31],[-14,35],130)]}, selected={t:4,configs:[config([158,171],[166,176],85)]};
+    exact.step(prefix);
+    const expected=exact.step(selected);
+    globalThis.onmessage({data:{type:'displayBatch',snapshots:[prefix,selected],t:4,readFrom:4,requestId:3}});
+    const batch=messages.at(-1);
+    assert.equal(batch.type,'displayBatch');assert.equal(batch.frames.length,1);
+    for (const key of ['t','Q','admitted','rejected','Dbar','betaHat','epsilonA'])
+      assert.deepEqual(batch.frames[0][key],expected[key],key);
   } finally { globalThis.onmessage = oldMessage; globalThis.postMessage = oldPost; }
 });

@@ -141,7 +141,7 @@
             </tbody></table>
           </section>
         </div>
-        <div class="playback-bar"><div class="timeline"><button id="replayButton" type="button" disabled aria-label="Replay computed snapshots">Replay</button><label class="time-label" for="timeSlider">Snapshot <output id="snapshotLabel">0 / 120</output></label><input id="timeSlider" type="range" min="1" max="120" step="1" value="1" disabled /><label class="speed-label">Speed<select id="playbackSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div><p class="keyboard-note"><kbd>Space</kbd> replay <kbd>←</kbd><kbd>→</kbd> step</p></div>
+        <div class="playback-bar"><div class="timeline"><button id="replayButton" type="button" disabled aria-label="Replay computed snapshots">Replay</button><label class="time-label" for="timeSlider" title="Snapshot shown in both heatmaps">Snapshot <output id="snapshotLabel">0 / 120</output></label><input id="timeSlider" type="range" min="1" max="120" step="1" value="1" disabled /><label class="speed-label">Speed<select id="playbackSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div><p class="keyboard-note"><kbd>Space</kbd> replay <kbd>←</kbd><kbd>→</kbd> step</p></div>
         <div class="field-grid">
           <figure class="view" id="viewDensity"><figcaption class="vlabel"><div class="field-heading"><h2><span data-tex="\bar{D}">D̄</span> · Mean residual density</h2><p class="view-meta"><span data-tex="\mathrm{m}^{-2}">m⁻²</span> · measurement field</p></div><div class="map-toolbar"><button id="densityZoomOut" type="button" aria-label="Zoom density out">−</button><button id="densityZoomIn" type="button" aria-label="Zoom density in">+</button><button id="densityResetView" type="button" aria-label="Reset density view">↺</button></div></figcaption><div class="view-body"><canvas id="densityCanvas" class="dashboard-canvas" role="img" aria-label="Mean accumulated residual density"></canvas></div></figure>
           <figure class="view" id="viewContrast"><figcaption class="vlabel"><div class="field-heading"><h2><span data-tex="\hat{\beta}">β̂</span> · Field contrast</h2><p class="view-meta">Dimensionless · not a probability</p></div><div class="map-toolbar"><button id="contrastZoomOut" type="button" aria-label="Zoom contrast out">−</button><button id="contrastZoomIn" type="button" aria-label="Zoom contrast in">+</button><button id="contrastResetView" type="button" aria-label="Reset contrast view">↺</button></div></figcaption><div class="view-body"><canvas id="contrastCanvas" class="dashboard-canvas" role="img" aria-label="Dimensionless field contrast"></canvas></div></figure>
@@ -201,8 +201,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261128-independent-wall';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261128-independent-wall';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261127-field-lead';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261127-field-lead';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

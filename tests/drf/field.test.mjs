@@ -240,3 +240,25 @@ test('known-pose viewport fields preserve native scalar pair sums after grid and
     }
   }
 });
+
+test('viewport focal reuse keeps covariance pair-specific and skipped readouts preserve inspection', () => {
+  const grid = createGrid(19, 13, [-1, 18, -1, 12]);
+  const poses = [[1, 3], [6, 2], [9, 4]], covariances = [[.2, .08, .3], [.1, -.04, .2], [.35, .12, .1]];
+  const configs = [[0,1], [0,2], [1,2]].map(([i,j]) => ({
+    i, j, pHat_i:poses[i], pHat_j:poses[j], Sigma_i:covariances[i], Sigma_j:covariances[j],
+    paths:[6.5, 14, 22].map(dHat => ({dHat, sigmaD:.25})),
+  }));
+  // A repeated vehicle ID may carry a different pose covariance in a second pair.
+  configs[1].Sigma_i = [.05, 0, .6];
+  for (const band of [4, 'full']) {
+    const native = createField(grid, {band}), viewport = createField(grid, {band, viewBounds:grid.domain});
+    for (const t of [1, 2, 3]) {
+      const frame = native.step({t, configs}), emitted = viewport.step({t, configs}, t === 3);
+      if (t < 3) assert.equal(emitted, undefined);
+      assert.deepEqual(viewport.D, native.D); assert.deepEqual(viewport.A, native.A);
+      for (const index of [0, 54, 103]) assert.deepEqual(viewport.inspect(index), native.inspect(index));
+      const readout = emitted ?? viewport.readout();
+      for (const key of ['Q', 'admitted', 'rejected', 'epsilonA', 'Dbar', 'betaHat']) assert.deepEqual(readout[key], frame[key]);
+    }
+  }
+});

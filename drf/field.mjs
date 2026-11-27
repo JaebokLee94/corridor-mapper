@@ -94,7 +94,7 @@ export function createGrid(nx = 150, ny = 150, domain = [0, 60, 0, 30]) {
 // A vehicle appears in multiple measured pairs. Reuse only the grid distances
 // and unit directions; covariance, range noise and accumulation stay pair specific.
 let spareFocalBuffers = [];
-function focalGrid(id, pose, slots, maxSlots, x, y, buffers) {
+function focalGrid(id, pose, slots, maxSlots, x, y, buffers, hypot = Math.hypot) {
   let slot = slots.get(id);
   if (slot && Object.is(slot.px, pose[0]) && Object.is(slot.py, pose[1])) return slot.data;
   if (!slot) {
@@ -108,7 +108,7 @@ function focalGrid(id, pose, slots, maxSlots, x, y, buffers) {
   for (let iy = 0; iy < y.length; iy++) {
     const dy = y[iy] - pose[1];
     for (let ix = 0; ix < x.length; ix++) {
-      const dx = x[ix] - pose[0], radius = Math.hypot(dx, dy), denom = Math.max(radius, FOCAL_EPS);
+      const dx = x[ix] - pose[0], radius = hypot(dx, dy), denom = Math.max(radius, FOCAL_EPS);
       slot.data[j++] = radius; slot.data[j++] = dx / denom; slot.data[j++] = dy / denom;
     }
   }
@@ -129,13 +129,36 @@ function accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, 
     deltaA[g] += factor * inversePSum;
     const lo = rho - radius, hi = rho + radius;
     if (hi < minPath || lo > maxPath) continue;
-    let sum = 0;
-    for (let q = lowerBound(paths, lo); q < paths.length && paths[q].dHat <= hi; q++) {
-      const z = (rho - paths[q].dHat) / sd;
-      sum += paths[q].inverseP * Math.exp(-0.5 * z * z);
-    }
-    deltaD[g] += factor * sum;
+    deltaD[g] += factor * gaussianSum(paths, rho, sd, lo, hi);
   }
+}
+
+// Reuse focal distances and directions across measured pairs. The six covariance
+// terms are pair-specific and retain the scalar geometry's accumulation order.
+function accumulateUncertainPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA, hypot, config) {
+  const v0 = sigmaD * sigmaD, si = config.Sigma_i, sj = config.Sigma_j;
+  const minPath = paths[0].dHat, maxPath = paths[paths.length - 1].dHat;
+  for (let g = 0, j = 0; g < deltaA.length; g++, j += 3) {
+    const u = fi[j + 1], v = fi[j + 2], w = fj[j + 1], z = fj[j + 2];
+    const variance = v0 + si[0]*u*u + 2*si[1]*u*v + si[2]*v*v + sj[0]*w*w + 2*sj[1]*w*z + sj[2]*z*z;
+    if (!(variance > 0) || !Number.isFinite(variance))
+      throw new RangeError("residual variance must be positive; all-noise-zero kernels are undefined");
+    const rho = fi[j] + fj[j], sd = Math.sqrt(variance), factor = hypot(u + w, v + z) / (SQRT_2PI * sd);
+    if (!Number.isFinite(rho) || !Number.isFinite(factor)) throw new RangeError("geometry exceeds finite numerical range");
+    deltaA[g] += factor * inversePSum;
+    const radius = band === "full" ? Infinity : band * sd, lo = rho - radius, hi = rho + radius;
+    if (hi < minPath || lo > maxPath) continue;
+    deltaD[g] += factor * gaussianSum(paths, rho, sd, lo, hi);
+  }
+}
+
+function gaussianSum(paths, rho, sd, lo, hi) {
+  let sum = 0;
+  for (let q = lowerBound(paths, lo); q < paths.length && paths[q].dHat <= hi; q++) {
+    const z = (rho - paths[q].dHat) / sd;
+    sum += paths[q].inverseP * Math.exp(-0.5 * z * z);
+  }
+  return sum;
 }
 
 function lowerBound(paths, value) {
@@ -217,6 +240,7 @@ export function createRidgeDensityField(grid) {
 /** C configurations, G grid cells, P paths/config, B band candidate visits:
  * O(C[P log P+G log P]+B) time, O(G+P) scratch plus up to 16 MiB for focal grids; D/A accumulate float64.
  * F41 A=f(x)Σ(1/P_q); sigmaD must be equal within each configuration.
+ * step(snapshot, false) commits the same accumulators without producing the two display rasters.
  */
 export function createField(grid, { band = 4, perimeter = "exact", updateCache = null, viewBounds } = {}) {
   validateFieldUpdateCache(updateCache);
@@ -236,10 +260,15 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
     let maxA = 0;
     for (const a of A) maxA = Math.max(maxA, a);
     epsilonA = 1e-12 * maxA;
+    return makeFrame();
+  }
+  function makeFrame() {
     const Dbar = new Float32Array(count), betaHat = new Float32Array(count);
+    const divisor = Math.max(Q, 1);
     for (let g = 0; g < count; g++) {
-      Dbar[g] = D[g] / Math.max(Q, 1);
-      betaHat[g] = A[g] + epsilonA > 0 ? D[g] / (A[g] + epsilonA) : 0;
+      const denominator = A[g] + epsilonA;
+      Dbar[g] = D[g] / divisor;
+      betaHat[g] = denominator > 0 ? D[g] / denominator : 0;
     }
     return { t, Dbar, betaHat, Q, admitted, rejected, epsilonA };
   }
@@ -255,7 +284,7 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
       return { t, D: D[index], A: A[index], Q, Dbar: D[index] / Math.max(Q, 1),
         betaHat: A[index] + epsilonA > 0 ? D[index] / (A[index] + epsilonA) : 0 };
     },
-    step(snapshot) {
+    step(snapshot, readFrame = true) {
       const started = performance.now(), wire = makeWire(snapshot);
       if (wire.t !== t + 1) throw new RangeError("snapshots must be processed once in causal t=1,2,... order");
       deltaD.fill(0); deltaA.fill(0);
@@ -279,12 +308,13 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
         nRejected += config.paths.length - paths.length;
         if (!paths.length) continue;
         const inversePSum = paths.reduce((sum, p) => sum + p.inverseP, 0);
-        if (wire.configs.length >= 3 && maxSlots >= 2 &&
-            config.Sigma_i.every(value => value === 0) && config.Sigma_j.every(value => value === 0)) {
-          const fi = focalGrid(config.i, config.pHat_i, slots, maxSlots, x, y, buffers),
-            fj = focalGrid(config.j, config.pHat_j, slots, maxSlots, x, y, buffers);
+        const fixed = config.Sigma_i.every(value => value === 0) && config.Sigma_j.every(value => value === 0);
+        if (wire.configs.length >= 3 && maxSlots >= 2 && (fixed || viewport)) {
+          const fi = focalGrid(config.i, config.pHat_i, slots, maxSlots, x, y, buffers, hypot),
+            fj = focalGrid(config.j, config.pHat_j, slots, maxSlots, x, y, buffers, hypot);
           if (fi && fj) {
-            accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA, hypot);
+            if (fixed) accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA, hypot);
+            else accumulateUncertainPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA, hypot, config);
             continue;
           }
         }
@@ -305,16 +335,18 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
       // after checkout, even if vehicle IDs and poses repeat on an edited grid.
       if (viewport && slots.size) spareFocalBuffers = Array.from(slots.values(), slot => slot.data);
       // Commit only after every configuration succeeds: malformed input leaves the prior frame intact.
+      let maxA = 0;
       for (let g = 0; g < count; g++) {
         const d = D[g] + deltaD[g], a = A[g] + deltaA[g];
         if (!Number.isFinite(d) || !Number.isFinite(a) || d < 0 || a < 0 || d > a * (1 + 1e-12))
           throw new Error("nonnegative field or beta bound invariant violated");
+        maxA = Math.max(maxA, a);
       }
       for (let g = 0; g < count; g++) { D[g] += deltaD[g]; A[g] += deltaA[g]; }
       t = wire.t; Q += nAdmitted; admitted += nAdmitted; rejected += nRejected;
+      epsilonA = 1e-12 * maxA;
       if (!reused) saveFieldIncrement(updateCache, wire, calculationGrid, band, perimeter, deltaD, deltaA, nAdmitted, nRejected);
-      const frame = readout();
-      return { ...frame, ms: performance.now() - started };
+      if (readFrame) return { ...makeFrame(), ms: performance.now() - started };
     },
   };
 }

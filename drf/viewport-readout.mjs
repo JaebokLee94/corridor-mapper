@@ -1,8 +1,13 @@
-import { viewGridLayout } from './display-field.mjs?v=20261128-fast-viewport';
+import { viewGridLayout } from './display-field.mjs?v=20261127-field-prefetch';
+
+// Let a changed seek take effect between eight measured updates. On a distant
+// seek, retain four neighboring readouts for scrubbing and skip earlier rasters.
+const batchSize=8, neighborFrames=4, cacheBytes=16*1024*1024;
+const rasterBytes=frame=>frame.Dbar.byteLength+frame.betaHat.byteLength;
 
 /** Read an exact display prefix on a panned/resized cell rectangle. The run's
  * wire array identifies its measured stream; only entries through target t go
- * to the worker. Keep frames for backwards scrubbing until the run/view changes.
+ * to the worker. Cache recent requested frames by byte size for backwards scrubbing.
  */
 export function createViewportReadout(openWorker, notify, onError) {
   let current;
@@ -11,25 +16,43 @@ export function createViewportReadout(openWorker, notify, onError) {
     const previous = current;
     current = undefined; // Fence late requests before stopping the worker.
     previous?.worker?.stop();
-    if (previous?.frames) previous.frames.length = 0;
+    previous?.frames?.clear();
+  }
+
+  function remember(view,frame) {
+    const previous=view.frames.get(frame.t);
+    if (previous) { view.bytes-=rasterBytes(previous);view.frames.delete(frame.t); }
+    view.frames.set(frame.t,frame);view.bytes+=rasterBytes(frame);
+    while (view.bytes>cacheBytes && view.frames.size>1) {
+      const oldest=view.frames.keys().next().value;
+      view.bytes-=rasterBytes(view.frames.get(oldest));view.frames.delete(oldest);
+    }
   }
 
   async function advance(view) {
     view.busy = true;
     try {
-      if (!view.worker) {
-        view.worker = openWorker();
-        const {nx, ny, domain} = view.baseGrid;
-        await view.worker.request({type:'initDisplay', grid:{nx, ny, domain},
-          numerical:{band:view.band, perimeter:view.perimeter, viewBounds:view.layout.domain}});
-      }
-      while (view === current && view.frames.length < view.target) {
-        const next = view.frames.length + 1;
-        const {type, requestId, ...frame} = await view.worker.request({type:'step', snapshot:view.wire[next - 1]});
+      while (view === current && view.target>0 && !view.frames.has(view.target)) {
+        if (!view.worker || view.position>=view.target) {
+          view.worker?.stop();
+          view.worker=openWorker();
+          const {nx, ny, domain}=view.baseGrid;
+          const ready=await view.worker.request({type:'initDisplay',grid:{nx,ny,domain},
+            numerical:{band:view.band,perimeter:view.perimeter,viewBounds:view.layout.domain}});
+          if (view!==current) return;
+          view.grid??=ready.grid;view.position=0;
+          continue;
+        }
+        const first=view.position+1, through=Math.min(view.position+batchSize,view.target);
+        const readFrom=Math.min(through+1,Math.max(first,view.target-neighborFrames+1));
+        const batch=await view.worker.request({type:'displayBatch',t:through,readFrom,snapshots:view.wire.slice(view.position,through)});
         if (view !== current) return;
-        if (type !== 'frame' || frame.t !== next) throw new Error('Field worker returned an unexpected viewport snapshot');
-        view.frames.push(frame);
-        if (next === view.target) notify();
+        if (batch.type!=='displayBatch' || batch.t!==through || batch.frames?.length!==through-readFrom+1 ||
+            !batch.frames.every((frame,i)=>frame.t===readFrom+i))
+          throw new Error('Field worker returned an unexpected viewport snapshot');
+        view.position=through;
+        for (const frame of batch.frames) remember(view,{...frame,grid:view.grid});
+        if (view.target>=readFrom && view.target<=through && view.frames.has(view.target)) notify();
       }
     } catch (error) {
       if (view === current) {
@@ -67,11 +90,13 @@ export function createViewportReadout(openWorker, notify, onError) {
     const old = current?.layout;
     if (!sameRun || !old || old.x0 !== layout.x0 || old.y0 !== layout.y0 || old.nx !== layout.nx || old.ny !== layout.ny) {
       reset();
-      current = {baseGrid, wire, band, perimeter, layout, frames:[]};
+      current = {baseGrid, wire, band, perimeter, layout, frames:new Map(), bytes:0, position:0};
     }
     current.target = t;
-    const frame = current.frames[t - 1];
-    if (!frame && !current.busy && !current.failed) void advance(current);
+    const frame=current.frames.get(t);
+    if (frame) {
+      current.frames.delete(t);current.frames.set(t,frame);
+    } else if (!current.busy && !current.failed) void advance(current);
     return frame;
   }
 

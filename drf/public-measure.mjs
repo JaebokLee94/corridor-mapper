@@ -1,5 +1,5 @@
 import {normalizeInput,measureTruthSnapshot} from './scenario.mjs?v=20261114-wall-geometry';
-import {prepareScenario,warmTruthCache} from './prepare-scenario.mjs?v=20261114-wall-geometry';
+import {prepareScenario,warmTruthCache} from './prepare-scenario.mjs?v=20261127-field-prefetch';
 
 const publicOrigin='https://jaeboklee94.github.io', endpoint='https://echomap-measure.umkuku-auth.workers.dev/v1/physical';
 // Keep cached physical paths and online inference separate. Public clients apply the same seeded noise locally.
@@ -31,10 +31,10 @@ export async function preparePublicScenario(raw,progress=()=>{},options={}){
    try{return await fetchPublicScene(input,(t,n)=>{last=t;progress(t,n);});}
    catch(err){if(err.message==='Cancelled')throw err;
      options.onPhase?.('local-fallback');
-     const scene=await prepareScenario(input,(t,n)=>progress(Math.max(last,t),n));
+     const scene=await prepareScenario(input,(t,n)=>progress(Math.max(last,t),n),{onMeasured:options.onMeasured});
      return {...scene,measurementBackend:'browser-fallback'};
    }
  }
  options.onPhase?.('browser');
- return {...await prepareScenario(input,progress),measurementBackend:'browser'};
+ return {...await prepareScenario(input,progress,{onMeasured:options.onMeasured}),measurementBackend:'browser'};
 }
