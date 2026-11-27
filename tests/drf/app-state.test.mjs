@@ -392,7 +392,7 @@ test('actual preview geometry stays cached when the truth overlay is hidden',()=
     FormData:class { *[Symbol.iterator]() { yield* Object.entries(input); } },
     previewKey:'',preview:[],previewBounds:undefined,previewDomain:undefined,normalizeInput:value=>value,notice:message=>notices.push(message),
     createSceneGeometry:value=>{generated++;if (!value.deltaD) throw new Error('Invalid spacing');return {walls,domain};}});
-  vm.runInContext(section('function previewWalls()','function renderSelected()'),context);
+  vm.runInContext(section('function previewWalls()','function renderSelected('),context);
   const initial=context.previewWalls();
   truth.checked=false;assert.equal(context.previewWalls(),initial,'Hiding the preview must keep the scene extent');
   truth.checked=true;assert.equal(context.previewWalls(),initial);
@@ -435,7 +435,7 @@ test('view reset preserves simulation, selection and replay, and clearing a run 
   const viewReset=source.match(/^\$\('firstSnapshot'\)\.onclick = .*;$/m)?.[0];assert.ok(viewReset,'Actual view reset handler exists');
   vm.runInContext([
     section('function stopReplay()','async function prepare('),
-    section('function renderSelected()','// Sweep diagnostics'),
+    section('function renderSelected(','// Sweep diagnostics'),
     section('// Sweep diagnostics','function replayTick('),
     section('async function receiveRunMessage(','async function hashField('),
     section('function replayTick(','$(\'runButton\').onclick'),viewReset,
@@ -742,7 +742,7 @@ test('timeline and replay stay locked until the run ends, including paused and p
   assert.equal($('timeSlider').disabled,true);assert.equal($('replayButton').disabled,true);
 });
 
-test('fields follow EchoSpline through replay and saved previous-CNN results retain their distinct label',async()=>{
+test('fields follow EchoSpline through replay and saved previous-CNN results retain their distinct label',async t=>{
   const {JSDOM}=await import('jsdom');
   const dom=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{pretendToBeVisual:true});
   try {
@@ -758,7 +758,7 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
     const context=vm.createContext({$,document,form:$('settings'),state,rightMethods,activeRightMethods,setMethodLabel,
       ...maps,hoverGeneration:0,LAYERED_DOMAIN,interpolationResult,fmt:String,performance,
       percentile,renderInterpolationPanel(){},drawComparisonHistory(){},renderDiagnostics(){}});
-    vm.runInContext(section('function renderSelected()','// Sweep diagnostics'),context);
+    vm.runInContext(section('function renderSelected(','// Sweep diagnostics'),context);
     for(const rightMethod of ['wmp','spline-cnn-fast']){
       $('rightMethod').value=rightMethod;context.renderSelected();
       assert.equal($('previousCnnNote').hidden,true);assert.equal($('rightMethod').hidden,false);
@@ -798,6 +798,29 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
     state.replay=false;state.followLive=false;check(1,joined);
     state.mode='running';state.followLive=true;
     delete state.methodFrames.echoSpline[1].field;check(1,joined); // Older server recording.
+
+    await t.test('a chart resize preserves pending and visible hover only for the same displayed frames',async()=>{
+      Object.assign(sceneGrid,{nx:2,ny:1,x:[25,75],y:[5]});
+      let resize,scheduled,finish;
+      Object.assign(context,{ResizeObserver:class{constructor(cb){resize=cb;}observe(){}},renderSweep(){},
+        hoverTimer:0,clearTimeout(){},setTimeout:cb=>{scheduled=cb;},
+        hoverWorker:{request:()=>new Promise(resolve=>{finish=resolve;})},
+        setMathText:(node,parts)=>{node.textContent=parts[0];}});
+      const inspect=vm.runInContext(section('const inspect =','const map =')+'inspect',context);
+      vm.runInContext(section('const chartResize =','const labelResize='),context);
+      const query=()=>{inspect({x:25,y:5,grid:sceneGrid},1);return scheduled();};
+      const pending=query(),generation=context.hoverGeneration;
+      resize();assert.equal(context.hoverGeneration,generation);
+      finish({t:1});await pending;
+      const reading=$('inspector').textContent;
+      assert.match(reading,/snapshot 1 · grid/);
+      resize();assert.equal($('inspector').textContent,reading);
+      state.methodFrames.echoSpline[1].field=early;
+      resize();assert.equal($('inspector').textContent,'');assert.ok(context.hoverGeneration>generation);
+      const stale=query();
+      context.renderSelected(new dom.window.Event('change'));
+      finish({t:1});await stale;assert.equal($('inspector').textContent,'');
+    });
   } finally {dom.window.close();}
 });
 
@@ -959,7 +982,7 @@ test('Pause, Step and Resume send explicit commands and wait for worker status b
 test('hidden charts defer rendering and visibility return refreshes the current selection and sweep without advancing',()=>{
   const events=new Map(),drawn=[],sweeps=[],document={hidden:true,addEventListener:(name,fn)=>events.set(name,fn)};
   const state={selected:17,mode:'paused'};
-  vm.runInNewContext(section('function renderSelected()','// Sweep diagnostics')+'\nrenderSelected();',{
+  vm.runInNewContext(section('function renderSelected(','// Sweep diagnostics')+'\nrenderSelected();',{
     document,$:()=>assert.fail('Hidden chart rendering must be skipped'),
   });
   vm.runInNewContext(section("document.addEventListener('visibilitychange'","document.addEventListener('keydown'"),{

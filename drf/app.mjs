@@ -496,7 +496,7 @@ const inspect = (point, t) => {
         { tex: String.raw`\bar{D}` }, ` ${fmt(value.Dbar)} · `,
         { tex: String.raw`\hat{\beta}` }, ` ${fmt(value.betaHat)}${wallDistance}`,
       ]);
-    } catch (error) { if (error.message !== 'Cancelled') $('inspector').textContent = `Inspection stopped: ${error.message}`; }
+    } catch (error) { if (generation === hoverGeneration && error.message !== 'Cancelled') $('inspector').textContent = `Inspection stopped: ${error.message}`; }
   }, 100);
 };
 const map = new DrfMap($('mapCanvas'),inspect),baselineMap=new DrfMap($('baselineCanvas'),inspect),densityMap=new DrfMap($('densityCanvas'),inspect),contrastMap=new DrfMap($('contrastCanvas'),inspect);
@@ -514,11 +514,9 @@ function previewWalls() {
     return preview;
   }
 }
-function renderSelected() {
+function renderSelected({layoutOnly=false}={}) {
   // Keep every result, but defer hidden-tab chart work until visibility returns.
   if (document.hidden) return;
-  hoverGeneration++;
-  $('inspector').textContent = '';
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
   const legacy=!!state.protocol && !state.protocol.echoSpline;
   const first=legacy?'guarded':'echoSpline', second=legacy?'baseline':'guarded';
@@ -561,6 +559,13 @@ function renderSelected() {
   // Older saved runs only carry fields on paired frames.
   const fieldFrame = records.echoSpline?.field ?? (independently
     ? state.frames[Math.min(methodT(first), state.frames.length) - 1] : frame);
+  const displayedFrame = method => independently ? records[method] : frame;
+  // The inspector itself can resize the charts; redrawing the same frames must keep its reading.
+  if (!layoutOnly || fieldFrame!==densityMap.state?.frame ||
+      displayedFrame(selected)!==map.state?.frame || displayedFrame(second)!==baselineMap.state?.frame) {
+    hoverGeneration++;
+    $('inspector').textContent = '';
+  }
   const fieldT = fieldFrame?.t ?? 0;
   const display={ interpolation: interpolate ? kind : 'off', grid: state.grid, domain: scenario?.domain ?? previewDomain ?? LAYERED_DOMAIN, frame:fieldFrame, truth: scenario?.truth[fieldT - 1], wire: scenario?.wire[fieldT - 1], walls,cameraBounds:scenario?.cameraBounds ?? previewBounds,
     bridges: visibleBridges(selected),
@@ -619,7 +624,7 @@ function renderSelected() {
       const stages=result?.stageTotalsMs;
       if(stages)label.title+=` GAT inference: ${(stages.gat/1000).toFixed(3)} s. GPR fit and prediction: ${(stages.gpr/1000).toFixed(3)} s. Other processing: ${(Math.max(0,ms-stages.gat-stages.gpr)/1000).toFixed(3)} s.`;
     }
-    view.set({...display,frame:independently?sample:frame,truth:scenario?.truth[t-1],wire:scenario?.wire[t-1],
+    view.set({...display,frame:displayedFrame(method),truth:scenario?.truth[t-1],wire:scenario?.wire[t-1],
       history:scenario?.wire.slice(0,t),observed:methodEvaluation(method)?.observed,bridges:visibleBridges(method),
       curves:result?.curves,candidates:result?.candidates??[],mode:'geometry',xRange:[-10,display.domain[1]+10]});
   }
@@ -1009,7 +1014,7 @@ $('exportPng').onclick = async () => {
   } catch (error) { notice(`PNG export failed: ${error.message}`); }
   finally { renderExportControls(); }
 };
-const chartResize = new ResizeObserver(() => { renderSelected(); renderSweep(); });
+const chartResize = new ResizeObserver(() => { renderSelected({layoutOnly:true}); renderSweep(); });
 chartResize.observe($('analysis-panel') ?? $('sweepPanel'));
 chartResize.observe($('metricChart'));
 const labelResize=new ResizeObserver(()=>{
