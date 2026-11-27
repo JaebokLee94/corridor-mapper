@@ -1209,7 +1209,7 @@ if (location.search) {
 }
 fillSettings(initialInput);
 history.replaceState(null, '', `#v1=${encodeURIComponent(JSON.stringify(initialInput))}`);
-(globalThis.__drfOffline ? Promise.resolve(globalThis.__drfOffline.metadata) : Promise.all([fetch(new URL('./provenance.json', import.meta.url)).then(r => r.json()), fetch(new URL('./reference/octave/fixtures.json', import.meta.url)).then(r => r.json())]))
+(globalThis.__drfOffline ? Promise.resolve(globalThis.__drfOffline.metadata) : Promise.all([fetch(new URL('./provenance.json?v=20261128-fast-viewport', import.meta.url)).then(r => r.json()), fetch(new URL('./reference/octave/fixtures.json', import.meta.url)).then(r => r.json())]))
   .then(([p, f]) => { provenance = p; reference = f.statistics; $('provenanceCommit').textContent = `${p.baseCommit.slice(0, 8)}`;
     $('provenanceCore').textContent = `${p.coreHash.slice(0, 12)}`; renderSweep(); })
   .catch(error => notice(`Could not load validation metadata: ${error.message}`));
