@@ -38,7 +38,7 @@ button { display:inline-flex; align-items:center; justify-content:center; gap:6p
 button:hover { background:var(--color-surface-2); border-color:var(--color-ink-muted); }
 button:active { background:var(--color-surface-3); }
 button:disabled { opacity:.45; cursor:default; }
-button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible { outline:3px solid var(--color-focus); outline-offset:3px; }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,.inspector:focus-visible { outline:3px solid var(--color-focus); outline-offset:3px; }
 .primary { background:#175d89; color:#fff; border-color:#175d89; font-weight:600; }
 .primary:hover { background:#104a70; color:#fff; border-color:#104a70; }
 .ghost { background:transparent; border-color:transparent; }
@@ -414,19 +414,18 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .baseline-name { color:var(--color-baseline); }
 #baselineCanvas { height:clamp(290px,24vw,430px); }
 .workbench-footer {
-  display:grid; grid-template-columns:fit-content(42%) minmax(0,1fr); align-items:start;
-  gap:4px 12px; min-width:0;
+  display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center;
+  gap:12px; min-width:0;
 }
-.analysis-launch { grid-area:1 / 1; justify-self:start; max-width:100%; gap:8px; white-space:normal; }
+.analysis-launch { justify-self:start; gap:8px; white-space:nowrap; }
 .inspector {
-  grid-area:1 / 2; align-self:center; min-width:0; color:var(--color-ink-muted);
-  font-size:13px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere;
+  min-width:0; overflow-x:auto; white-space:nowrap; color:var(--color-ink-muted);
+  font-size:13px; font-variant-numeric:tabular-nums;
 }
-.workbench-footer .provenance { grid-column:1/-1; justify-content:flex-end; margin:0; padding:0; gap:4px 16px; font-size:12px; }
-@media(min-width:1100px) {
-  .inspector:empty + .provenance { grid-area:1 / 2; align-self:center; }
+.inspector:empty { visibility:hidden; }
+@media(max-width:480px) {
+  .analysis-label-extra { display:none; }
 }
-@media(max-width:1099px) { .workbench-footer .provenance { justify-content:flex-start; } }
 #analysisDialog { width:min(1200px,calc(100vw - 32px)); overscroll-behavior:contain; }
 @media(min-width:1100px) and (min-height:700px) {
   :root { --header-height:56px; --sidebar:260px; }
@@ -458,7 +457,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .sidebar .toggle-list legend { margin:3px 0; }
   .sidebar .toggle { min-height:clamp(24px,3.2dvh,28px); }
   .sidebar-section>.note { margin:4px 0 6px; }
-  /* Reserve the existing button row for layout. Longer readings extend the scrollable footer below the plots. */
+  /* Cell readouts scroll within the button row so the plots keep their height. */
   .content { min-height:0; overflow:auto; scrollbar-gutter:stable; overscroll-behavior:contain; padding:12px 18px 8px; display:grid; grid-template-rows:minmax(32px,auto) minmax(540px,1fr) 30px; gap:6px; }
   .workbench-footer { align-self:start; }
   .workbench-title { margin:0; gap:12px; }
@@ -502,7 +501,6 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   #viewMetrics .vlabel { flex-wrap:wrap; }
   #viewMetrics select { width:auto; height:28px; font-size:13px; }
   .analysis-launch { min-height:30px; padding:4px 12px; }
-  .provenance { margin:0; padding:0; font-size:12px; gap:8px 18px; align-items:center; }
   footer { display:none; }
 }
 /* Stacked chart headers need room for five legible percentage ticks. */

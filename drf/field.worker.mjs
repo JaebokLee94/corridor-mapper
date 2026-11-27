@@ -1,5 +1,5 @@
 import { createGrid, createField } from "./field.mjs?v=20261118-device-selection-final";
-import { createDisplayField } from "./display-field.mjs?v=20261127-field-tiles";
+import { createDisplayField } from "./display-field.mjs?v=20261128-viewport-field";
 
 let field;
 globalThis.onmessage = ({ data: message }) => {
@@ -8,7 +8,7 @@ globalThis.onmessage = ({ data: message }) => {
       const grid = message.grid ?? {}, numerical = message.numerical ?? {};
       const baseGrid = createGrid(grid.nx, grid.ny, grid.domain);
       field = (message.type === "initDisplay" ? createDisplayField : createField)(baseGrid, numerical);
-      globalThis.postMessage({ type: "initialized", requestId: message.requestId, grid: baseGrid });
+      globalThis.postMessage({ type: "initialized", requestId: message.requestId, grid: field.grid });
     } else if (message.type === "step") {
       if (!field) throw new Error("field worker must be initialized");
       const frame = field.step(message.snapshot);

@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/echomap-icon-32.png?v=20261103" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="assets/echomap-icon.svg?v=20261103" sizes="any" />
   <link rel="apple-touch-icon" href="assets/echomap-touch-icon.png?v=20261103" sizes="180x180" />
-  <link rel="stylesheet" href="drf/style.css?v=20261127-field-inspector" />
+  <link rel="stylesheet" href="drf/style.css?v=20261127-footer-row" />
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to experiment</a>
@@ -149,9 +149,8 @@
         </div>
       </section>
       <div class="workbench-footer">
-        <button class="analysis-launch" id="analysisButton" type="button">Experiments, diagnostics &amp; exports <span aria-hidden="true">↗</span></button>
-        <output id="inspector" class="inspector" aria-label="Selected grid cell measurements" aria-live="off"></output>
-        <div class="provenance"><span>Frozen DRF base <code id="provenanceCommit">Loading</code></span><span>Core SHA-256 <code id="provenanceCore">Loading</code></span><span>Comparison release · 2026.11.14</span></div>
+        <button class="analysis-launch" id="analysisButton" type="button" aria-label="Experiments, diagnostics &amp; exports"><span>Experiments<span class="analysis-label-extra">, diagnostics &amp; exports</span></span> <span aria-hidden="true">↗</span></button>
+        <output id="inspector" class="inspector" tabindex="0" aria-label="Selected grid cell measurements" aria-live="off"></output>
       </div>
       <dialog id="analysisDialog" aria-labelledby="analysisTitle"><div class="dialog-title"><h2 id="analysisTitle">Analysis tools</h2><button id="closeAnalysis" type="button">Close</button></div><div class="analysis-content" id="analysis-panel">
         <div class="tabs table-scroll" role="tablist" aria-label="Analysis tools"><button id="sweepTab" data-tab="sweepPanel" role="tab" aria-controls="sweepPanel" aria-selected="true" type="button">Parameter sweep</button><button id="deviceBenchmarkTab" data-tab="deviceBenchmarkPanel" role="tab" aria-controls="deviceBenchmarkPanel" aria-selected="false" tabindex="-1" type="button">Device benchmark</button><button id="diagnosticTab" data-tab="diagnosticPanel" role="tab" aria-controls="diagnosticPanel" aria-selected="false" tabindex="-1" type="button">Diagnostics</button><button id="exportTab" data-tab="exportPanel" role="tab" aria-controls="exportPanel" aria-selected="false" tabindex="-1" type="button">Export</button></div>
@@ -171,7 +170,9 @@
           <div class="table-scroll"><table id="deviceBenchmarkTable"><caption>Measured runs · median and range. Rejected or interrupted paths without completed measurements show 0 runs.</caption><thead><tr><th>Condition</th><th>Method</th><th>Device</th><th>Runs</th><th>Estimator sum [ms]</th><th>Map F₁ [%]</th><th>Output / device check</th></tr></thead><tbody><tr><td colspan="7">Run a benchmark to compare devices.</td></tr></tbody></table></div>
           <details><summary>Machine-readable summary</summary><pre id="deviceBenchmarkSummary" class="table-scroll">{}</pre></details>
         </section>
-        <section id="diagnosticPanel" role="tabpanel" aria-labelledby="diagnosticTab" hidden><h2>Scattering diagnostics</h2><p class="note">Uses simulated reflection points for post-hoc analysis only.</p><div class="diagnostic-selectors"><label class="field"><span>Experiment</span><select id="diagnosticSourceSelect" disabled><option>No completed results</option></select></label><label class="field"><span>Vehicle pair · profile only</span><select id="configSelect" disabled><option>No pairs available</option></select></label></div><p id="diagnosticScope" class="note"></p><p id="diagnosticSummary" class="status">Run a comparison or a parameter sweep to view diagnostics.</p><p id="diagnosticProfileStatus" class="note" role="status"></p><div class="diagnostic-grid"><figure><figcaption>Theorem 2 ratio and <span data-tex="\chi^2_1">χ²₁</span> density</figcaption><canvas id="diagnosticChart" class="chart" aria-label="Theorem 2 ratio histogram"></canvas></figure><figure><figcaption>Scattering profile <span data-tex="\delta(s),\,w(s),\,\Lambda(s)">δ(s), w(s), Λ(s)</span></figcaption><canvas id="profileChart" class="chart" aria-label="Scattering profile for the selected pair"></canvas></figure><figure><figcaption>Diffuse count vs local prediction</figcaption><canvas id="countChart" class="chart" aria-label="Observed and predicted diffuse counts"></canvas></figure></div></section>
+        <section id="diagnosticPanel" role="tabpanel" aria-labelledby="diagnosticTab" hidden><h2>Scattering diagnostics</h2><p class="note">Uses simulated reflection points for post-hoc analysis only.</p><div class="diagnostic-selectors"><label class="field"><span>Experiment</span><select id="diagnosticSourceSelect" disabled><option>No completed results</option></select></label><label class="field"><span>Vehicle pair · profile only</span><select id="configSelect" disabled><option>No pairs available</option></select></label></div><p id="diagnosticScope" class="note"></p><p id="diagnosticSummary" class="status">Run a comparison or a parameter sweep to view diagnostics.</p><p id="diagnosticProfileStatus" class="note" role="status"></p><div class="diagnostic-grid"><figure><figcaption>Theorem 2 ratio and <span data-tex="\chi^2_1">χ²₁</span> density</figcaption><canvas id="diagnosticChart" class="chart" aria-label="Theorem 2 ratio histogram"></canvas></figure><figure><figcaption>Scattering profile <span data-tex="\delta(s),\,w(s),\,\Lambda(s)">δ(s), w(s), Λ(s)</span></figcaption><canvas id="profileChart" class="chart" aria-label="Scattering profile for the selected pair"></canvas></figure><figure><figcaption>Diffuse count vs local prediction</figcaption><canvas id="countChart" class="chart" aria-label="Observed and predicted diffuse counts"></canvas></figure></div>
+          <div class="provenance"><span>Frozen DRF base <code id="provenanceCommit">Loading</code></span><span>Core SHA-256 <code id="provenanceCore">Loading</code></span><span>Comparison release · 2026.11.14</span></div>
+        </section>
         <section id="exportPanel" role="tabpanel" aria-labelledby="exportTab" hidden>
           <h2>Save results</h2>
           <label class="field export-source"><span>CSV and PNG data</span><select id="exportSourceSelect" disabled><option>Run a comparison or sweep first</option></select></label>
@@ -200,8 +201,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261127-cnn-display';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261127-cnn-display';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261128-viewport-field';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261128-viewport-field';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

@@ -226,8 +226,10 @@ test('server page load remains idle for saved completed, active and paused compa
 test('explicit Run starts a new calculation after completion and reconnects only to an active comparison',async()=>{
   for (const status of ['done','cancelled','failed','running','paused']) {
     const selected={seed:7,snapshots:3},previous={seed:42,snapshots:120};let input=selected,queries=0;
-    const state={server:{},mode:'idle',generation:0,workers:[]},created=[],posted=[];
+    const state={server:{},mode:'idle',generation:0,workers:[]},created=[],posted=[],boundsCalls=[];
+    const bounds=[-13,160,-40,55];
     const context=vm.createContext({state,location:{hash:''},controls(){},notice(){},
+      currentHeatmapBounds:refresh=>{boundsCalls.push(refresh);return bounds;},
       connectComputeServer:async()=>{queries++;return {job:{id:'previous',mode:'comparison',status,input:previous}};},
       settings:()=>input,fillSettings:value=>{input=value;},cancel:()=>{state.generation++;},
       createWorker:(name,options)=>{created.push({name,...options});return {postMessage:message=>posted.push(message),terminate(){}};},
@@ -239,6 +241,10 @@ test('explicit Run starts a new calculation after completion and reconnects only
     const active=['running','paused'].includes(status);
     assert.equal(queries,1);assert.equal(created.length,1);assert.equal(created[0].resumeId,active?'previous':undefined);
     assert.equal(posted.length,1);assert.equal(posted[0].input,active?previous:selected);
+    assert.deepEqual(boundsCalls,active?[]:[true]);
+    assert.deepEqual(posted[0].viewBounds,active?undefined:bounds);
+    assert.equal(Object.hasOwn(posted[0].input,'viewBounds'),false);
+    assert.deepEqual(JSON.parse(decodeURIComponent(context.location.hash.slice(3))),active?previous:selected);
   }
 });
 
@@ -255,7 +261,7 @@ test('New map & run draws a different seed and four valid wall settings, preserv
     doc.getElementById('showInterpolation').checked=true;doc.getElementById('interpolationKind').value='extended';
     let activeJob;const starts=[],notices=[];
     Object.assign(window,{$:id=>doc.getElementById(id),form,normalizeInput:experimentSettings,state:{server:{},workers:[],mode:'done'},
-      connectComputeServer:async()=>({job:activeJob}),notice:text=>notices.push(text),controls(){},cancel(){},
+      connectComputeServer:async()=>({job:activeJob}),notice:text=>notices.push(text),controls(){},cancel(){},currentHeatmapBounds:()=>[-10,125,-30,40],
       createWorker:()=>({postMessage:msg=>starts.push(msg)}),fail:err=>{throw err;}});
     window.crypto.getRandomValues=array=>{array[0]=0xffffffff;return array;};
     window.eval(section('function settings()', 'function createLocalWorker(')+section('async function requestedServerJob(', 'function fail(')
@@ -348,7 +354,9 @@ test('full runs and single steps send exactly one start command with the request
     const input={scene:'layered',seed:0xffffffff,vehicles:10,snapshots:requested,grid:150,band:4,perimeter:'exact'},posted=[],inspections=[];
     const state={generation:0,scenario:null,mode:'idle',workers:[]},location={hash:'#v1=old'};
     const worker={postMessage:message=>posted.push(message),terminate(){}};
-    const context=vm.createContext({state,location,
+    const bounds=[-35,135,-28,47];
+    const context=vm.createContext({state,location,currentHeatmapBounds:refresh=>{assert.equal(refresh,true);return bounds;},
+      updateHeatmapViewport:()=>assert.deepEqual(state.fieldViewBounds,bounds),
       settings:()=>({...input}),cancel:()=>{state.generation++;},controls(){},notice(){},
       createWorker:name=>{assert.equal(name,'run');return worker;},
       makeWorker:name=>({request:async message=>{inspections.push([name,message]);return {};}}),
@@ -359,10 +367,12 @@ test('full runs and single steps send exactly one start command with the request
     await context.prepare({single});
     assert.equal(posted.length,1,'Starting the run must not dispatch any per-snapshot request');
     assert.equal(posted[0].type,'start');assert.equal(posted[0].requestId,state.generation);assert.equal(posted[0].single,single);
+    assert.deepEqual(posted[0].viewBounds,bounds);
     assert.deepEqual({...posted[0].input},input,'Preserve seed, fleet size and requested run length');
     assert.deepEqual(JSON.parse(decodeURIComponent(location.hash.slice(3))),input);
     const scenario={input,domain:[0,80,-20,50]},grid={nx:150,ny:150,domain:scenario.domain};
-    await context.receiveRunMessage({type:'prepared',requestId:state.generation,scenario,grid},state.generation);
+    await context.receiveRunMessage({type:'prepared',requestId:state.generation,scenario,grid,viewBounds:bounds},state.generation);
+    assert.deepEqual(state.fieldViewBounds,bounds);
     assert.deepEqual(state.protocol,LEGACY_RUN_PROTOCOL);
     assert.equal(state.scenario,scenario);assert.equal(state.grid,grid,'Use the grid supplied by the autonomous worker');
     assert.equal(state.generatedSnapshots,requested);assert.equal(state.measurementTotal,requested);
@@ -382,6 +392,21 @@ test('actual lower-map buttons affect only their own camera',()=>{
   }
   assert.deepEqual(calls,[['density','zoom',1.3],['density','zoom',1/1.3],['density','fit'],
     ['contrast','zoom',1.3],['contrast','zoom',1/1.3],['contrast','fit']]);
+});
+
+test('a new run uses the union of the two refreshed heatmap viewports without moving either camera',()=>{
+  const draws=[];
+  const pane=(id,edges)=>({canvas:{id},visibleBounds:null,paint(canvas,ratio){
+    draws.push([canvas.id,ratio]);this.visibleBounds=edges;
+  }});
+  const densityMap=pane('density',[-48,91,2,61]), contrastMap=pane('contrast',[20,145,-67,32]);
+  const context=vm.createContext({densityMap,contrastMap,window:{devicePixelRatio:2}});
+  vm.runInContext(section('function currentHeatmapBounds(','function updateHeatmapViewport('),context);
+  assert.equal(context.currentHeatmapBounds(),null);
+  assert.deepEqual(Array.from(context.currentHeatmapBounds(true)),[-48,145,-67,61]);
+  assert.deepEqual(draws,[['density',2],['contrast',2]]);
+  assert.deepEqual(Array.from(context.currentHeatmapBounds()),[-48,145,-67,61]);
+  assert.equal(draws.length,2);
 });
 
 test('actual preview geometry stays cached when the truth overlay is hidden',()=>{
@@ -644,6 +669,7 @@ test('reset-and-run clears the completed result and replay but preserves current
     workers:[{stop(){stopped++;}}],replay:true,generatedSnapshots:3,measurementTotal:3});
   Object.assign(context,{hoverGeneration:0,hoverTimer:0,hoverWorker:{},evalWorker:{},replayFrame:19,location:{hash:'#old'},
     settings:()=>({...input}),fillSettings:()=>assert.fail('Restart must not restore default parameters'),clearTimeout(){},
+    currentHeatmapBounds:()=>[-14,128,-33,41],
     cancelAnimationFrame:id=>{if(id===19)cancelledReplay++;},
     createWorker:name=>{assert.equal(name,'run');return {postMessage:message=>commands.push(message),terminate(){}};},
     map:{fit(){}},baselineMap:{fit(){}},densityMap:{fit(){}},contrastMap:{fit(){}},
@@ -692,6 +718,9 @@ test('run shortcuts use the existing buttons from focused controls and respect d
     $('runButton').disabled=true;$('newMapRun').disabled=true;
     key(document.body,{ctrlKey:true});key(document.body,{metaKey:true,shiftKey:true});
     assert.deepEqual(calls,[]);
+    window.state.frames=[{t:1},{t:2}];window.state.selected=1;
+    assert.equal(key($('inspector'),{key:'ArrowRight'}).defaultPrevented,false);
+    assert.equal(window.state.selected,1,'Keyboard scrolling a long readout preserves its snapshot');
   } finally {window.close();}
 });
 
@@ -813,7 +842,7 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
       resize();assert.equal(context.hoverGeneration,generation);
       finish({t:1});await pending;
       const reading=$('inspector').textContent;
-      assert.match(reading,/snapshot 1 · grid/);
+      assert.match(reading,/t=1 · \(/);
       resize();assert.equal($('inspector').textContent,reading);
       state.methodFrames.echoSpline[1].field=early;
       resize();assert.equal($('inspector').textContent,'');assert.ok(context.hoverGeneration>generation);
@@ -832,7 +861,7 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
         section('function replayTick(','function resetView('),context);
       const send=async message=>{await context.receiveRunMessage({requestId:1,...message},1);};
       const method=(side,t,at)=>send({type:'method-frame',side,t,at,result:{ms:1},evaluation:{}});
-      const join=(t,fieldAt)=>send({type:'frame',next:t,fieldAt,frame:{t,methods:{echoSpline:{ms:1},guarded:{ms:1}}},
+      const join=(t,fieldAt)=>send({type:'frame',next:t,fieldAt,frame:{t,grid:structuredClone(wideGrid),methods:{echoSpline:{ms:1},guarded:{ms:1}}},
         evaluation:{methods:{echoSpline:{},guarded:{}}}});
       function expectViews(left,right,field){
         for (const [view,t] of [[maps.map,left],[maps.baselineMap,right],[maps.densityMap,field],[maps.contrastMap,field]]) {
@@ -878,6 +907,55 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
       tick(10,2,1,1);tick(14,2,3,1);tick(20,2,3,2);
       tick(24,3,3,2);tick(59,3,3,2);tick(60,3,3,3);
       assert.equal(state.selected,3);
+    });
+
+    await t.test('the viewport field and EchoSpline paint one measured prefix while CNN and raw completion times stay independent',async()=>{
+      const input={snapshots:3,rightMethod:'spline-cnn-fast'};
+      Object.assign(state,{generation:1,mode:'running',method:'compare',followLive:true,replay:false,
+        fieldViewBounds:wideGrid.domain,protocol:echoProtocol(input),scenario:{...state.scenario,input,wire:snapshots,truth:snapshots},
+        frames:[],evaluations:[],frameTimes:[],methodFrames:null,next:0,selected:0,
+        livePaint:0,computeClock:null,computePaint:0,computeDisplay:null,nextMapPaintAt:undefined});
+      let now=0;
+      Object.assign(context,{performance:{now:()=>now},requestAnimationFrame:()=>1,controls(){},notice(){},
+        fail:error=>assert.fail(error.message),hashField:async()=>''});
+      vm.runInContext(section('async function receiveRunMessage(','async function hashField(')
+        +section('function renderSelected(','// Sweep diagnostics')+section('function replayTick(','function resetView('),context);
+      const send=message=>context.receiveRunMessage({requestId:1,...message},1);
+      const field=t=>({t,grid:structuredClone(wideGrid),Dbar:Float32Array.of(t),betaHat:Float32Array.of(t/3)});
+      const method=(side,t,at,early)=>send({type:'method-frame',side,t,at,result:{ms:t},evaluation:{},field:early});
+      const join=(t,fieldAt)=>send({type:'frame',next:t,fieldAt,frame:{...field(t),methods:{echoSpline:{ms:t},guarded:{ms:t}}},
+        evaluation:{methods:{echoSpline:{},guarded:{}}}});
+      function check(left,right) {
+        for(const [view,t] of [[maps.map,left],[maps.densityMap,left],[maps.contrastMap,left],[maps.baselineMap,right]]){
+          assert.equal(view.state.frame?.t??0,t);
+          assert.equal(view.state.wire,snapshots[t-1]);
+          assert.deepEqual(view.state.history,snapshots.slice(0,t));
+        }
+        assert.equal(maps.densityMap.state.frame,maps.contrastMap.state.frame);
+        assert.match($('primaryProgress').title,new RegExp('Snapshot '+left+'/3'));
+        assert.match($('secondaryProgress').title,new RegExp('Snapshot '+right+'/3'));
+      }
+      function live(left,right) {state.livePaint=0;context.renderSelected({framesOnly:true});check(left,right);}
+      now=1;await method('guarded',1,now);live(0,1);
+      now=3;await method('echoSpline',1,now);
+      now=4;await method('echoSpline',2,now);live(0,1);
+      assert.equal($('updateP95Value').textContent,'2.0','Time statistics already include the two left estimator results');
+      now=8;await join(1,now);live(1,1);
+      now=12;await send({type:'field-frame',t:2,at:now,field:field(2)});live(2,1);
+      now=15;await method('guarded',2,now);await join(2,12);live(2,2);
+      // The third field finished at 16, before either estimator requested painting at t=3.
+      now=18;await method('echoSpline',3,now,field(3));live(3,2);
+      assert.equal($('computeTimeValue').textContent,'0.018');
+      now=30;await method('guarded',3,now);await join(3,16);live(3,3);
+      assert.deepEqual(state.frameTimes,[8,15,30]);
+      await send({type:'status',mode:'done'});
+      $('playbackSpeed').value='1';context.toggleReplay();check(0,0);
+      const start=now;
+      for(const [at,left,right] of [[1,0,1],[4,0,1],[8,1,1],[11,1,1],[12,2,1],[15,2,2],[16,2,2],[18,3,2],[30,3,3]]){
+        now=start+at;context.replayTick(now);check(left,right);
+      }
+      assert.equal($('computeTimeValue').textContent,'0.018');assert.equal($('bComputeTimeValue').textContent,'0.030');
+      state.fieldViewBounds=undefined;
     });
 
     await t.test('held CNN positions paint between fits and replay on the same clock',async()=>{
@@ -952,13 +1030,20 @@ test('hover resolves the displayed snapshot grid for live, replay, geometry, and
     inspect({x:123,y:0,grid},2);await scheduled();
     const q=requests.at(-1);
     assert.equal(q.grid,wideGrid);assert.equal(q.index,3);assert.equal(q.epsilonA,.02);
-    assert.deepEqual(q.snapshots,wire);assert.match(inspector.textContent,/grid \(125, 0\)/);
+    assert.deepEqual(q.snapshots,wire);assert.match(inspector.textContent,/t=2 · \(125, 0\)/);
   }
   inspect({x:123,y:0,grid:sceneGrid},1);
   assert.equal(scheduled,null);assert.equal(inspector.textContent,'');
   inspect({x:73,y:0,grid:sceneGrid},1);await scheduled();
   assert.equal(requests.at(-1).index,1);assert.equal(requests.at(-1).grid,sceneGrid);
-  assert.equal(requests.at(-1).snapshots.length,1);assert.match(inspector.textContent,/grid \(75, 0\)/);
+  assert.equal(requests.at(-1).snapshots.length,1);assert.match(inspector.textContent,/t=1 · \(75, 0\)/);
+  const pannedGrid={nx:2,ny:1,domain:[150,170,-1,1],x:[155,165],y:[0]};
+  const panned={t:1,grid:pannedGrid,epsilonA:.03};
+  inspect({x:163,y:0,grid:sceneGrid,field:panned},1);await scheduled();
+  const pannedQuery=requests.at(-1);
+  assert.equal(pannedQuery.grid,pannedGrid);assert.equal(pannedQuery.index,1);
+  assert.equal(pannedQuery.epsilonA,panned.epsilonA);assert.deepEqual(pannedQuery.snapshots,wire.slice(0,1));
+  assert.match(inspector.textContent,/t=1 · \(165, 0\)/);
 });
 
 test('graph timers and table use elapsed time, stop each completed method and remain fixed during replay',async()=>{

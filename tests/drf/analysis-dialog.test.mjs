@@ -30,13 +30,17 @@ test('the measured cell readout shares the analysis button footer and renders ea
   const inspector=$('inspector'), button=$('analysisButton');
   assert.equal(button.nextElementSibling,inspector);
   assert.equal(inspector.parentElement.className,'workbench-footer');
+  assert.equal(inspector.parentElement.children.length,2);
+  assert.equal(inspector.tabIndex,0);
+  assert.equal($('provenanceCore').closest('[role="tabpanel"]'),$('diagnosticPanel'));
+  assert.equal($('provenanceCommit').closest('[role="tabpanel"]'),$('diagnosticPanel'));
   assert.equal(inspector.closest('.dashboard'),null);
   const previous=globalThis.document;
   globalThis.document=inspector.ownerDocument;
   t.after(()=>{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;});
   const symbols=['D','A','Q',String.raw`\bar{D}`,String.raw`\hat{\beta}`,String.raw`\mathrm{m}^{-2}`];
-  setMathText(inspector,['snapshot 10 · grid (109.00, 6.00) m · ',...symbols.map(tex=>({tex})),
-    ' · Wall-sample distance 9.27 m · evaluation only']);
+  setMathText(inspector,['t=10 · (109.00, 6.00) m · ',...symbols.map(tex=>({tex})),
+    ' · Wall-sample distance 9.27 m (eval.)']);
   assert.deepEqual([...inspector.querySelectorAll('[data-rendered-tex]')].map(node=>node.dataset.renderedTex),symbols);
   for(const node of inspector.querySelectorAll('[data-tex]')) {
     assert.ok(node.querySelector('svg path'));assert.ok(parseFloat(node.firstElementChild.style.width)>0);

@@ -165,3 +165,71 @@ test('the first expanded grid spanning multiple 64K row tiles matches a single f
   assert.equal(frame.Q, 45);
   for (const key of ['Q', 'epsilonA', 'Dbar', 'betaHat']) assert.deepEqual(frame[key], reference[key], key);
 });
+
+test('the fixed view covers partially visible cells beyond both ends, with no base-domain padding or growth', () => {
+  const base = createGrid(10, 10, [-0.5, 9.5, -0.5, 9.5]);
+  const viewBounds = new Float64Array([-8.2, 16.01, 1.87, 2.5]);
+  const display = createDisplayField(base, {viewBounds}), grid = display.grid;
+  assert.deepEqual(grid.domain, [-8.5, 16.5, 1.5, 2.5]);
+  assert.equal(grid.ny, 1);
+  const c = config([2, 2], [6, 2], 24), wire = {t: 1, configs: [c]};
+  const first = display.step(wire), saved = structuredClone(first);
+  const expected = createField(createGrid(25, 1, [-8.5, 16.5, 1.5, 2.5]));
+  const firstExpected = expected.step(wire);
+  for (const key of ['Dbar','betaHat','epsilonA','Q']) assert.deepEqual(first[key], firstExpected[key]);
+  for (const x of [-8, 16]) {
+    const peak = pathFieldPoint([x, 2], c, c.paths[0]);
+    const at = indexAt(grid, x, 2);
+    assert.equal(peak.r, 0);
+    assert.equal(first.Dbar[at], Math.fround(peak.u));
+    assert.equal(first.betaHat[at], Math.fround(peak.u / (peak.alpha + first.epsilonA)));
+  }
+  viewBounds[1] = 2000;
+  assert.throws(() => display.step({t: 3, configs: []}), /causal/);
+  const far = {t: 2, configs: [config([200, 55], [220, 90], 100)]};
+  const last = display.step(far), lastExpected = expected.step(far);
+  assert.equal(last.grid, grid);
+  assert.equal(last.Q, 2);
+  for (const key of ['Dbar','betaHat','epsilonA','Q']) assert.deepEqual(last[key], lastExpected[key]);
+  assert.deepEqual(first, saved);
+});
+
+test('view bounds preserve original fractional lattice centres, exact edges and panned single cells', () => {
+  const base = createGrid(11, 9, [-1.3, 4.5, -2.5, 2.8]);
+  const left = base.xmin + 4 * base.dx, right = base.xmin + 6 * base.dx;
+  const grid = createDisplayField(base, {viewBounds: [left, right, base.ymin, base.ymax]}).grid;
+  assert.deepEqual(grid.domain, [left, right, base.ymin, base.ymax]);
+  assert.deepEqual(grid.x, base.x.slice(4, 6)); assert.deepEqual(grid.y, base.y);
+  const cx = base.xmin + 20.5 * base.dx, cy = base.ymin - 2.5 * base.dy;
+  const panned = createDisplayField(base, {viewBounds: [cx - .1, cx + .1, cy - .1, cy + .1]}).grid;
+  assert.deepEqual(panned.x, Float64Array.of(cx)); assert.deepEqual(panned.y, Float64Array.of(cy));
+  for (const bounds of [null, {}, [], [1, 1, 2, 4], [2, 1, 2, 4], [0, 1, 3, 2],
+    [NaN, 0, 1, 2], [0, Infinity, 0, 1], [0, 1e20, 0, 1], [0, 1e7, 0, 1e7]])
+    assert.throws(() => createDisplayField(base, {viewBounds: bounds}), /viewBounds/);
+});
+
+test('a fixed multi-tile worker sends the selected grid and cumulative fields with its rectangle-wide epsilon', async () => {
+  const base = createGrid(80, 70, [-.5, 79.5, -.5, 69.5]);
+  const numerical = {viewBounds: [-65.85, 225.15, -41.12, 190.2], band: 3, perimeter: 'ramanujan'};
+  const referenceGrid = createGrid(292, 232, [-66.5, 225.5, -41.5, 190.5]);
+  const exact = createField(referenceGrid, numerical);
+  const oldMessage = globalThis.onmessage, oldPost = globalThis.postMessage, messages = [];
+  globalThis.postMessage = (response, transfer = []) => messages.push(structuredClone(response, {transfer}));
+  try {
+    await import('../../drf/field.worker.mjs?fixed-view-test');
+    globalThis.onmessage({data: {type: 'initDisplay', grid: base, numerical, requestId: 0}});
+    assert.equal(messages[0].type, 'initialized');
+    assert.deepEqual(messages[0].grid, referenceGrid);
+    const poses = Array.from({length: 10}, (_, i) => [83 + i, 159 + i % 3]);
+    const pairs = [];
+    for (let i = 0; i < poses.length; i++) for (let j = i + 1; j < poses.length; j++)
+      pairs.push({...config(poses[i], poses[j], 72 + i + j), i, j});
+    for (const wire of [{t: 1, configs: pairs}, {t: 2, configs: [config([-500, 98], [-445, 99], 137)]}]) {
+      globalThis.onmessage({data: {type: 'step', snapshot: wire, requestId: wire.t}});
+      const frame = messages.at(-1), ref = exact.step(wire);
+      assert.equal(frame.type, 'frame'); assert.deepEqual(frame.grid, referenceGrid);
+      for (const key of ['t','Q','admitted','rejected','Dbar','betaHat','epsilonA']) assert.deepEqual(frame[key], ref[key], key);
+    }
+    assert.equal(messages.at(-1).Q, 46);
+  } finally { globalThis.onmessage = oldMessage; globalThis.postMessage = oldPost; }
+});

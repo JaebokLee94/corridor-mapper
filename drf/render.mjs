@@ -133,7 +133,8 @@ export class DrfMap {
         this.pointer = [e.clientX,e.clientY]; this.auto = false; this.draw(); this.onCameraChange?.();
       }
       const [x,y] = mapToWorld([e.offsetX,e.offsetY],this.camera,this.box);
-      this.onInspect?.({x,y,grid:this.state.grid},this.state.frame?.t);
+      const field=this.state.mode==='geometry' ? undefined : this.state.frame;
+      this.onInspect?.({x,y,grid:this.state.grid,field},this.state.frame?.t);
     });
     for (const name of ["pointerup","pointercancel","lostpointercapture"]) canvas.addEventListener(name,() => { this.pointer=null; });
   }
@@ -239,6 +240,12 @@ export class DrfMap {
       if(geometry)this.canvas.closest?.('.map-pane')?.style?.setProperty?.('--plot-right-inset',(width-box.x-box.w)+'px');
       this.box=box;
       this.canvas.dataset.view=JSON.stringify({xmin:lo[0],xmax:hi[0],ymin:lo[1],ymax:hi[1],pixelsPerMetreX:c.scaleX,pixelsPerMetreY:c.scaleY,aspectMode:this.state.aspectMode ?? 'fill',plotWidth:box.w,plotHeight:box.h,auto:this.auto});
+      this.canvas.dataset.snapshot=String(this.state.frame?.t??0);
+      const bounds=[lo[0],hi[0],lo[1],hi[1]];
+      if (bounds.some((value,i)=>value!==this.visibleBounds?.[i])) {
+        this.visibleBounds=bounds;
+        this.onViewBoundsChange?.();
+      }
     }
     ctx.save();ctx.beginPath();ctx.rect(box.x,box.y,box.w,box.h);ctx.clip();
     if (g && this.state.frame && !geometry) {

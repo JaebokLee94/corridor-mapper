@@ -14,9 +14,10 @@ import { echoProtocol } from './echo-comparison.mjs?v=20261127-cnn-display';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261127-cnn-display';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261127-cnn-display';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261128-viewport-field';
+import { createViewportReadout } from './viewport-readout.mjs?v=20261128-viewport-field';
 import { download, png300dpi } from '../surf/exports.mjs';
-import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
+import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261128-viewport-field';
 import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261127-cnn-display';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 
@@ -123,7 +124,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261127-cnn-display';
+  const revision = '20261128-viewport-field';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -139,7 +140,7 @@ function createWorker(name, options = {}) {
   if (name === 'run') return runPreloader.take(options.input) ?? createLocalWorker(name);
   return createLocalWorker(name);
 }
-function makeWorker(name, onProgress = () => {}) {
+function makeWorker(name, onProgress = () => {}, {track=true} = {}) {
   const worker = createWorker(name), pending = new Map(); let id = 0, stopped = false;
   worker.onmessage = ({ data }) => {
     if (data.type === 'progress') { onProgress(data); return; }
@@ -152,7 +153,8 @@ function makeWorker(name, onProgress = () => {}) {
     if (stopped) { reject(new Error('Cancelled')); return; }
     const requestId = ++id; pending.set(requestId, { resolve, reject }); worker.postMessage({ ...message, requestId });
   }); }, stop() { stopped = true; worker.terminate(); for (const p of pending.values()) p.reject(new Error('Cancelled')); pending.clear(); } };
-  state.workers.push(handle); return handle;
+  if (track) state.workers.push(handle);
+  return handle;
 }
 function stopReplay() {
   cancelAnimationFrame(replayFrame); replayFrame = 0; state.replay = false;
@@ -218,7 +220,7 @@ function renderExportControls() {
   }));
   select.value = choices.some(([value]) => value === previous) ? previous : choices[0]?.[0] ?? '';
   select.disabled = !choices.length;
-  $('exportJson').disabled = !comparison && !sweep;
+  $('exportJson').disabled = !!state.jsonExportWorker || !comparison && !sweep;
   for (const id of ['exportCsv', 'exportPng']) $(id).disabled = !choices.length;
   const isSweep = select.value === 'sweep';
   $('exportCsvDescription').textContent = isSweep
@@ -241,6 +243,9 @@ function cancel(clear = false) {
   }
   state.generation++; hoverGeneration++; clearTimeout(hoverTimer); stopReplay();
   const generation = state.generation;
+  state.viewportReader?.reset();
+  state.panBounds=undefined;
+  clearTimeout(state.viewportTimer);
   for (const worker of state.workers) {
     const stopped = worker.stop();
     stopped?.catch?.(error => {
@@ -252,6 +257,7 @@ function cancel(clear = false) {
   diagnosticView.reset();
   state.busy = false; state.mode = clear ? 'idle' : 'cancelled'; state.nextMapPaintAt=undefined;
   if (clear) {
+    state.fieldViewBounds=undefined;
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
     state.frameTimes = []; state.methodFrames=null; state.joinedComputeMs=null;
     state.computeClock=null;
@@ -338,7 +344,8 @@ async function prepare({single = false, newMap = false} = {}) {
     state.workers.push({ stop: () => worker.terminate(), detach: worker.detach ? () => worker.detach() : null });
     worker.onmessage = ({ data }) => { void receiveRunMessage(data, generation); };
     worker.onerror = event => { if (generation === state.generation) fail(new Error(event.message || 'Could not load the simulation worker. Reload and run again.')); };
-    worker.postMessage({ type: 'start', requestId: generation, input, single });
+    const viewBounds=resumeId ? null : currentHeatmapBounds(true);
+    worker.postMessage({ type: 'start', requestId: generation, input, single, ...(viewBounds ? {viewBounds} : {}) });
   } catch (error) { fail(error); }
 }
 function fail(error) {
@@ -383,6 +390,8 @@ async function receiveRunMessage(data, generation) {
       state.protocol = structuredClone(data.protocol ?? LEGACY_RUN_PROTOCOL);
       renderThresholdProtocol(state.protocol);
       state.scenario = data.scenario; state.grid = data.grid; state.valid = true;
+      state.fieldViewBounds=data.viewBounds;
+      if (data.viewBounds) updateHeatmapViewport();
       state.measurementTotal = data.scenario.input.snapshots; state.generatedSnapshots = state.measurementTotal;
       if (state.server) { fillSettings(data.scenario.input); location.hash = `v1=${encodeURIComponent(JSON.stringify(data.scenario.input))}`; }
       // Inspection is separate from the run and cannot hold up its progress.
@@ -421,6 +430,7 @@ async function receiveRunMessage(data, generation) {
       if (!sample || data.field?.t!==data.t) throw new Error('Unexpected display field snapshot');
       sample.field=data.field;
       sample.fieldAt=data.at;
+      if (state.fieldViewBounds) updateComparisonStatus();
       scheduleLivePaint();
       return;
     }
@@ -475,8 +485,9 @@ async function receiveRunMessage(data, generation) {
 function updateComparisonStatus() {
   if (state.mode!=='running') return;
   const total=state.scenario.input.snapshots, joined=state.frames.length;
-  const rightFrames=state.methodFrames?.guarded;
-  const left=state.methodFrames?.echoSpline.length ?? joined;
+  const rightFrames=state.methodFrames?.guarded, leftFrames=state.methodFrames?.echoSpline;
+  const left=state.fieldViewBounds && leftFrames
+    ? (leftFrames.findLast(s=>s.field || state.frames[s.t-1])?.t ?? 0) : leftFrames?.length ?? joined;
   const right=rightFrames?.at(-1)?.displayAt!=null ? liveMethodFrame(rightFrames).t : rightFrames?.length ?? joined;
   if (state.methodFrames && left===total && right===total) {
     notice(joined<total ? `Both maps complete · updating measurement fields ${joined} / ${total}` : 'Both maps complete · measurement fields ready');
@@ -513,7 +524,7 @@ async function hashField(frame) {
 }
 const inspect = (point, t) => {
   clearTimeout(hoverTimer); const generation = ++hoverGeneration;
-  const frame = state.frames[t - 1] ?? state.methodFrames?.echoSpline[t - 1]?.field;
+  const frame = point.field ?? state.frames[t - 1] ?? state.methodFrames?.echoSpline[t - 1]?.field;
   const grid = frame?.grid ?? point.grid;
   if (!frame || !grid || !hoverWorker) { $('inspector').textContent = ''; return; }
   const [xmin,xmax,ymin,ymax] = grid.domain ?? [grid.xmin,grid.xmax,grid.ymin,grid.ymax];
@@ -530,10 +541,10 @@ const inspect = (point, t) => {
       if ($('showTruth').checked) {
         let distance = Infinity;
         for (const wall of state.scenario.walls) for (const p of wall) distance = Math.min(distance, Math.hypot(x - p[0], y - p[1]));
-        wallDistance = ` · Wall-sample distance ${fmt(distance)} m · evaluation only`;
+        wallDistance = ` · Wall-sample distance ${fmt(distance)} m (eval.)`;
       }
       setMathText($('inspector'), [
-        `snapshot ${value.t} · grid (${fmt(x, 2)}, ${fmt(y, 2)}) m · `,
+        `t=${value.t} · (${fmt(x, 2)}, ${fmt(y, 2)}) m · `,
         { tex: 'D' }, ` ${fmt(value.D)} · `, { tex: 'A' }, ` ${fmt(value.A)} [`,
         { tex: String.raw`\mathrm{m}^{-2}` }, '] · ', { tex: 'Q' }, ` ${value.Q} · `,
         { tex: String.raw`\bar{D}` }, ` ${fmt(value.Dbar)} · `,
@@ -544,6 +555,28 @@ const inspect = (point, t) => {
 };
 const map = new DrfMap($('mapCanvas'),inspect),baselineMap=new DrfMap($('baselineCanvas'),inspect),densityMap=new DrfMap($('densityCanvas'),inspect),contrastMap=new DrfMap($('contrastCanvas'),inspect);
 linkMapCameras(map,baselineMap,()=>state.method==='compare');
+function currentHeatmapBounds(refresh=false) {
+  const panes=[densityMap,contrastMap];
+  // Run may have selected a new random wall since the last animation frame.
+  if (refresh) for (const pane of panes) pane.paint(pane.canvas,window.devicePixelRatio||1);
+  const bounds=panes.map(pane=>pane.visibleBounds).filter(Boolean);
+  if (!bounds.length) return null;
+  return [Math.min(...bounds.map(b=>b[0])),Math.max(...bounds.map(b=>b[1])),
+    Math.min(...bounds.map(b=>b[2])),Math.max(...bounds.map(b=>b[3]))];
+}
+function updateHeatmapViewport() {
+  clearTimeout(state.viewportTimer);
+  if (!state.fieldViewBounds || !state.scenario) return;
+  state.viewportTimer=setTimeout(()=>{
+    const bounds=currentHeatmapBounds(), original=state.fieldViewBounds;
+    if (!bounds || !original) return;
+    const outside=bounds[0]<original[0] || bounds[1]>original[1] || bounds[2]<original[2] || bounds[3]>original[3];
+    state.panBounds=outside ? bounds : undefined;
+    if (!outside) state.viewportReader?.reset();
+    scheduleLivePaint();
+  },120);
+}
+densityMap.onViewBoundsChange=contrastMap.onViewBoundsChange=updateHeatmapViewport;
 let previewKey='',preview=[],previewBounds,previewDomain;
 function previewWalls() {
   // Static truth preview uses exactly the accepted geometry used by the worker.
@@ -586,6 +619,11 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
     if(list){
       records[method]=state.replay?list.findLast(s=>(s.displayAt??s.at)<=state.replayPosition):
         state.followLive && ['running','paused'].includes(state.mode)?liveMethodFrame(list):list[state.selected-1];
+      if (method==='echoSpline' && state.fieldViewBounds && (state.replay || state.followLive && ['running','paused'].includes(state.mode))) {
+        // Present the estimate and both measurement fields in the same paint, leaving the other estimator independent.
+        records[method]=list.findLast(s=>(s.field || state.frames[s.t-1]) &&
+          (!state.replay || Math.max(s.at,s.fieldAt??s.at)<=state.replayPosition));
+      }
       if (method==='guarded') state.nextMapPaintAt=state.followLive && state.mode==='running'
         ? list[records[method]?.t??0]?.displayAt : undefined;
     }
@@ -610,6 +648,12 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
       if (state.replay && sample.fieldAt>state.replayPosition) continue;
       fieldFrame=sample.field ?? state.frames[t-1];
     }
+  }
+  if (fieldFrame && state.panBounds) {
+    state.viewportReader??=createViewportReadout(()=>makeWorker('field',undefined,{track:false}),scheduleLivePaint,
+      error=>notice(`Heatmap update failed: ${error.message}`));
+    fieldFrame=state.viewportReader.read({baseGrid:state.grid, numerical:{band:scenario.input.band,perimeter:scenario.input.perimeter},
+      wire:scenario.wire,bounds:state.panBounds,t:fieldFrame.t}) ?? fieldFrame;
   }
   const displayedFrame = method => independently ? records[method] : frame;
   // Keep the cell reading when layout alone redraws the same frames.
@@ -683,7 +727,11 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
       history:scenario?.wire.slice(0,t),observed:methodEvaluation(method)?.observed,bridges:visibleBridges(method),
       curves:result?.curves,candidates:result?.candidates??[],mode:'geometry',xRange:[-10,display.domain[1]+10]});
   }
-  if (!framesOnly || densityMap.state?.grid!==display.grid || densityMap.state?.frame?.t!==fieldFrame?.t || !densityMap.state?.heatField) {
+  const previousGrid=densityMap.state?.frame?.grid, fieldGrid=fieldFrame?.grid;
+  const fieldMoved=previousGrid && fieldGrid && (previousGrid.nx!==fieldGrid.nx || previousGrid.ny!==fieldGrid.ny ||
+    previousGrid.domain.some((bound,i)=>bound!==fieldGrid.domain[i]));
+  if (!framesOnly || densityMap.state?.grid!==display.grid || densityMap.state?.frame?.t!==fieldFrame?.t ||
+      fieldMoved || !densityMap.state?.heatField) {
     const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
     densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
     contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
@@ -886,7 +934,7 @@ document.addEventListener('keydown', event => {
     if (!event.repeat) $(event.shiftKey ? 'newMapRun' : 'runButton').click();
     return;
   }
-  if (event.target.matches('input,select,textarea,button')) return;
+  if (event.target.matches('input,select,textarea,button,#inspector')) return;
   if (['running', 'paused'].includes(state.mode)) return;
   if (event.code === 'Space') { event.preventDefault(); toggleReplay(); }
   if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.frames.length) {
@@ -1047,7 +1095,8 @@ $('loadSavedSweep').onclick = () => {
   if (job?.mode === 'sweep' && job.next > 0) return runSweep(job.jobs, job.id);
 };
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
-$('exportJson').onclick = () => {
+$('exportJson').onclick = async () => {
+  if (state.jsonExportWorker) return;
   const hasFrameGrid = state.frames.some(frame=>frame.grid);
   const schema = hasFrameGrid ? 'echomap-drf/7' : state.protocol?.echoSpline || state.sweepRuns.some(r=>r.protocol?.echoSpline) ? 'echomap-drf/6' : 'echomap-drf/5';
   const data = { schema, estimators: state.protocol, selectedMethod: state.method, displayInterpolation: $('showInterpolation')?.checked ? $('interpolationKind').value : 'off', toleranceM: 0.4, measurementBackend:state.scenario?.measurementBackend, measurementPreparationMs:state.scenario?.simulatorMs, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
@@ -1056,7 +1105,44 @@ $('exportJson').onclick = () => {
     input: state.scenario?.input ?? state.sweepRuns[0]?.input, measurement: state.scenario?.wire.slice(0, state.frames.length) ?? [], result: state.frames,
     evaluation: state.evaluations, truth: { role: 'evaluation only', wallModel: state.scenario?.wallModel, wallGeneration: state.scenario?.wallGeneration, walls: state.scenario?.walls ?? [], snapshots: state.scenario?.truth.slice(0, state.frames.length) ?? [] },
     sweep: { completeSeedResults: state.sweepRuns.map(({ final, ...run }) => run), aggregates: aggregateRuns(state.sweepRuns) } };
-  download(new Blob([JSON.stringify(data, jsonValue)], { type: 'application/json' }), 'echomap-drf.json');
+  if (!state.fieldViewBounds || !data.result.length) {
+    download(new Blob([JSON.stringify(data, jsonValue)], { type: 'application/json' }), 'echomap-drf.json');
+    return;
+  }
+  const button=$('exportJson'), generation=state.generation, frames=data.result.slice();
+  const {nx,ny,domain}=state.grid, {band,perimeter}=data.input;
+  let worker;
+  try {
+    worker=makeWorker('field');
+    state.jsonExportWorker=worker;
+    button.disabled=true;
+    button.textContent=`Preparing full fields · 0 / ${frames.length}`;
+    // Serialize each restored field separately so the full rasters never accumulate in memory.
+    const header=JSON.stringify({...data,result:undefined},jsonValue);
+    const parts=[header.slice(0,-1),',"result":['];
+    await worker.request({type:'initDisplay',grid:{nx,ny,domain},numerical:{band,perimeter}});
+    for (const [i,frame] of frames.entries()) {
+      if (generation!==state.generation) return;
+      const {grid,Dbar,betaHat,epsilonA}=await worker.request({type:'step',snapshot:data.measurement[i]});
+      if (generation!==state.generation) return;
+      parts.push(new Blob([i?',':'',JSON.stringify({...frame,grid,Dbar,betaHat,epsilonA},jsonValue)]));
+      button.textContent=`Preparing full fields · ${i+1} / ${frames.length}`;
+    }
+    parts.push(']}');
+    download(new Blob(parts,{type:'application/json'}),'echomap-drf.json');
+  } catch (error) {
+    if (generation===state.generation && error.message!=='Cancelled') notice(`JSON export failed: ${error.message}`);
+  } finally {
+    if (worker) {
+      const index=state.workers.indexOf(worker);
+      if (index!==-1) { worker.stop(); state.workers.splice(index,1); }
+    }
+    if (state.jsonExportWorker===worker) {
+      state.jsonExportWorker=null;
+      button.textContent='Download JSON';
+      renderExportControls();
+    }
+  }
 };
 $('exportSourceSelect').onchange = renderExportControls;
 $('exportCsv').onclick = () => {

@@ -127,6 +127,32 @@ test('job finishes without any browser/event consumer; late reconnect recovers i
   assert.match(first, new RegExp(`id: ${state.seq}`)); assert.match(first, /event: notice/); abort.abort();
 });
 
+test('comparison jobs validate camera bounds and archive the requested field on the original lattice', async t => {
+  const { base } = await ready(t), viewBounds = [-6, 12, -3, 6];
+  for (const invalid of [null, [0, 1, 0], [1, 0, 0, 1], [0, 1, 0, '1'], [1e300, 1.1e300, 0, 1]]) {
+    assert.equal((await post(base, '/api/jobs', { input, viewBounds: invalid })).status, 400);
+  }
+  assert.equal((await post(base, '/api/jobs', { input, viewBounds: [-1500, 1500, -1500, 1500] })).status, 413);
+  assert.deepEqual((await (await fetch(base + '/api/jobs')).json()).jobs, []);
+  const response = await post(base, '/api/jobs', { input, viewBounds });
+  assert.equal(response.status, 201);
+  const job = await response.json(), state = await waitFor(base, job, value => value.status === 'done');
+  assert.deepEqual(state.viewBounds, viewBounds);
+  assert.equal(Object.hasOwn(state.input, 'viewBounds'), false);
+  const messages = await readMessages(base, job, state.seq);
+  const prepared = messages.find(message => message.type === 'prepared');
+  assert.deepEqual(prepared.viewBounds, viewBounds);
+  assert.deepEqual(prepared.grid.domain, [0, 60, 0, 30]);
+  const frames = messages.filter(message => message.type === 'frame');
+  assert.equal(frames.length, input.snapshots);
+  for (const { frame } of frames) {
+    assert.deepEqual(frame.grid.domain, viewBounds);
+    assert.deepEqual([frame.grid.nx, frame.grid.ny, frame.grid.dx, frame.grid.dy], [30, 30, .6, .3]);
+    assert.equal(frame.Dbar.length, 900);
+    assert.equal(frame.betaHat.length, 900);
+  }
+});
+
 test('single-step, one active job, explicit cancellation and next job are independent of connection lifetime', async t => {
   const { base } = await ready(t), job = await (await post(base, '/api/jobs', { input, single: true })).json();
   await waitFor(base, job, state => state.status === 'paused' && state.next === 1);

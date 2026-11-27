@@ -108,12 +108,14 @@ test('detach during creation keeps the job, while explicit terminate cancels a l
 
 test('refresh detaches a result stream without cancellation and resumes from persisted ordered history', async t => {
   const f = fixture(t); f.packets.set(1, encodePacket({ type: 'status', mode: 'paused', next: 0, total: 2 }));
-  const first = f.worker(); first.worker.postMessage({ type: 'start', requestId: 1, input: {} }); await flush(); first.worker.detach();
+  const viewBounds = [-20, 125, -30, 35], input = { seed: 42 };
+  const first = f.worker(); first.worker.postMessage({ type: 'start', requestId: 1, input, viewBounds }); await flush(); first.worker.detach();
   assert.equal(f.commands().length, 0); assert.equal(f.storage.get(savedKey), f.job.id);
   f.job.seq = 1;
   const config = await connectComputeServer(); assert.equal(config.job.id, f.job.id);
-  const resumed = f.worker({ resumeId: config.job.id }); resumed.worker.postMessage({ type: 'start', requestId: 8 }); await flush();
-  assert.equal(f.calls.filter(call => call.url === '/api/jobs' && call.options.method === 'POST').length, 1);
+  const resumed = f.worker({ resumeId: config.job.id }); resumed.worker.postMessage({ type: 'start', requestId: 8, viewBounds: [0, 10, 0, 10] }); await flush();
+  const creations = f.calls.filter(call => call.url === '/api/jobs' && call.options.method === 'POST');
+  assert.deepEqual(creations.map(call => call.body), [{ input, single: false, viewBounds }]);
   assert.equal(resumed.messages.find(message => message.type === 'status').mode, 'paused');
   assert.deepEqual(resumed.errors, []); assert.equal(f.commands().length, 0);
 });

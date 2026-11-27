@@ -179,7 +179,8 @@ export function createServerRunWorker(_config, { resumeId, mode = 'comparison', 
   }
   async function begin(message) {
     job = resumeId ? await json(`/api/jobs/${encodeURIComponent(resumeId)}`)
-      : await json('/api/jobs', mode === 'sweep' ? { mode, jobs } : { input: message.input, single: !!message.single });
+      : await json('/api/jobs', mode === 'sweep' ? { mode, jobs }
+        : { input: message.input, single: !!message.single, viewBounds: message.viewBounds });
     // Retain the ID until an explicit cancellation is acknowledged, including
     // when creation finishes after the page has detached or requested cancel.
     remember(job.id);

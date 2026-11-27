@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import { activeRightMethods } from '../drf/right-methods.mjs';
 import { experimentSettings as normalizeInput } from '../drf/experiment-settings.mjs';
+import { viewGridLayout } from '../drf/display-field.mjs';
+import { createGrid } from '../drf/field.mjs';
+import { candidateDomain } from '../drf/paper-preset.mjs';
+import { LAYERED_DOMAIN } from '../drf/scenario.mjs';
 /** Loopback-only computation service. Workers own jobs independently of clients.
  * SSE carries small availability notices; lossless binary packets are spooled to
  * disk once and fetched separately. Slow/disconnected viewers never pace CPU work.
@@ -38,11 +42,22 @@ async function requestJson(request) {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw fail(400, 'Invalid JSON request'); }
 }
 
-function normalizeRequest(raw) {
+function normalizeRequest(raw, maxJobBytes) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw fail(400, 'Expected an object');
   const mode = raw.mode ?? 'comparison';
   const check = input => { const normalized = normalizeInput(input); if (!(normalized.sigmaD > 0)) throw fail(400, 'Range SD must be positive'); return normalized; };
-  if (mode === 'comparison') return { mode, input: check(raw.input), single: raw.single === true };
+  if (mode === 'comparison') {
+    const input = check(raw.input), single = raw.single === true, viewBounds = raw.viewBounds;
+    if (viewBounds !== undefined) {
+      const domain = input.scene === 'layered' ? LAYERED_DOMAIN : candidateDomain(input.scene);
+      const base = createGrid(input.grid, input.grid, domain);
+      const { nx, ny } = viewGridLayout(base, viewBounds);
+      // Each stored snapshot contains at least the two Float32 heatmaps.
+      const rasterBytes = nx * ny * 2 * Float32Array.BYTES_PER_ELEMENT * (single ? 1 : input.snapshots);
+      if (rasterBytes > maxJobBytes) throw fail(413, 'Display fields exceed the job storage budget');
+    }
+    return { mode, input, single, viewBounds };
+  }
   if (mode !== 'sweep' || !Array.isArray(raw.jobs) || !raw.jobs.length || raw.jobs.length > 1000)
     throw fail(400, 'A sweep requires 1–1,000 jobs');
   const jobs = raw.jobs.map(check), signatures = jobs.map(value => JSON.stringify(value));
@@ -76,7 +91,7 @@ export async function createSimulationServer({ root = defaultRoot, cacheDirector
   await writeFile(join(storage, 'session.json'), JSON.stringify({ schema: 'echomap-local-cache/1', pid: process.pid, createdAt: Date.now() }));
   let stopping = false, starting = false;
   const view = job => ({ id: job.id, mode: job.mode, status: job.status, next: job.next, total: job.total,
-    input: job.request.input, jobs: job.request.jobs, seq: job.publishedSeq, createdAt: job.createdAt,
+    input: job.request.input, jobs: job.request.jobs, viewBounds: job.request.viewBounds, seq: job.publishedSeq, createdAt: job.createdAt,
     completedAt: job.completedAt, bytes: job.bytes, error: job.error,
     eventsUrl: `/api/jobs/${job.id}/events`, statusUrl: `/api/jobs/${job.id}`, messagesUrl: `/api/jobs/${job.id}/messages` });
   async function flushClient(job, client) {
@@ -167,7 +182,7 @@ export async function createSimulationServer({ root = defaultRoot, cacheDirector
           job.terminalRequested = true; stopWorkers(job);
         }
       });
-      worker.postMessage({ type: 'start', requestId: id, input: request.input, single: request.single });
+      worker.postMessage({ type: 'start', requestId: id, input: request.input, single: request.single, viewBounds: request.viewBounds });
     } else {
       let cursor = 0, completed = 0;
       append(job, { type: 'status', mode: 'running', next: 0, total: request.jobs.length });
@@ -224,7 +239,7 @@ export async function createSimulationServer({ root = defaultRoot, cacheDirector
         if (request.method === 'GET') { await cleanup(); return json(response, 200, { jobs: [...jobs.values()].map(view).reverse() }); }
         if (request.method === 'POST') {
           const raw = await requestJson(request); let normalized;
-          try { normalized = normalizeRequest(raw); } catch (error) { throw fail(error.status ?? 400, error.message); }
+          try { normalized = normalizeRequest(raw, maxJobBytes); } catch (error) { throw fail(error.status ?? 400, error.message); }
           return json(response, 201, view(await startJob(normalized)));
         }
       }

@@ -1,7 +1,7 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261119-cnn-stride4';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid } from './field.mjs?v=20261119-cnn-stride4';
-import { createDisplayField } from './display-field.mjs?v=20261127-field-tiles';
+import { createDisplayField } from './display-field.mjs?v=20261128-viewport-field';
 import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261127-cnn-display';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 
@@ -123,7 +123,8 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       scenario.input=input;run.scenario=scenario;
       const grid=createGrid(input.grid,input.grid,scenario.domain);
       await Promise.all([...sides,'field'].map(async side=>{
-        const client=side==='field' ? createFieldClient(grid,{band:input.band,perimeter:input.perimeter})
+        const client=side==='field' ? createFieldClient(grid,{band:input.band,perimeter:input.perimeter,
+          ...(message.viewBounds ? {viewBounds:message.viewBounds} : {})})
           : createMethod(side,input,scenario.domain);
         const lane=run.lanes[side]={client,pending:new Map(),next:0,limit:message.single?1:input.snapshots};
         await client.ready;
@@ -131,7 +132,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       }));
       if(!current(run))return;
       run.ready=true;
-      send(run,'prepared',{scenario,grid,protocol:echoProtocol(input)});
+      send(run,'prepared',{scenario,grid,protocol:echoProtocol(input),...(message.viewBounds ? {viewBounds:message.viewBounds} : {})});
       await pump(run);
     }catch(error){fail(run,error);}
   }

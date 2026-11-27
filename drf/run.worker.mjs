@@ -1,6 +1,6 @@
 import { workerDisplayField, workerMethod } from './method-client.mjs?v=20261127-independent-field';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { createRunEngine } from './run-engine.mjs?v=20261127-cnn-display';
+import { createRunEngine } from './run-engine.mjs?v=20261128-viewport-field';
 import { warmTruthCache } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 import { truthCacheKey } from './truth-cache.mjs';
@@ -14,7 +14,7 @@ let warming, pendingStart;
 const engine = createRunEngine({ prepare:preparePublicScenario,
   createFieldClient(grid,numerical){
     const worker=globalThis.__echoFieldUrl?new Worker(globalThis.__echoFieldUrl):
-      new Worker(new URL('./field.worker.mjs?v=20261127-field-tiles',import.meta.url),{type:'module'});
+      new Worker(new URL('./field.worker.mjs?v=20261128-viewport-field',import.meta.url),{type:'module'});
     return workerDisplayField(worker,grid,numerical);
   },
   createMethod(side,input,domain){
@@ -39,7 +39,7 @@ globalThis.onmessage = async ({ data }) => {
       if (warming === pending) globalThis.postMessage({ type: 'truth-warmed', hit });
       return;
     }
-    const allowed = data.type === 'start' ? ['type', 'requestId', 'input', 'single'] : ['type', 'requestId'];
+    const allowed = data.type === 'start' ? ['type', 'requestId', 'input', 'single', 'viewBounds'] : ['type', 'requestId'];
     if (Object.keys(data).some(key => !allowed.includes(key))) throw new Error('Unexpected run command input');
     if (data.type === 'cancel' && pendingStart?.requestId === data.requestId) {
       pendingStart = null;

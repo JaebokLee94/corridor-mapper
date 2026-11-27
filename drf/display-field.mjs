@@ -42,14 +42,45 @@ function growMargin(current, cells, baseSize) {
   return block * Math.ceil(cells / block);
 }
 
-function paddedGrid(base, [left, right, bottom, top]) {
+function paddedGrid(base, [left, right, bottom, top], domain) {
   const {dx, dy} = base, nx = base.nx + left + right, ny = base.ny + bottom + top;
-  const xmin = base.xmin - left * dx, xmax = base.xmax + right * dx;
-  const ymin = base.ymin - bottom * dy, ymax = base.ymax + top * dy;
+  const [xmin, xmax, ymin, ymax] = domain ?? [
+    base.xmin - left * dx, base.xmax + right * dx, base.ymin - bottom * dy, base.ymax + top * dy,
+  ];
   // Address every centre from the original origin, including after repeated extensions.
   return {nx, ny, xmin, xmax, ymin, ymax, domain: [xmin, xmax, ymin, ymax], dx, dy,
     x: Float64Array.from({length: nx}, (_, ix) => base.xmin + (ix - left + 0.5) * dx),
     y: Float64Array.from({length: ny}, (_, iy) => base.ymin + (iy - bottom + 0.5) * dy)};
+}
+
+// Include the entire camera rectangle, rounding outwards to original cell edges.
+// Compare world coordinates at the nearest edge to avoid adding a cell when
+// division alone rounds a representable boundary to e.g. 7.000000000000001.
+export function viewGridLayout(base, bounds) {
+  if (!(Array.isArray(bounds) || ArrayBuffer.isView(bounds)) || bounds.length !== 4 ||
+      !Array.from(bounds).every(Number.isFinite) || !(bounds[0] < bounds[1] && bounds[2] < bounds[3]))
+    throw new RangeError('viewBounds require four finite increasing bounds [xmin,xmax,ymin,ymax]');
+  function axis(lo, hi, origin, end, n, spacing) {
+    const edge = k => k === n ? end : origin + k * spacing;
+    let first = Math.round((lo - origin) / spacing), last = Math.round((hi - origin) / spacing);
+    if (edge(first) > lo) first--;
+    if (edge(last) < hi) last++;
+    if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) || first >= last ||
+        edge(first) > lo || edge(last) < hi)
+      throw new RangeError('viewBounds cannot be represented on the base cell lattice');
+    return [first, last, edge(first), edge(last)];
+  }
+  const [x0, x1, xmin, xmax] = axis(bounds[0], bounds[1], base.xmin, base.xmax, base.nx, base.dx);
+  const [y0, y1, ymin, ymax] = axis(bounds[2], bounds[3], base.ymin, base.ymax, base.ny, base.dy);
+  const nx = x1-x0, ny = y1-y0;
+  if (nx * ny > 0xffffffff) throw new RangeError('viewBounds exceed the field array dimensions');
+  return {nx, ny, x0, y0, domain:[xmin, xmax, ymin, ymax]};
+}
+
+function viewGrid(base, bounds) {
+  const {nx, ny, x0, y0, domain} = viewGridLayout(base, bounds);
+  if (x0 === 0 && nx === base.nx && y0 === 0 && ny === base.ny) return base;
+  return paddedGrid(base, [-x0, x0+nx-base.nx, -y0, y0+ny-base.ny], domain);
 }
 
 // 64K cells fit all ten vehicles' three Float64 focal coordinates in createField's 16 MiB cache.
@@ -61,11 +92,13 @@ function appendTiles(tiles, grid, old, margins, base, replay) {
   const x0 = -left, x1 = base.nx + right, y0 = -bottom, y1 = base.ny + top;
   function add(x, endX, y, endY) {
     if (endX === x || endY === y) return;
-    const xs = grid.x.subarray(x - x0, endX - x0);
-    const rows = Math.max(1, Math.floor(MAX_TILE_CELLS / xs.length));
-    for (let row = y; row < endY; row += rows) {
-      const ys = grid.y.subarray(row - y0, Math.min(row + rows, endY) - y0);
-      tiles.push({x, y:row, field:replay({nx:xs.length, ny:ys.length, x:xs, y:ys})});
+    for (let col = x; col < endX; col += MAX_TILE_CELLS) {
+      const xs = grid.x.subarray(col - x0, Math.min(col + MAX_TILE_CELLS, endX) - x0);
+      const rows = Math.floor(MAX_TILE_CELLS / xs.length);
+      for (let row = y; row < endY; row += rows) {
+        const ys = grid.y.subarray(row - y0, Math.min(row + rows, endY) - y0);
+        tiles.push({x:col, y:row, field:replay({nx:xs.length, ny:ys.length, x:xs, y:ys})});
+      }
     }
   }
   if (!old) { add(x0, x1, y0, y1); return; }
@@ -81,9 +114,19 @@ function appendTiles(tiles, grid, old, margins, base, replay) {
  * Grown cells need past D and A, including denominator contributions far from any return.
  * Backfill only the new strips. Old cells receive each measurement exactly once. Storage
  * is O(G + measured prefix), including the O(G) contiguous frame used by display/export.
+ * With numerical.viewBounds, G is fixed at the displayed cell rectangle and epsilonA
+ * uses the maximum cumulative A on that rectangle. No new regions require backfill.
  */
 export function createDisplayField(baseGrid, numerical = {}) {
   const band = numerical.band ?? 4;
+  const fixed = numerical.viewBounds !== undefined;
+  if (fixed) {
+    baseGrid = viewGrid(baseGrid, numerical.viewBounds);
+    if (baseGrid.nx * baseGrid.ny <= MAX_TILE_CELLS) {
+      const field = createField(baseGrid, numerical);
+      return {grid:baseGrid, step(snapshot) { return {...field.step(snapshot), grid:baseGrid}; }};
+    }
+  }
   const history = [];
   function replay(coords) {
     const field = createField(coords, numerical);
@@ -92,22 +135,23 @@ export function createDisplayField(baseGrid, numerical = {}) {
   }
   let grid = baseGrid, margins = [0, 0, 0, 0], tiles = [];
   appendTiles(tiles, grid, null, margins, baseGrid, replay);
-  return {step(snapshot) {
+  return {get grid() { return grid; }, step(snapshot) {
     const started = performance.now(), wire = makeWire(snapshot);
     if (wire.t !== history.length + 1) throw new RangeError('Display snapshots must follow causal t=1,2,... order');
-    const [xmin, xmax, ymin, ymax] = measuredBounds(wire, band, baseGrid.domain);
-    const nextMargins = [
-      growMargin(margins[0], (baseGrid.xmin - xmin) / baseGrid.dx, baseGrid.nx),
-      growMargin(margins[1], (xmax - baseGrid.xmax) / baseGrid.dx, baseGrid.nx),
-      growMargin(margins[2], (baseGrid.ymin - ymin) / baseGrid.dy, baseGrid.ny),
-      growMargin(margins[3], (ymax - baseGrid.ymax) / baseGrid.dy, baseGrid.ny),
-    ];
-    let nextGrid = grid, nextTiles = tiles;
-    const grew = nextMargins.some((n, i) => n !== margins[i]);
-    if (grew) {
-      nextGrid = paddedGrid(baseGrid, nextMargins);
-      nextTiles = history.length ? tiles.slice() : [];
-      appendTiles(nextTiles, nextGrid, history.length ? margins : null, nextMargins, baseGrid, replay);
+    let nextGrid = grid, nextTiles = tiles, nextMargins = margins;
+    if (!fixed) {
+      const [xmin, xmax, ymin, ymax] = measuredBounds(wire, band, baseGrid.domain);
+      nextMargins = [
+        growMargin(margins[0], (baseGrid.xmin - xmin) / baseGrid.dx, baseGrid.nx),
+        growMargin(margins[1], (xmax - baseGrid.xmax) / baseGrid.dx, baseGrid.nx),
+        growMargin(margins[2], (baseGrid.ymin - ymin) / baseGrid.dy, baseGrid.ny),
+        growMargin(margins[3], (ymax - baseGrid.ymax) / baseGrid.dy, baseGrid.ny),
+      ];
+      if (nextMargins.some((n, i) => n !== margins[i])) {
+        nextGrid = paddedGrid(baseGrid, nextMargins);
+        nextTiles = history.length ? tiles.slice() : [];
+        appendTiles(nextTiles, nextGrid, history.length ? margins : null, nextMargins, baseGrid, replay);
+      }
     }
     let frames;
     try {
