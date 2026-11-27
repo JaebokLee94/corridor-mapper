@@ -75,7 +75,7 @@
           <label class="field"><span>Support reach <small>m</small></span><input name="echoSupportM" type="number" value="8" min="1" max="12" step="0.5" required title="Maximum horizontal distance from an estimated reflection point for drawing the fitted wall" /></label>
         </div></details>
         <details class="sidebar-section numerics-settings"><summary>Display-field numerics</summary><p class="note numerics-note">WM-P: <span data-tex="100\times100">100 × 100</span> grid,<br /><span data-tex="4\sigma">4σ</span> band, exact perimeter.</p><div class="prop-grid">
-          <label class="field"><span>Display grid</span><select name="grid"><option value="100">100 per axis</option><option value="150" selected>150 per axis</option><option value="200">200 per axis</option></select></label>
+          <label class="field"><span>Base display grid</span><select name="grid"><option value="100">100 per axis</option><option value="150" selected>150 per axis</option><option value="200">200 per axis</option></select></label>
           <label class="field"><span>Residual band <span data-tex="\sigma">σ</span></span><select name="band"><option value="3">3 SD</option><option value="4" selected>4 SD</option><option value="5">5 SD</option><option value="full">Full grid</option></select></label>
           <label class="field span-2"><span>Ellipse perimeter</span><select name="perimeter"><option value="exact">Exact integration</option><option value="ramanujan">Ramanujan approximation</option></select></label>
         </div></details>
@@ -196,8 +196,8 @@
   <noscript><p class="noscript">Enable JavaScript to run the experiment. The source code is available from the Source link.</p></noscript>
   <script>
     const runtime=document.createElement('script');
-    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261119-cnn-stride4';
-    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261119-cnn-stride4';}
+    if(location.protocol==='file:') runtime.src='drf/offline.bundle.js?v=20261127-field-extent';
+    else {runtime.type='module';runtime.src='drf/app.mjs?v=20261127-field-extent';}
     runtime.onerror=()=>{const status=document.getElementById('status');status.textContent='Could not load the application. Reload the page or check the local files.';status.title=status.textContent;};
     document.body.append(runtime);
   </script>

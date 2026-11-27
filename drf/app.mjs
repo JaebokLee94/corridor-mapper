@@ -14,7 +14,7 @@ import { echoProtocol } from './echo-comparison.mjs?v=20261119-cnn-stride4';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261119-cnn-stride4';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261119-cnn-stride4';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261127-field-extent';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261119-cnn-stride4';
@@ -123,7 +123,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261119-cnn-stride4';
+  const revision = '20261127-field-extent';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -471,13 +471,17 @@ async function hashField(frame) {
 const inspect = (point, t) => {
   clearTimeout(hoverTimer); const generation = ++hoverGeneration;
   const frame = state.frames[t - 1] ?? state.methodFrames?.echoSpline[t - 1]?.field;
-  if (!frame || point.index < 0 || !hoverWorker) { $('inspector').textContent = ''; return; }
-  const grid = state.grid, ix = point.index % grid.nx, iy = Math.floor(point.index / grid.nx), x = grid.x[ix], y = grid.y[iy];
+  const grid = frame?.grid ?? point.grid;
+  if (!frame || !grid || !hoverWorker) { $('inspector').textContent = ''; return; }
+  const [xmin,xmax,ymin,ymax] = grid.domain ?? [grid.xmin,grid.xmax,grid.ymin,grid.ymax];
+  const ix = Math.floor((point.x-xmin)/((xmax-xmin)/grid.nx)), iy = Math.floor((point.y-ymin)/((ymax-ymin)/grid.ny));
+  if (ix<0 || ix>=grid.nx || iy<0 || iy>=grid.ny) { $('inspector').textContent = ''; return; }
+  const x = grid.x[ix], y = grid.y[iy];
   hoverTimer = setTimeout(async () => {
     if (generation !== hoverGeneration || !hoverWorker) return;
     try {
       const value = await hoverWorker.request({ type: 'prefixInspect', grid, numerical: { band: state.scenario.input.band, perimeter: state.scenario.input.perimeter },
-        snapshots: state.scenario.wire.slice(0, frame.t), index: point.index, epsilonA: frame.epsilonA });
+        snapshots: state.scenario.wire.slice(0, frame.t), index: iy*grid.nx+ix, epsilonA: frame.epsilonA });
       if (generation !== hoverGeneration) return;
       let wallDistance = '';
       if ($('showTruth').checked) {
@@ -968,8 +972,11 @@ $('loadSavedSweep').onclick = () => {
 };
 const jsonValue = (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : typeof value === 'number' && !Number.isFinite(value) ? null : value;
 $('exportJson').onclick = () => {
-  const data = { schema: state.protocol?.echoSpline || state.sweepRuns.some(r=>r.protocol?.echoSpline) ? 'echomap-drf/6' : 'echomap-drf/5', estimators: state.protocol, selectedMethod: state.method, displayInterpolation: $('showInterpolation')?.checked ? $('interpolationKind').value : 'off', toleranceM: 0.4, measurementBackend:state.scenario?.measurementBackend, measurementPreparationMs:state.scenario?.simulatorMs, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
+  const hasFrameGrid = state.frames.some(frame=>frame.grid);
+  const schema = hasFrameGrid ? 'echomap-drf/7' : state.protocol?.echoSpline || state.sweepRuns.some(r=>r.protocol?.echoSpline) ? 'echomap-drf/6' : 'echomap-drf/5';
+  const data = { schema, estimators: state.protocol, selectedMethod: state.method, displayInterpolation: $('showInterpolation')?.checked ? $('interpolationKind').value : 'off', toleranceM: 0.4, measurementBackend:state.scenario?.measurementBackend, measurementPreparationMs:state.scenario?.simulatorMs, provenance, units: { position: 'm', range: 'm', poseCovariance: 'm²', roughnessInput: 'deg', truthAngles: 'rad', D: '1/m²', A: '1/m²', Dbar: '1/m²', betaHat: 'dimensionless', time: 'snapshot index; physical dt unspecified' },
     grid: state.grid ? { ...state.grid, arrayOrder: 'iy*nx+ix; ascending y; cell centers' } : null,
+    ...(hasFrameGrid ? { fieldGrid: 'Use each result frame’s grid for Dbar and betaHat (iy*nx+ix, ascending y, cell centers).' } : {}),
     input: state.scenario?.input ?? state.sweepRuns[0]?.input, measurement: state.scenario?.wire.slice(0, state.frames.length) ?? [], result: state.frames,
     evaluation: state.evaluations, truth: { role: 'evaluation only', wallModel: state.scenario?.wallModel, wallGeneration: state.scenario?.wallGeneration, walls: state.scenario?.walls ?? [], snapshots: state.scenario?.truth.slice(0, state.frames.length) ?? [] },
     sweep: { completeSeedResults: state.sweepRuns.map(({ final, ...run }) => run), aggregates: aggregateRuns(state.sweepRuns) } };

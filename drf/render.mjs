@@ -71,10 +71,12 @@ function fieldPalette(field='Dbar') {
   const colors=dark ? [channels ?? darkPalettes[key][0],...darkPalettes[key].slice(1)] : palettes[key];
   return {key:`${dark ? 'dark' : 'light'}:${key}:${colors[0].join(',')}`,colors};
 }
-const colorAt = (t, palette) => {
+function writeHeatPixel(pixels, offset, t, palette, alpha) {
   const p = Math.max(0,Math.min(1,t)) * (palette.length-1), i = Math.min(palette.length-2,Math.floor(p));
-  return palette[i].map((v,k) => Math.round(v+(palette[i+1][k]-v)*(p-i)));
-};
+  const low = palette[i], high = palette[i+1], fraction = p-i;
+  for (let k=0;k<3;k++) pixels[offset+k] = Math.round(low[k]+(high[k]-low[k])*fraction);
+  pixels[offset+3] = alpha;
+}
 const rgb = (c) => `rgb(${c.join(",")})`;
 const numberLabel = (x) => !Number.isFinite(x) ? "—" : x !== 0 && (Math.abs(x) < .001 || Math.abs(x) >= 1e4) ? x.toExponential(1) : Number(x.toPrecision(3)).toString();
 
@@ -120,11 +122,8 @@ export class DrfMap {
         this.camera.cy += (e.clientY-this.pointer[1])/this.camera.scaleY;
         this.pointer = [e.clientX,e.clientY]; this.auto = false; this.draw(); this.onCameraChange?.();
       }
-      const [x,y] = mapToWorld([e.offsetX,e.offsetY],this.camera,this.box), g=this.state.grid;
-      if (!g) return;
-      const d=g.domain ?? [g.xmin,g.xmax,g.ymin,g.ymax], dx=(d[1]-d[0])/g.nx, dy=(d[3]-d[2])/g.ny;
-      const ix=Math.floor((x-d[0])/dx), iy=Math.floor((y-d[2])/dy);
-      this.onInspect?.({ x,y,index:ix>=0 && ix<g.nx && iy>=0 && iy<g.ny ? iy*g.nx+ix : -1 }, this.state.frame?.t);
+      const [x,y] = mapToWorld([e.offsetX,e.offsetY],this.camera,this.box);
+      this.onInspect?.({x,y,grid:this.state.grid},this.state.frame?.t);
     });
     for (const name of ["pointerup","pointercancel","lostpointercapture"]) canvas.addEventListener(name,() => { this.pointer=null; });
   }
@@ -140,7 +139,7 @@ export class DrfMap {
   buildHeat(palette=fieldPalette(this.state.heatField)) {
     this.paletteKey=palette.key;this.heatPalette=palette.colors;
     if(this.state.mode==='geometry')return;
-    const {grid:g,frame,heatField="Dbar",scaleMode="linear"}=this.state;
+    const {frame,heatField="Dbar",scaleMode="linear"}=this.state, g=frame?.grid ?? this.state.grid;
     if (!g) {this.heat.width=1;this.heat.height=1;this.maxValue=0;return;}
     this.heat.width=g.nx; this.heat.height=g.ny;
     const values=frame?.[heatField], ctx=this.heat.getContext("2d"), data=ctx.createImageData(g.nx,g.ny);
@@ -151,7 +150,7 @@ export class DrfMap {
     for (let iy=0;iy<g.ny;iy++) for (let ix=0;ix<g.nx;ix++) {
       const value=Math.max(0,values?.[iy*g.nx+ix] ?? 0), t=denominator>0 ? (scaleMode === "log" ? Math.log1p(value) : value)/denominator : 0;
       const at=4*((g.ny-1-iy)*g.nx+ix);
-      data.data.set([...colorAt(t,this.heatPalette),values && Number.isFinite(value) && value>0 ? 255 : 0],at);
+      writeHeatPixel(data.data,at,t,this.heatPalette,values && Number.isFinite(value) && value>0 ? 255 : 0);
     }
     ctx.putImageData(data,0,0);
   }
@@ -218,7 +217,8 @@ export class DrfMap {
     }
     ctx.save();ctx.beginPath();ctx.rect(box.x,box.y,box.w,box.h);ctx.clip();
     if (g && this.state.frame && !geometry) {
-      const p=screen([domain[0],domain[3]]),q=screen([domain[1],domain[2]]);
+      const [xmin,xmax,ymin,ymax]=this.state.frame.grid?.domain ?? domain;
+      const p=screen([xmin,ymax]),q=screen([xmax,ymin]);
       ctx.imageSmoothingEnabled=false; ctx.drawImage(this.heat,p[0],p[1],q[0]-p[0],q[1]-p[1]);
     }
     drawGrid(ctx,box,xs.map(x=>screen([x,0])[0]),ys.map(y=>screen([0,y])[1]),token('grid'));

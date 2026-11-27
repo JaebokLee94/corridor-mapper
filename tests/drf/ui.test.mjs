@@ -70,6 +70,7 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
       if (key==='arc') dots.push(args);
       if (key==='fillText') {assert.ok(parseFloat(target.font.match(/(\d+)px/)[1])>=14,args[0]);labels.push(args[0]);if (/^V\d+$/.test(args[0])) labelPositions.push(args);}
       if (key==='drawImage' && args[0]?.src?.startsWith('data:image/svg+xml')) mathImages.push(args);
+      if (key==='drawImage' && args[0]?.getContext) snapshots.raster=args;
       if (key==='strokeRect') rectangles.push(args);
     };}});
   };
@@ -179,6 +180,37 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
       bottom.set({...bottom.state,layers:{showTruth:true}});bottom.paint(bottomCanvas,2);
       assert.equal(bottomCanvas.dataset.view,manualView,`${heatField}: showing truth preserves the manual camera`);
       assert.deepEqual(bottom.defaultScale,visibleFloor);
+
+      const grid={nx:4,ny:2,domain:[-45,140,-47,50]};
+      const expandedFrame={...frame,t:2,grid,Dbar:new Float32Array(8).fill(1),betaHat:new Float32Array(8).fill(.5)};
+      bottom.fit();bottom.paint(bottomCanvas,1);
+      const fitted=bottomCanvas.dataset.view,defaultCamera=bottom.camera;
+      bottom.set({...bottom.state,frame:expandedFrame});bottom.paint(bottomCanvas,1);
+      assert.equal(bottomCanvas.dataset.view,fitted,heatField+' expanding the field preserves the original view');
+      assert.equal(bottom.camera,defaultCamera,heatField+' frame changes do not reset the automatic camera');
+      const [raster,x,y,w,h]=snapshots.raster;
+      assert.equal(raster,bottom.heat);assert.equal(raster.width,4);assert.equal(raster.height,2);
+      const nearPoint=(a,b)=>a.forEach((v,i)=>assert.ok(Math.abs(v-b[i])<1e-10));
+      nearPoint(mapToWorld([x,y],bottom.camera,bottom.box),[-45,50]);
+      nearPoint(mapToWorld([x+w,y+h],bottom.camera,bottom.box),[140,-47]);
+      let hover;
+      bottom.onInspect=(point,t)=>{hover={point,t};};
+      const [px,py]=mapToScreen([-5,20],bottom.camera,bottom.box);
+      bottomCanvas.listeners.pointermove({offsetX:px,offsetY:py});
+      nearPoint([hover.point.x,hover.point.y],[-5,20]);
+      assert.equal(hover.point.grid,bottom.state.grid);assert.equal(hover.t,2);
+
+      bottom.zoom(1.3,[px,py]);bottom.paint(bottomCanvas,1);
+      const manual=bottomCanvas.dataset.view;
+      bottom.set({...bottom.state,frame});bottom.paint(bottomCanvas,1);
+      assert.equal(bottomCanvas.dataset.view,manual,heatField+' preserves manual zoom during replay');
+      bottom.set({...bottom.state,frame:expandedFrame});bottom.paint(bottomCanvas,1);
+      assert.equal(bottomCanvas.dataset.view,manual);
+      bottom.fit();bottom.paint(bottomCanvas,1);assert.equal(bottomCanvas.dataset.view,fitted);
+      bottom.fit(true);bottom.paint(bottomCanvas,1);
+      const full=bottomCanvas.dataset.view;
+      bottom.set({...bottom.state,frame});bottom.paint(bottomCanvas,1);
+      assert.equal(bottomCanvas.dataset.view,full,heatField+' full-domain reset uses only the original scene grid');
     }
     const beforeExit=map.state,exitWire={t:80,configs:[{i:1,j:2,pHat_i:[120,15],pHat_j:[150,16]}]};
     for (const [name,mode,heatField] of [['RAW','geometry','Dbar'],['density',undefined,'Dbar'],['contrast',undefined,'betaHat']]) {

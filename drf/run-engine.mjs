@@ -1,6 +1,7 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261119-cnn-stride4';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
-import { createGrid, createField } from './field.mjs?v=20261119-cnn-stride4';
+import { createGrid } from './field.mjs?v=20261119-cnn-stride4';
+import { createDisplayField } from './display-field.mjs';
 import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261119-cnn-stride4';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 
@@ -101,7 +102,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       if(!current(run))return;
       scenario.input=input;run.scenario=scenario;
       const grid=createGrid(input.grid,input.grid,scenario.domain);
-      run.field=createField(grid,{band:input.band,perimeter:input.perimeter});
+      run.field=createDisplayField(grid,{band:input.band,perimeter:input.perimeter});
       for(const side of sides)run.lanes[side]={client:createMethod(side,input,scenario.domain),
         evaluator:createPSPTEvaluator(scenario,grid),pending:new Map(),next:0,limit:message.single?1:input.snapshots};
       await Promise.all(sides.map(side=>run.lanes[side].client.ready));

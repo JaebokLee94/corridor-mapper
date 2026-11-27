@@ -13,6 +13,11 @@ import { createPSPTEvaluator } from '../../drf/pspt-evaluate.mjs';
 
 const input = { scene: 'reference', vehicles: 3, snapshots: 3, grid: 100,
   roughness: 2, cellStep: .2, seed: 42, sigmaP: .1, sigmaD: .1 };
+function referenceDisplayFrame(scene, grid, t) {
+  const field = createField(grid, { band: scene.input.band, perimeter: scene.input.perimeter });
+  for (const wire of scene.wire.slice(0, t - 1)) field.step(wire);
+  return { ...field.step(scene.wire[t - 1]), grid };
+}
 const numerical = value => {
   if (ArrayBuffer.isView(value)) return Array.from(value);
   if (Array.isArray(value)) return value.map(numerical);
@@ -53,15 +58,15 @@ test('autonomous engine matches the existing foreground kernels for every measur
   const scene = await generateScenario(input), grid = createGrid(100, 100, scene.domain);
   assert.deepEqual(numerical(prepared.scenario), numerical(scene)); assert.deepEqual(prepared.grid, grid);
   assert.deepEqual(prepared.protocol, echoProtocol(input));
-  const field = createField(grid, { band: scene.input.band, perimeter: scene.input.perimeter });
   const estimator = new EchoComparison(scene.input,scene.domain);
   const guardedEvaluator = createPSPTEvaluator(scene, grid), baselineEvaluator = createPSPTEvaluator(scene, grid);
   assert.equal(frames.length, input.snapshots);
   for (let i = 0; i < frames.length; i++) {
-    const wire = scene.wire[i], frame = field.step(wire), methods = estimator.step(wire);
+    const frame = referenceDisplayFrame(scene, frames[i].frame.grid, i + 1), methods = estimator.step(scene.wire[i]);
+    assert.ok(frame.grid.xmin < grid.xmin, 'the measured left ellipse tips extend past the reference wall');
     Object.assign(frame, { methods, candidates: methods.guarded.candidates, psptMs: methods.guarded.ms, method: 'guarded-tuned' });
     const guarded = guardedEvaluator.step(frame,null,methods.guarded.bridges,methods.guarded.extendedBridges), echoSpline = baselineEvaluator.step({...frame,...methods.echoSpline},guarded);
-    assert.deepEqual(numerical(frames[i].frame), numerical(frame), `unchanged numerical frame at t=${i + 1}`);
+    assert.deepEqual(numerical(frames[i].frame), numerical(frame), `field and estimator outputs at t=${i + 1}`);
     assert.deepEqual(numerical(frames[i].evaluation), numerical({ ...guarded, methods: { echoSpline, guarded } }));
     assert.equal(frames[i].next, i + 1);
   }
@@ -110,8 +115,12 @@ test('actual worker accepts step and resume commands between transferable frame 
   await waitUntil(() => messages.some(message => message.mode === 'done'), 'resume should finish the remaining snapshot');
   const frames = messages.filter(message => message.type === 'frame');
   assert.deepEqual(frames.map(message => message.next), [1, 2, 3]);
-  assert.ok(frames.every(message => message.frame.Dbar instanceof Float32Array && message.frame.Dbar.length === 10000));
-  assert.ok(frames.every(message => message.frame.betaHat instanceof Float32Array && message.frame.betaHat.length === 10000));
+  for (const { frame } of frames) {
+    const cells = frame.grid.nx * frame.grid.ny;
+    assert.ok(cells > input.grid ** 2);
+    assert.ok(frame.Dbar instanceof Float32Array && frame.Dbar.length === cells);
+    assert.ok(frame.betaHat instanceof Float32Array && frame.betaHat.length === cells);
+  }
   assert.deepEqual(messages.filter(message => message.type === 'error'), []);
 });
 
@@ -185,10 +194,9 @@ for(const blockedSide of ['echoSpline','guarded']){
       assert.equal(messages.some(m=>m.type==='frame'||m.mode==='done'),false);
       const early = messages.filter(m => m.field);
       assert.deepEqual(early.map(m => m.field.t), blockedSide === 'guarded' ? [1,2,3] : []);
-      const {scenario,grid} = messages.find(m => m.type === 'prepared');
-      const field = createField(grid, {band:scenario.input.band, perimeter:scenario.input.perimeter});
+      const {scenario} = messages.find(m => m.type === 'prepared');
       for (const m of early) {
-        const expected = field.step(scenario.wire[m.t-1]);
+        const expected = referenceDisplayFrame(scenario, m.field.grid, m.t);
         assert.deepEqual(m.field.Dbar, expected.Dbar);
         assert.deepEqual(m.field.betaHat, expected.betaHat);
       }

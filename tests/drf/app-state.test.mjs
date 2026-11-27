@@ -747,9 +747,10 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
   const dom=new JSDOM(readFileSync(new URL('../../drf.html',import.meta.url),'utf8'),{pretendToBeVisual:true});
   try {
     const document=dom.window.document, $=id=>document.getElementById(id);
-    const snapshots=[1,2,3].map(t=>({t})), joined={t:1}, early={t:2};
+    const sceneGrid={domain:[0,100,-20,30]},wideGrid={domain:[-35,132,-40,50]};
+    const snapshots=[1,2,3].map(t=>({t})), joined={t:1}, early={t:2,grid:wideGrid};
     const sample=(t,at,field)=>({t,at,field,result:{ms:1},evaluation:{}});
-    const state={method:'compare',mode:'running',followLive:true,selected:1,frames:[joined],evaluations:[],
+    const state={method:'compare',mode:'running',followLive:true,selected:1,grid:sceneGrid,frames:[joined],evaluations:[],
       scenario:{input:{snapshots:3},domain:LAYERED_DOMAIN,cameraBounds:LAYERED_DOMAIN,walls:[],wire:snapshots,truth:snapshots},
       methodFrames:{echoSpline:[sample(1,5),sample(2,10,early)],guarded:[sample(1,15)]}};
     const maps={};
@@ -781,8 +782,9 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
     $('rightMethod').value='wmp';
     function check(t,field) {
       context.renderSelected();
+      assert.equal(maps.map.state.grid,sceneGrid);assert.equal(maps.baselineMap.state.grid,sceneGrid);
       for(const view of [maps.densityMap,maps.contrastMap]){
-        assert.equal(view.state.frame,field);
+        assert.equal(view.state.frame,field);assert.equal(view.state.grid,sceneGrid);
         assert.equal(view.state.wire,snapshots[t-1]);assert.equal(view.state.truth,snapshots[t-1]);
         assert.deepEqual(view.state.history,snapshots.slice(0,t));
       }
@@ -797,6 +799,29 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
     state.mode='running';state.followLive=true;
     delete state.methodFrames.echoSpline[1].field;check(1,joined); // Older server recording.
   } finally {dom.window.close();}
+});
+
+test('hover resolves the displayed snapshot grid for live, replay, geometry, and legacy fields',async()=>{
+  const sceneGrid={nx:2,ny:1,domain:[0,100,-1,1],x:[25,75],y:[0]};
+  const wideGrid={nx:4,ny:1,domain:[-50,150,-1,1],x:[-25,25,75,125],y:[0]};
+  const frame={t:1,epsilonA:.01}, early={t:2,epsilonA:.02,grid:wideGrid}, wire=[{t:1},{t:2}];
+  const state={grid:sceneGrid,frames:[frame],methodFrames:{echoSpline:[{}, {field:early}]},scenario:{input:{band:4,perimeter:'exact'},wire}};
+  const requests=[],inspector={},view={textContent:''};let scheduled;
+  const inspect=vm.runInNewContext(section('const inspect =','const map =')+'inspect',{state,hoverGeneration:0,hoverTimer:0,
+    $:id=>id==='inspector'?inspector:view,fmt:String,setMathText:(node,parts)=>{node.textContent=parts[0];},
+    hoverWorker:{request:async(msg)=>{requests.push(msg);return {t:msg.snapshots.length};}},
+    clearTimeout:()=>{scheduled=null;},setTimeout:fn=>{scheduled=fn;}});
+  for (const grid of [wideGrid,sceneGrid]) {
+    inspect({x:123,y:0,grid},2);await scheduled();
+    const q=requests.at(-1);
+    assert.equal(q.grid,wideGrid);assert.equal(q.index,3);assert.equal(q.epsilonA,.02);
+    assert.deepEqual(q.snapshots,wire);assert.match(inspector.textContent,/grid \(125, 0\)/);
+  }
+  inspect({x:123,y:0,grid:sceneGrid},1);
+  assert.equal(scheduled,null);assert.equal(inspector.textContent,'');
+  inspect({x:73,y:0,grid:sceneGrid},1);await scheduled();
+  assert.equal(requests.at(-1).index,1);assert.equal(requests.at(-1).grid,sceneGrid);
+  assert.equal(requests.at(-1).snapshots.length,1);assert.match(inspector.textContent,/grid \(75, 0\)/);
 });
 
 test('graph timers and table use elapsed time, stop each completed method and remain fixed during replay',async()=>{

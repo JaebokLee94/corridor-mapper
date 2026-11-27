@@ -214,7 +214,10 @@ test('real run engine and sweep preserve all numerical prefixes, final metrics a
   const frames = messages.filter(m => m.type === 'frame');
   assert.equal(frames.length, expected.length);
   for (let t = 0; t < expected.length; t++) {
-    assert.deepEqual(numerical(frames[t].frame), numerical(expected[t].frame), `frame at t=${t + 1}`);
+    const { grid, ...actual } = frames[t].frame;
+    const reference = createField(grid, { band: expectedScene.input.band, perimeter: expectedScene.input.perimeter });
+    for (const wire of expectedScene.wire.slice(0, t + 1)) reference.step(wire);
+    assert.deepEqual(numerical(actual), numerical({ ...expected[t].frame, ...reference.readout() }), `frame at t=${t + 1}`);
     assert.deepEqual(numerical(frames[t].evaluation), numerical(expected[t].evaluation), `evaluation at t=${t + 1}`);
   }
   assert.equal(messages.at(-1).mode, 'done');
