@@ -35,11 +35,11 @@ function measuredBounds(wire, band, domain) {
   return [xmin, xmax, ymin, ymax];
 }
 
-// Reserve whole blocks and grow each margin geometrically to amortize prefix replays.
+// A tile keeps its accumulated field, so extending one block never replays the old area.
 function growMargin(current, cells, baseSize) {
   if (cells <= current) return current;
   const block = Math.max(1, Math.ceil(baseSize / 8));
-  return Math.max(2 * current, block * Math.ceil(cells / block));
+  return block * Math.ceil(cells / block);
 }
 
 function paddedGrid(base, [left, right, bottom, top]) {
@@ -52,16 +52,24 @@ function paddedGrid(base, [left, right, bottom, top]) {
     y: Float64Array.from({length: ny}, (_, iy) => base.ymin + (iy - bottom + 0.5) * dy)};
 }
 
-// Tiles keep their original integer cell indices as the outer rectangle grows.
-function addMargins(tiles, grid, old, margins, base, replay) {
+// 64K cells fit all ten vehicles' three Float64 focal coordinates in createField's 16 MiB cache.
+const MAX_TILE_CELLS = 64 * 1024;
+
+// Tile origins use the original lattice, so added rows never move a previously measured cell.
+function appendTiles(tiles, grid, old, margins, base, replay) {
   const [left, right, bottom, top] = margins;
   const x0 = -left, x1 = base.nx + right, y0 = -bottom, y1 = base.ny + top;
-  const oldX0 = -old[0], oldX1 = base.nx + old[1], oldY0 = -old[2], oldY1 = base.ny + old[3];
   function add(x, endX, y, endY) {
     if (endX === x || endY === y) return;
-    const coords = {nx:endX-x, ny:endY-y, x:grid.x.subarray(x-x0,endX-x0), y:grid.y.subarray(y-y0,endY-y0)};
-    tiles.push({x, y, field:replay(coords)});
+    const xs = grid.x.subarray(x - x0, endX - x0);
+    const rows = Math.max(1, Math.floor(MAX_TILE_CELLS / xs.length));
+    for (let row = y; row < endY; row += rows) {
+      const ys = grid.y.subarray(row - y0, Math.min(row + rows, endY) - y0);
+      tiles.push({x, y:row, field:replay({nx:xs.length, ny:ys.length, x:xs, y:ys})});
+    }
   }
+  if (!old) { add(x0, x1, y0, y1); return; }
+  const oldX0 = -old[0], oldX1 = base.nx + old[1], oldY0 = -old[2], oldY1 = base.ny + old[3];
   // Side strips cover the previous height; top and bottom span the new width.
   add(x0, oldX0, oldY0, oldY1);
   add(oldX1, x1, oldY0, oldY1);
@@ -82,7 +90,8 @@ export function createDisplayField(baseGrid, numerical = {}) {
     for (const past of history) field.step(past);
     return field;
   }
-  let grid = baseGrid, margins = [0, 0, 0, 0], tiles = [{x:0, y:0, field:replay(grid)}];
+  let grid = baseGrid, margins = [0, 0, 0, 0], tiles = [];
+  appendTiles(tiles, grid, null, margins, baseGrid, replay);
   return {step(snapshot) {
     const started = performance.now(), wire = makeWire(snapshot);
     if (wire.t !== history.length + 1) throw new RangeError('Display snapshots must follow causal t=1,2,... order');
@@ -94,14 +103,11 @@ export function createDisplayField(baseGrid, numerical = {}) {
       growMargin(margins[3], (ymax - baseGrid.ymax) / baseGrid.dy, baseGrid.ny),
     ];
     let nextGrid = grid, nextTiles = tiles;
-    if (nextMargins.some((n, i) => n !== margins[i])) {
+    const grew = nextMargins.some((n, i) => n !== margins[i]);
+    if (grew) {
       nextGrid = paddedGrid(baseGrid, nextMargins);
-      if (history.length) {
-        nextTiles = tiles.slice();
-        addMargins(nextTiles, nextGrid, margins, nextMargins, baseGrid, replay);
-      } else {
-        nextTiles = [{x:-nextMargins[0], y:-nextMargins[2], field:createField(nextGrid,numerical)}];
-      }
+      nextTiles = history.length ? tiles.slice() : [];
+      appendTiles(nextTiles, nextGrid, history.length ? margins : null, nextMargins, baseGrid, replay);
     }
     let frames;
     try {

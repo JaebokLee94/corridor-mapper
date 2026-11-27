@@ -9,10 +9,14 @@ test('heatmap theme changes recolor cached fields and matching colorbars without
   const root={dataset:{theme:'light'}};
   let plotBackground='#ffffff',systemDark=false;
   const makeCanvas=()=>{
-    const canvas={clientWidth:700,clientHeight:400,dataset:{},style:{},addEventListener(){}};
+    const canvas={clientWidth:700,clientHeight:400,dataset:{},style:{},sizeWrites:0,images:0,addEventListener(){}};
+    for (const key of ['width','height']) {
+      let size=0;
+      Object.defineProperty(canvas,key,{get:()=>size,set(value){size=value;canvas.sizeWrites++;}});
+    }
     const context=new Proxy({
       font:'14px Arial',measureText:text=>({width:text.length*7}),
-      createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),
+      createImageData(w,h){canvas.images++;return {data:new Uint8ClampedArray(w*h*4)};},
       putImageData(image){canvas.pixels=[...image.data];},
       createLinearGradient(){const stops=[];gradients.push(stops);return {addColorStop:(at,color)=>stops.push([at,color])};},
     },{get:(target,key)=>key in target ? target[key] : ()=>{}});
@@ -72,6 +76,16 @@ test('heatmap theme changes recolor cached fields and matching colorbars without
       assert.deepEqual(map.heat.pixels.slice(4,8),[22,38,48,255],'Tiny positive values blend into the dark plot background instead of becoming white patches');
       assert.deepEqual(map.heat.pixels.slice(0,4),[22,38,48,0],'A zero cell still uses the existing transparent alpha mask');
     }
+    const fixedGrid={nx:3,ny:2,domain:[0,3,0,2]};
+    map.set({grid:fixedGrid,frame:{Dbar:Float32Array.of(1,2,3,4,5,6)},heatField:'Dbar',scaleMode:'log',layers:{}});
+    map.paint(canvas,1);
+    const allocations=[map.heat.images,map.heat.sizeWrites,canvas.sizeWrites];
+    map.set({...map.state,frame:{Dbar:Float32Array.of(NaN,Infinity,3,0,-1,-Infinity)}});
+    map.paint(canvas,1);
+    assert.equal(map.maxValue,3);
+    assert.deepEqual(map.heat.pixels,[...Array(5).fill([22,38,48,0]).flat(),255,206,122,255],
+      'empty and nonfinite cells clear the previous colour while the finite maximum is preserved');
+    assert.deepEqual([map.heat.images,map.heat.sizeWrites,canvas.sizeWrites],allocations,'stable grids and viewports reuse their buffers');
   } finally {
     for (const [key,descriptor] of Object.entries(saved)) descriptor ? Object.defineProperty(globalThis,key,descriptor) : delete globalThis[key];
   }

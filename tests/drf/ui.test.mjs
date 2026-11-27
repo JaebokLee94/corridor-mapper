@@ -55,26 +55,40 @@ test('axis-fitted camera preserves metre coordinates and the zoom anchor', () =>
 });
 
 test('render keeps world row order, uses real DPR/300 dpi pixels, and charts execute', async () => {
-  const snapshots={},created=[],rectangles=[],labels=[],mathImages=[],gridSegments=[],labelPositions=[],dots=[],ellipseStarts=[],strokes=[],gridColor='#c4d3e2';
+  const snapshots={},created=[],rectangles=[],labels=[],mathImages=[],gridSegments=[],labelPositions=[],dots=[],ellipseStarts=[],ellipses=[],strokes=[],gridColor='#c4d3e2';
   const context=() => {
-    let path=[],subpathStarts=[],point;
+    let path=[],point,world,ellipseCount=0,lastCommand;
+    const transforms=[];
     return new Proxy({font:'16px Arial',createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData:(data)=>{snapshots.image=data.data;},measureText:(text)=>({width:text.length*9}),createLinearGradient:()=>({addColorStop(){}})}, {get(target,key){return key in target ? target[key] : (...args)=>{
-      if (key==='beginPath') {path=[];subpathStarts=[];point=undefined;}
-      if (key==='moveTo') {point=args;subpathStarts.push(path.length);}
+      if (key==='save') transforms.push(world);
+      if (key==='restore') world=transforms.pop();
+      if (key==='transform') world=args;
+      if (key==='beginPath') {path=[];ellipseCount=0;point=undefined;}
+      if (key==='moveTo') point=args;
+      if (key==='ellipse') {
+        assert.equal(lastCommand,'moveTo','every ellipse starts its own subpath');
+        const [sx,,,sy,tx,ty]=world;
+        const [cx,cy,major,minor,angle,start,end]=args;
+        assert.equal(start,0);assert.equal(end,2*Math.PI);
+        assert.deepEqual(point,[cx+major*Math.cos(angle),cy+major*Math.sin(angle)]);
+        ellipseStarts.push([sx*point[0]+tx,sy*point[1]+ty]);
+        ellipses.push({minorTip:[sx*(cx-minor*Math.sin(angle))+tx,sy*(cy+minor*Math.cos(angle))+ty]});
+        ellipseCount++;
+      }
       if (key==='lineTo') {if (point) path.push([point,args]);point=args;}
       if (key==='setLineDash') target.lineDash=args[0].slice();
-      if (key==='stroke') strokes.push({color:target.strokeStyle,width:target.lineWidth,cap:target.lineCap,dash:target.lineDash?.slice() ?? [],segments:path.slice()});
+      if (key==='stroke') strokes.push({color:target.strokeStyle,width:target.lineWidth,cap:target.lineCap,dash:target.lineDash?.slice() ?? [],segments:path.slice(),ellipseCount,alpha:target.globalAlpha,world});
       if (key==='stroke' && target.strokeStyle===gridColor) gridSegments.push(...path);
-      if (key==='stroke' && target.strokeStyle!==gridColor) for (const [i,start] of subpathStarts.entries())
-        if ((subpathStarts[i+1] ?? path.length)-start===96) ellipseStarts.push(path[start][0]);
       if (key==='arc') dots.push(args);
       if (key==='fillText') {assert.ok(parseFloat(target.font.match(/(\d+)px/)[1])>=14,args[0]);labels.push(args[0]);if (/^V\d+$/.test(args[0])) labelPositions.push(args);}
       if (key==='drawImage' && args[0]?.src?.startsWith('data:image/svg+xml')) mathImages.push(args);
       if (key==='drawImage' && args[0]?.getContext) snapshots.raster=args;
       if (key==='strokeRect') rectangles.push(args);
+      lastCommand=key;
     };}});
   };
   const makeCanvas=()=>{const ctx=context(),listeners={};return {clientWidth:700,clientHeight:540,width:0,height:0,style:{},dataset:{},listeners,getContext:()=>ctx,addEventListener(name,callback){listeners[name]=callback;},setPointerCapture(){},toBlob(callback){callback(new Blob(['png']));}};};
+  const nearPoint=(a,b)=>a.forEach((v,i)=>assert.ok(Math.abs(v-b[i])<1e-10));
   const assertGrid=(box,message) => {
     const near=(a,b)=>Math.abs(a-b)<1e-8,inside=(v,lo,hi)=>v>lo+1e-8 && v<hi-1e-8;
     assert.ok(gridSegments.some(([a,b])=>near(a[0],b[0]) && inside(a[0],box.x,box.x+box.w) && near(Math.min(a[1],b[1]),box.y) && near(Math.max(a[1],b[1]),box.y+box.h)),`${message}: vertical grid inside plot`);
@@ -190,7 +204,6 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
       assert.equal(bottom.camera,defaultCamera,heatField+' frame changes do not reset the automatic camera');
       const [raster,x,y,w,h]=snapshots.raster;
       assert.equal(raster,bottom.heat);assert.equal(raster.width,4);assert.equal(raster.height,2);
-      const nearPoint=(a,b)=>a.forEach((v,i)=>assert.ok(Math.abs(v-b[i])<1e-10));
       nearPoint(mapToWorld([x,y],bottom.camera,bottom.box),[-45,50]);
       nearPoint(mapToWorld([x+w,y+h],bottom.camera,bottom.box),[140,-47]);
       let hover;
@@ -301,12 +314,16 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
     const spans=createWalls({ scene: 'reference' }),fleet=generateSnapshot(normalizeInput({scene:'reference',vehicles:20,snapshots:1}),spans,1),wireBefore=JSON.stringify(fleet.wire),fleetCanvas=makeCanvas(),stats={textContent:''};
     fleetCanvas.clientWidth=480;fleetCanvas.clientHeight=220;fleetCanvas.closest=()=>({querySelector:()=>stats});
     const fleetMap=new DrfMap(fleetCanvas),fleetState={grid:{nx:2,ny:2,domain:[0,60,0,30]},frame:{...frame,t:1},wire:fleet.wire,walls:sampleWalls(spans),history:[fleet.wire],aspectMode:'equal',layers:{showTruth:true,showVehicles:true,showEllipses:true}};
-    labelPositions.length=0;dots.length=0;ellipseStarts.length=0;
+    labelPositions.length=0;dots.length=0;ellipseStarts.length=0;ellipses.length=0;strokes.length=0;
     fleetMap.set({...fleetState,mode:'geometry'});fleetMap.paint(fleetCanvas,1);
     const allPaths=fleet.wire.configs.flatMap(c=>c.paths.map(q=>({c,q}))),stride=Math.ceil(allPaths.length/600);
     const sampled=allPaths.filter(({c,q},i)=>i%stride===0 && q.dHat>Math.hypot(c.pHat_j[0]-c.pHat_i[0],c.pHat_j[1]-c.pHat_i[1]));
     assert.ok(allPaths.length>600 && ellipseStarts.length<=600,'large fleets must retain a bounded ellipse overlay');
     assert.equal(ellipseStarts.length,sampled.length,'ellipse sampling follows global wire order rather than a per-pair limit');
+    const ellipseStrokes=strokes.filter(s=>s.ellipseCount);
+    assert.equal(ellipseStrokes.length,1,'overlapping ellipses take a single transparent stroke');
+    assert.equal(ellipseStrokes[0].ellipseCount,sampled.length);assert.equal(ellipseStrokes[0].alpha,.28);
+    assert.equal(ellipseStrokes[0].width,.75);assert.equal(ellipseStrokes[0].world,undefined,'line width stays in CSS pixels');
     sampled.forEach(({c,q},i)=> {
       const a=c.pHat_i,b=c.pHat_j,angle=Math.atan2(b[1]-a[1],b[0]-a[0]),expected=mapToScreen([(a[0]+b[0])/2+q.dHat/2*Math.cos(angle),(a[1]+b[1])/2+q.dHat/2*Math.sin(angle)],fleetMap.camera,fleetMap.box);
       expected.forEach((value,k)=>assert.ok(Math.abs(value-ellipseStarts[i][k])<1e-8,'sampled ellipse must come from the unchanged measured path'));
@@ -317,6 +334,12 @@ test('render keeps world row order, uses real DPR/300 dpi pixels, and charts exe
     ellipseStarts.length=0;fleetMap.set({...fleetState,wire:smallWire,mode:'geometry'});fleetMap.paint(fleetCanvas,1);
     const smallPaths=smallWire.configs.reduce((sum,c)=>sum+c.paths.length,0);
     assert.ok(smallPaths<600);assert.equal(Number(fleetCanvas.dataset.ellipseShown),smallPaths,'small fleets retain every valid ellipse');
+    const tilted={i:0,j:1,pHat_i:[8,4],pHat_j:[14,12],paths:[{dHat:26,sigmaD:.4}]};
+    ellipses.length=0;
+    fleetMap.set({...fleetState,wire:{t:1,configs:[tilted]},aspectMode:'fill'});fleetMap.paint(fleetCanvas,1);
+    assert.notEqual(fleetMap.camera.scaleX,fleetMap.camera.scaleY);
+    // Focal distance 10, major axis 13, minor axis 12. The minor direction is (-0.8,0.6).
+    nearPoint(ellipses[0].minorTip,mapToScreen([11-12*.8,8+12*.6],fleetMap.camera,fleetMap.box));
     for (const mode of ['geometry',undefined]) {
       labelPositions.length=0;dots.length=0;
       fleetMap.set({...fleetState,mode,layers:{...fleetState.layers,showEllipses:false}});fleetMap.fit();fleetMap.paint(fleetCanvas,1);

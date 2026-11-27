@@ -71,14 +71,24 @@ function fieldPalette(field='Dbar') {
   const colors=dark ? [channels ?? darkPalettes[key][0],...darkPalettes[key].slice(1)] : palettes[key];
   return {key:`${dark ? 'dark' : 'light'}:${key}:${colors[0].join(',')}`,colors};
 }
-function writeHeatPixel(pixels, offset, t, palette, alpha) {
+function writeHeatPixel(pixels, offset, t, palette) {
   const p = Math.max(0,Math.min(1,t)) * (palette.length-1), i = Math.min(palette.length-2,Math.floor(p));
   const low = palette[i], high = palette[i+1], fraction = p-i;
   for (let k=0;k<3;k++) pixels[offset+k] = Math.round(low[k]+(high[k]-low[k])*fraction);
-  pixels[offset+3] = alpha;
+  pixels[offset+3] = 255;
 }
 const rgb = (c) => `rgb(${c.join(",")})`;
 const numberLabel = (x) => !Number.isFinite(x) ? "—" : x !== 0 && (Math.abs(x) < .001 || Math.abs(x) >= 1e4) ? x.toExponential(1) : Number(x.toPrecision(3)).toString();
+
+function plotContext(canvas,width,height,ratio) {
+  const pixelsX=Math.round(width*ratio),pixelsY=Math.round(height*ratio);
+  if (canvas.width!==pixelsX) canvas.width=pixelsX;
+  if (canvas.height!==pixelsY) canvas.height=pixelsY;
+  const ctx=canvas.getContext("2d");
+  ctx.setTransform(ratio,0,0,ratio,0,0);
+  ctx.clearRect(0,0,width,height);
+  return ctx;
+}
 
 /** Presentation only. Input field is iy*nx+ix with y ascending; canvas y is inverted.
  * O(nx*ny + history pairs + displayed paths) per field update; O(nx*ny) heatmap memory.
@@ -140,17 +150,33 @@ export class DrfMap {
     this.paletteKey=palette.key;this.heatPalette=palette.colors;
     if(this.state.mode==='geometry')return;
     const {frame,heatField="Dbar",scaleMode="linear"}=this.state, g=frame?.grid ?? this.state.grid;
-    if (!g) {this.heat.width=1;this.heat.height=1;this.maxValue=0;return;}
-    this.heat.width=g.nx; this.heat.height=g.ny;
-    const values=frame?.[heatField], ctx=this.heat.getContext("2d"), data=ctx.createImageData(g.nx,g.ny);
+    if (!g) {this.heat.width=1;this.heat.height=1;this.heatImage=null;this.maxValue=0;return;}
+    const ctx=this.heat.getContext("2d");
+    if (!this.heatImage || this.heat.width!==g.nx || this.heat.height!==g.ny) {
+      if (this.heat.width!==g.nx) this.heat.width=g.nx;
+      if (this.heat.height!==g.ny) this.heat.height=g.ny;
+      this.heatImage=ctx.createImageData(g.nx,g.ny);
+    }
+    const data=this.heatImage, pixels=data.data, values=frame?.[heatField];
+    // Replicate one native-order RGBA word so even transparent cells retain the exact palette RGB.
+    const background=Uint8ClampedArray.of(...palette.colors[0].map(Math.round),0);
+    new Uint32Array(pixels.buffer,pixels.byteOffset,pixels.length/4).fill(new Uint32Array(background.buffer)[0]);
     this.maxValue=0;
-    if (values) for (const v of values) if (Number.isFinite(v) && v>this.maxValue) this.maxValue=v;
-    const denominator=scaleMode === "log" ? Math.log1p(this.maxValue) : this.maxValue;
-    // Formula: image row = ny-1-iy. World y is never reordered in inference data.
-    for (let iy=0;iy<g.ny;iy++) for (let ix=0;ix<g.nx;ix++) {
-      const value=Math.max(0,values?.[iy*g.nx+ix] ?? 0), t=denominator>0 ? (scaleMode === "log" ? Math.log1p(value) : value)/denominator : 0;
-      const at=4*((g.ny-1-iy)*g.nx+ix);
-      writeHeatPixel(data.data,at,t,this.heatPalette,values && Number.isFinite(value) && value>0 ? 255 : 0);
+    if (values) for (let i=0;i<values.length;i++) {
+      const v=values[i];
+      if (v>this.maxValue && Number.isFinite(v)) this.maxValue=v;
+    }
+    if (this.maxValue>0) {
+      const log=scaleMode==="log", denominator=log ? Math.log1p(this.maxValue) : this.maxValue;
+      // Image rows run downwards, while measured y coordinates run upwards.
+      for (let iy=0;iy<g.ny;iy++) {
+        const src=iy*g.nx, dest=(g.ny-1-iy)*g.nx;
+        for (let ix=0;ix<g.nx;ix++) {
+          const value=values[src+ix];
+          if (value>0 && Number.isFinite(value))
+            writeHeatPixel(pixels,4*(dest+ix),(log ? Math.log1p(value) : value)/denominator,this.heatPalette);
+        }
+      }
     }
     ctx.putImageData(data,0,0);
   }
@@ -173,11 +199,10 @@ export class DrfMap {
     // Also refresh synchronously for export or a draw before the theme observer fires.
     const palette=fieldPalette(this.state.heatField);
     if (palette.key!==this.paletteKey) this.buildHeat(palette);
-    target.width=Math.round(width*ratio); target.height=Math.round(height*ratio);
-    const ctx=target.getContext("2d"), css=getComputedStyle(document.documentElement), token=(name,fallback) => css.getPropertyValue(`--color-${name}`).trim() || fallback;
+    const ctx=plotContext(target,width,height,ratio), css=getComputedStyle(document.documentElement), token=(name,fallback) => css.getPropertyValue(`--color-${name}`).trim() || fallback;
     const ink=token("ink"),muted=token("ink-muted"),line=token("line"),evalColor=token("eval"),reflectionColor=token("reflection"),background=token("plot-bg");
     const trackColor=token("track","#1c5cab"),ellipseColor=token("ellipse","#1d9b79"),proxyColor=token("proxy","#b8237a"),truthColor=token("truth",ink);
-    ctx.scale(ratio,ratio); ctx.fillStyle=background; ctx.fillRect(0,0,width,height);
+    ctx.fillStyle=background; ctx.fillRect(0,0,width,height);
     ctx.font=uiFont(14);
     // 52 px left margin keeps y tick labels clear of the rotated axis title.
     const geometry=this.state.mode === "geometry",box={ x:52,y:16,w:Math.max(1,width-(geometry ? 68 : 116)),h:Math.max(1,height-62) }, g=this.state.grid;
@@ -255,19 +280,21 @@ export class DrfMap {
       // Keep each ellipse a separate subpath behind walls, candidates and vehicles.
       ctx.beginPath();ctx.globalAlpha=.28;ctx.strokeStyle=ellipseColor;ctx.lineWidth=.75;
       ctx.setLineDash([]);ctx.lineJoin='round';ctx.lineCap='round';
+      const origin=screen([0,0]);
+      ctx.save();
+      ctx.transform(c.scaleX,0,0,-c.scaleY,origin[0],origin[1]);
       for (const config of wire?.configs ?? []) {
         const a=config.pHat_i,b=config.pHat_j,dx=b[0]-a[0],dy=b[1]-a[1],distance=Math.hypot(dx,dy),angle=Math.atan2(dy,dx),cos=Math.cos(angle),sin=Math.sin(angle);
+        const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2;
         for (const q of config.paths) {
           if (ellipseIndex++%ellipseStride!==0 || !(q.dHat>distance)) continue;
           const major=q.dHat/2,minor=Math.sqrt(major*major-distance*distance/4);
-          for (let k=0;k<=96;k++) {
-            const t=k*2*Math.PI/96,x=major*Math.cos(t),y=minor*Math.sin(t);
-            const [sx,sy]=screen([(a[0]+b[0])/2+x*cos-y*sin,(a[1]+b[1])/2+x*sin+y*cos]);
-            k===0 ? ctx.moveTo(sx,sy) : ctx.lineTo(sx,sy);
-          }
+          ctx.moveTo(cx+major*cos,cy+major*sin);
+          ctx.ellipse(cx,cy,major,minor,angle,0,2*Math.PI);
           ellipseShown++;
         }
       }
+      ctx.restore(); // Stroke the transformed paths at their original CSS-pixel width.
       ctx.stroke();ctx.globalAlpha=1;
     }
     if (target===this.canvas && geometry) {
@@ -387,9 +414,8 @@ export class DrfMap {
 function chartSurface(canvas,{width=canvas.clientWidth,height=canvas.clientHeight,pixelRatio=window.devicePixelRatio || 1}={}) {
   if (width<1 || height<1) return null;
   const ratio=pixelRatio;
-  canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
-  const ctx=canvas.getContext("2d"),css=getComputedStyle(document.documentElement),color=(name) => css.getPropertyValue(`--color-${name}`).trim();
-  ctx.scale(ratio,ratio);ctx.fillStyle=color("plot-bg");ctx.fillRect(0,0,width,height);
+  const ctx=plotContext(canvas,width,height,ratio),css=getComputedStyle(document.documentElement),color=(name) => css.getPropertyValue(`--color-${name}`).trim();
+  ctx.fillStyle=color("plot-bg");ctx.fillRect(0,0,width,height);
   return {ctx,width,height,color};
 }
 // Title is optional: when the card header already names the metric, the plot takes its space.

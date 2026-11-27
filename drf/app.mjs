@@ -10,11 +10,11 @@ import { percentile } from './statistics.mjs';
 import { psptSnapshotCsv } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { fitMethodLabel,setMethodLabel } from './method-label.mjs?v=20261119-cnn-stride4';
 import { rightMethods, activeRightMethods, canonicalRightMethod } from './right-methods.mjs?v=20261119-cnn-stride4';
-import { echoProtocol } from './echo-comparison.mjs?v=20261119-cnn-stride4';
+import { echoProtocol } from './echo-comparison.mjs?v=20261127-cnn-display';
 import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261119-cnn-stride4';
-import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261127-field-extent';
+import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261127-cnn-display';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
 import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261127-independent-field';
@@ -123,7 +123,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261127-independent-field';
+  const revision = '20261127-cnn-display';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -250,7 +250,7 @@ function cancel(clear = false) {
   state.workers = []; state.pendingCommand = null;
   runWorker = null; evalWorker = null; hoverWorker = null; diagnosticWorker = null;
   diagnosticView.reset();
-  state.busy = false; state.mode = clear ? 'idle' : 'cancelled';
+  state.busy = false; state.mode = clear ? 'idle' : 'cancelled'; state.nextMapPaintAt=undefined;
   if (clear) {
     state.pendingInput = null; state.protocol = null; state.scenario = null; state.grid = null; state.frames = []; state.evaluations = []; state.selected = 0; state.next = 0; state.valid = false;
     state.frameTimes = []; state.methodFrames=null; state.joinedComputeMs=null;
@@ -396,7 +396,19 @@ async function receiveRunMessage(data, generation) {
       state.methodFrames??={echoSpline:[],guarded:[]};
       const list=state.methodFrames[data.side];
       if(!list || data.t!==list.length+1)throw new Error('Out-of-order method result');
-      list.push({...data,totalMs:(list.at(-1)?.totalMs??0)+data.result.ms});
+      const sample={...data,totalMs:(list.at(-1)?.totalMs??0)+data.result.ms};
+      const stride=data.side==='guarded' && state.protocol?.guarded?.mapUpdateStride;
+      if (stride && data.t<state.scenario.input.snapshots) {
+        const offset=(data.t-1)%stride;
+        if (offset) {
+          // Place already measured vehicle positions between CNN fits. Keep the actual completion
+          // timestamp for timings and never make an available new wall wait for a held snapshot.
+          const fit=list[data.t-offset-1], previousFit=list[data.t-offset-stride-1];
+          const interval=(fit.at-(previousFit?.at??0))/stride;
+          sample.displayAt=Math.max(data.at,fit.at+offset*interval);
+        }
+      }
+      list.push(sample);
       syncComputeClock(Math.max(data.at,state.computeClock?.elapsedMs??0),true);
       updateComparisonStatus();
       scheduleLivePaint();
@@ -446,7 +458,10 @@ async function receiveRunMessage(data, generation) {
       state.pendingCommand = null;
       if(data.mode!=='running' && state.computeClock?.startedAt!=null)syncComputeClock(computeElapsedMs(null,false),false);
       state.mode = data.mode; state.busy = data.mode === 'running'; controls();
-      if (data.mode === 'paused') notice('Paused after the current snapshot.');
+      if (data.mode === 'paused') {
+        notice('Paused after the current snapshot.');
+        if (state.nextMapPaintAt!=null) scheduleLivePaint();
+      }
       if (data.mode === 'done') {
         const hash = await hashField(state.frames.at(-1));
         if (generation !== state.generation) return;
@@ -460,7 +475,9 @@ async function receiveRunMessage(data, generation) {
 function updateComparisonStatus() {
   if (state.mode!=='running') return;
   const total=state.scenario.input.snapshots, joined=state.frames.length;
-  const left=state.methodFrames?.echoSpline.length ?? joined, right=state.methodFrames?.guarded.length ?? joined;
+  const rightFrames=state.methodFrames?.guarded;
+  const left=state.methodFrames?.echoSpline.length ?? joined;
+  const right=rightFrames?.at(-1)?.displayAt!=null ? liveMethodFrame(rightFrames).t : rightFrames?.length ?? joined;
   if (state.methodFrames && left===total && right===total) {
     notice(joined<total ? `Both maps complete · updating measurement fields ${joined} / ${total}` : 'Both maps complete · measurement fields ready');
   } else if (left!==right) {
@@ -567,8 +584,10 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
   for(const method of [first,second]){
     const list=state.methodFrames?.[method];
     if(list){
-      records[method]=state.replay?list.findLast(s=>s.at<=state.replayPosition):
-        state.followLive && ['running','paused'].includes(state.mode)?list.at(-1):list[state.selected-1];
+      records[method]=state.replay?list.findLast(s=>(s.displayAt??s.at)<=state.replayPosition):
+        state.followLive && ['running','paused'].includes(state.mode)?liveMethodFrame(list):list[state.selected-1];
+      if (method==='guarded') state.nextMapPaintAt=state.followLive && state.mode==='running'
+        ? list[records[method]?.t??0]?.displayAt : undefined;
     }
   }
   const methodResult=method=>independently?records[method]?.result:frame?.methods?.[method];
@@ -593,7 +612,7 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
     }
   }
   const displayedFrame = method => independently ? records[method] : frame;
-  // The inspector itself can resize the charts; redrawing the same frames must keep its reading.
+  // Keep the cell reading when layout alone redraws the same frames.
   if (!layoutOnly || fieldFrame!==densityMap.state?.frame ||
       displayedFrame(selected)!==map.state?.frame || displayedFrame(second)!==baselineMap.state?.frame) {
     hoverGeneration++;
@@ -695,6 +714,12 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
   drawComparisonHistory($('metricChart'),history,historyMetric,scenario?.input.snapshots ?? Number(form.elements.namedItem('snapshots').value),state.method,state.method==='compare' && !interpolate ? 'off' : kind,legacy,rightSolo);
   renderDiagnostics();
 }
+function liveMethodFrame(list) {
+  const last=list.at(-1);
+  if (last?.displayAt==null || state.mode!=='running') return last;
+  const elapsed=Math.max(last.at,computeElapsedMs(null,false)??0);
+  return list.findLast(s=>(s.displayAt??s.at)<=elapsed);
+}
 function computeElapsedMs(method,independently,now=performance.now()){
   const list=independently ? state.methodFrames?.[method] : null;
   const total=state.scenario?.input.snapshots??state.pendingInput?.snapshots;
@@ -705,6 +730,8 @@ function computeElapsedMs(method,independently,now=performance.now()){
   return clock.elapsedMs+(clock.startedAt===null?0:Math.max(0,now-clock.startedAt));
 }
 function syncComputeClock(elapsedMs,running){
+  // A queued completion from another worker can be older than time already shown on screen.
+  if (running && state.computeClock?.startedAt!=null) elapsedMs=Math.max(elapsedMs,computeElapsedMs(null,false));
   state.computeClock={elapsedMs,startedAt:running?performance.now():null};
   if(!state.computePaint)paintComputeClock();
 }
@@ -712,6 +739,11 @@ function paintComputeClock(){
   state.computePaint=0;
   if(document.hidden)return;
   if(state.computeDisplay)renderComputeTimes(...state.computeDisplay);
+  if(state.nextMapPaintAt!=null && computeElapsedMs(null,false)>=state.nextMapPaintAt){
+    state.nextMapPaintAt=undefined;
+    updateComparisonStatus();
+    scheduleLivePaint();
+  }
   if(state.computeClock?.startedAt!=null)state.computePaint=requestAnimationFrame(paintComputeClock);
 }
 function renderComputeTimes(first,second,selected,independently){
@@ -777,7 +809,7 @@ function replayTick(time) {
     state.selected = times.findLastIndex(at => at <= state.replayPosition) + 1;
   }
   const methodChanged=state.methodFrames && Object.values(state.methodFrames).some(list=>
-    list.findLastIndex(s=>s.at<=previousTime)!==list.findLastIndex(s=>s.at<=state.replayPosition));
+    list.findLastIndex(s=>(s.displayAt??s.at)<=previousTime)!==list.findLastIndex(s=>(s.displayAt??s.at)<=state.replayPosition));
   const fieldChanged=state.methodFrames?.echoSpline?.some(s=>s.fieldAt>previousTime && s.fieldAt<=state.replayPosition);
   if (state.selected !== previous || methodChanged || fieldChanged) {
     $('timeSlider').value = state.selected; renderSelected({framesOnly:true});

@@ -879,6 +879,62 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
       tick(24,3,3,2);tick(59,3,3,2);tick(60,3,3,3);
       assert.equal(state.selected,3);
     });
+
+    await t.test('held CNN positions paint between fits and replay on the same clock',async()=>{
+      const arrivals=[40,41,42,43,100,101,102,103,120,121,122];
+      const input={snapshots:arrivals.length,rightMethod:'spline-cnn-fast'};
+      const wire=arrivals.map((at,i)=>({t:i+1})),fits={1:[],5:[],9:[],11:[]};
+      const records=wire.map(({t})=>({result:{ms:t,curves:fits[t]??fits[t-(t-1)%4]},evaluation:{observed:[t]}}));
+      Object.assign(state,{generation:1,mode:'running',method:'compare',followLive:true,replay:false,
+        protocol:echoProtocol(input),scenario:{...state.scenario,input,wire,truth:wire},frames:[],evaluations:[],frameTimes:[],
+        methodFrames:null,selected:0,next:0,livePaint:0,computePaint:0,computeClock:null,computeDisplay:null,nextMapPaintAt:undefined});
+      let now=0,callbacks=[],frameId=0;
+      Object.assign(context,{performance:{now:()=>now},requestAnimationFrame:callback=>{callbacks.push(callback);return ++frameId;},
+        controls(){},notice(){},fail:error=>assert.fail(error.message),hashField:async()=>''});
+      vm.runInContext(section('async function receiveRunMessage(','async function hashField(')
+        +section('function renderSelected(','// Sweep diagnostics')+section('function replayTick(','function resetView('),context);
+      const send=message=>context.receiveRunMessage({requestId:1,...message},1);
+      function expectRight(t){
+        const view=maps.baselineMap.state;
+        assert.equal(view.frame?.t??0,t);
+        assert.equal(view.wire,wire[t-1]);
+        assert.equal(view.curves,records[t-1]?.result.curves);
+        assert.equal(view.observed,records[t-1]?.evaluation.observed);
+        assert.equal(maps.map.state.frame,undefined);
+        assert.equal(maps.densityMap.state.frame,undefined);
+      }
+      const timeline=[[40,1],[43,1],[49,1],[50,2],[59,2],[60,3],[70,4],[100,5],[103,5],[115,6],[120,9],[121,9],[122,11],[145,11]];
+      let received=0;
+      for(const [at,t] of timeline){
+        while(received<arrivals.length && arrivals[received]<=at){
+          now=arrivals[received];
+          await send({type:'method-frame',side:'guarded',t:received+1,at:now,...records[received]});
+          received++;
+        }
+        now=at;
+        // The clock can schedule a map paint for the next animation frame without another worker packet.
+        for(let i=0;i<2;i++)for(const paint of callbacks.splice(0))paint(now);
+        expectRight(t);
+      }
+      for(const [i,sample] of state.methodFrames.guarded.entries()){
+        assert.equal(sample.at,arrivals[i]);
+        assert.equal(sample.result,records[i].result);
+        assert.equal(sample.evaluation,records[i].evaluation);
+        assert.equal(sample.totalMs,(i+1)*(i+2)/2);
+      }
+      for(const {t} of wire){
+        now=200+t;
+        const left={result:{ms:1},evaluation:{}},right=records[t-1];
+        await send({type:'method-frame',side:'echoSpline',t,at:now,...left});
+        await send({type:'frame',next:t,fieldAt:now,frame:{t,methods:{echoSpline:left.result,guarded:right.result}},
+          evaluation:{methods:{echoSpline:left.evaluation,guarded:right.evaluation}}});
+      }
+      await send({type:'status',mode:'done'});
+      $('playbackSpeed').value='1';
+      const start=now;
+      context.toggleReplay();expectRight(0);
+      for(const [at,t] of timeline){now=start+at;context.replayTick(now);expectRight(t);}
+    });
   } finally {dom.window.close();}
 });
 

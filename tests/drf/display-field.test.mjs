@@ -128,3 +128,40 @@ test('new margins and a retried snapshot match a single full-grid accumulator', 
   assert.deepEqual(previous, saved);
   for (const key of ['Q','admitted','rejected','epsilonA','Dbar','betaHat']) assert.deepEqual(final[key],expected[key],key);
 });
+
+test('crossing the next two-cell block adds only that block and keeps both ellipse tips', () => {
+  const base = createGrid(16, 16, [-0.5, 15.5, -0.5, 15.5]), display = createDisplayField(base);
+  const earlier = config([18, 8], [22, 8], 6, 0.1), later = config([19, 8], [23, 8], 6, 0.1);
+  const first = display.step({t: 1, configs: [earlier]}), saved = structuredClone(first);
+  const second = display.step({t: 2, configs: [later]});
+  // The 4-SD outer right tips are 23.2 m and 24.2 m; each margin block is 2 m.
+  assert.deepEqual(first.grid.domain, [-0.5, 23.5, -0.5, 15.5]);
+  assert.deepEqual(second.grid.domain, [-0.5, 25.5, -0.5, 15.5]);
+  assert.equal(second.Q, 2);
+  for (const [x, pair] of [[23, earlier], [24, later]]) {
+    const peak = pathFieldPoint([x, 8], pair, pair.paths[0]);
+    assert.equal(peak.r, 0);
+    assert.equal(second.Dbar[indexAt(second.grid, x, 8)], Math.fround(peak.u / 2));
+  }
+  assert.deepEqual(first, saved);
+});
+
+test('the first expanded grid spanning multiple 64K row tiles matches a single full-grid field', () => {
+  const base = createGrid(200, 200, [-0.5, 199.5, -0.5, 199.5]);
+  const poses = Array.from({length: 10}, (_, i) => [94 + i, 96 + i % 5]);
+  const configs = [];
+  for (let i = 0; i < poses.length; i++) for (let j = i + 1; j < poses.length; j++) {
+    configs.push({...config(poses[i], poses[j], 260 + (i + j) % 4), i, j});
+  }
+  const wire = {t: 1, configs}, frame = createDisplayField(base).step(wire);
+  const {nx, ny} = frame.grid, boundaryRow = Math.floor(64 * 1024 / nx);
+  assert.ok(nx * ny > 64 * 1024 && boundaryRow > 0 && boundaryRow < ny);
+  const reference = createField(frame.grid).step(wire);
+  for (const row of [boundaryRow - 1, boundaryRow]) {
+    const expectedRow = reference.Dbar.subarray(row * nx, (row + 1) * nx);
+    assert.ok(expectedRow.some(value => value > 0), 'each side of the tile boundary has measured support');
+    assert.deepEqual(frame.Dbar.subarray(row * nx, (row + 1) * nx), expectedRow);
+  }
+  assert.equal(frame.Q, 45);
+  for (const key of ['Q', 'epsilonA', 'Dbar', 'betaHat']) assert.deepEqual(frame[key], reference[key], key);
+});
