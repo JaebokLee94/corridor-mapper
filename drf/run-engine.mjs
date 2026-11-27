@@ -1,7 +1,7 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261119-cnn-stride4';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid } from './field.mjs?v=20261119-cnn-stride4';
-import { createDisplayField } from './display-field.mjs';
+import { createDisplayField } from './display-field.mjs?v=20261127-independent-field';
 import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261119-cnn-stride4';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 
@@ -26,48 +26,64 @@ function localMethod(side,input,domain){
     step:wire=>estimator.stepSide(side,wire),close:()=>estimator.close()};
 }
 
-/** Each estimator consumes the same ordered wires on its own worker and clock.
- * Emit its result immediately. EchoSpline advances the display field. Joined frames stay ordered for exports and older clients.
+function localField(grid,numerical){
+  return {...createDisplayField(grid,numerical),ready:Promise.resolve(),close(){}};
+}
+
+/** The estimators and display field advance independently on the same measured
+ * wires. Joined snapshots retain all three outputs for replay and exports.
  */
-export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generateScenario,createMethod=localMethod}={}) {
+export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generateScenario,createMethod=localMethod,createFieldClient=localField}={}) {
   if(typeof emit!=='function')throw new TypeError('A result emitter is required');
   let active;
   const current=run=>active===run&&!['done','cancelled','failed'].includes(run.target);
   const send=(run,type,value={})=>emit({type,requestId:run.requestId,...value});
   const status=(run,mode)=>send(run,'status',{mode,next:run.next,total:run.input.snapshots});
-  function close(run){for(const lane of Object.values(run.lanes))lane.client.close();}
+  function close(run){
+    for(const lane of Object.values(run.lanes)){
+      lane.client.close(); lane.pending.clear();
+    }
+  }
   function fail(run,error){
     if(!current(run))return;
     run.target='failed';close(run);send(run,'error',{message:error.message});
   }
 
   function join(run){
-    const t=run.next+1,left=run.lanes.echoSpline.pending.get(t),right=run.lanes.guarded.pending.get(t);
-    if(!left||!right)return;
+    const t=run.next+1,left=run.lanes.echoSpline.pending.get(t),right=run.lanes.guarded.pending.get(t),
+      display=run.lanes.field.pending.get(t);
+    if(!left||!right||!display)return;
     for(const lane of Object.values(run.lanes))lane.pending.delete(t);
-    const frame={...left.field};
+    const frame={...display.field};
     frame.methods={echoSpline:left.result,guarded:right.result};
     frame.candidates=right.result.candidates;frame.psptMs=right.result.ms;frame.method=run.method;
     left.evaluation.diagnostics=right.evaluation.diagnostics;
     const evaluation={...right.evaluation,methods:{echoSpline:left.evaluation,guarded:right.evaluation}};
     run.next=t;
-    send(run,'frame',{frame,evaluation,next:t});
+    send(run,'frame',{frame,evaluation,next:t,fieldAt:display.at});
   }
+
+  function recordMethod(run,side,t,at,result){
+    const lane=run.lanes[side];
+    const evaluation=lane.evaluator.step({t,...result,method:run.method,curveMethod:side==='echoSpline'?side:run.input.rightMethod},
+      side==='echoSpline'?{diagnostics:{}}:null,result.bridges,result.extendedBridges,result.checkedChains);
+    lane.pending.set(t,{result,evaluation});
+    const {diagnostics,...metrics}=evaluation;
+    const display=side==='echoSpline' && !run.lanes.guarded.pending.has(t) ? run.lanes.field.pending.get(t) : null;
+    send(run,'method-frame',{side,t,at,result,evaluation:metrics,field:display?.field});
+  }
+
   async function advance(run,side){
     const lane=run.lanes[side];
     while(current(run)&&run.target==='running'&&lane.next<lane.limit){
       const wire=run.scenario.wire[lane.next],result=await lane.client.step(wire);
       if(!current(run))return;
-      const t=++lane.next;
-      const evaluation=lane.evaluator.step({t,...result,method:run.method,curveMethod:side==='echoSpline'?side:run.input.rightMethod},
-        side==='echoSpline'?{diagnostics:{}}:null,result.bridges,result.extendedBridges,result.checkedChains);
-      const field=side==='echoSpline' ? run.field.step(wire) : undefined;
-      lane.pending.set(t,{result,evaluation,field});
-      const {diagnostics,...metrics}=evaluation;
-      // A ready right-hand result delivers the field in the immediately following joined frame.
-      const earlyField=field && !run.lanes.guarded.pending.has(t) ? field : undefined;
-      const at=run.elapsed+performance.now()-run.started;
-      send(run,'method-frame',{side,t,at,result,evaluation:metrics,field:earlyField});
+      const at=run.elapsed+performance.now()-run.started,t=++lane.next;
+      if(side==='field'){
+        lane.pending.set(t,{field:result,at});
+        if(run.lanes.echoSpline.pending.has(t)&&!run.lanes.guarded.pending.has(t))
+          send(run,'field-frame',{t,at,field:result});
+      }else recordMethod(run,side,t,at,result);
       if(!current(run))return;
       join(run);
       if(current(run)&&lane.next<lane.limit)await yieldTask();
@@ -78,7 +94,11 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
     run.busy=true;run.started=performance.now();
     send(run,'compute-clock',{elapsedMs:run.elapsed,running:true});
     try{
-      await Promise.all(sides.map(side=>advance(run,side)));
+      const lanes=Object.keys(run.lanes);
+      // A resume can arrive while a paused lane still has a request in flight.
+      do {
+        await Promise.all(lanes.map(side=>advance(run,side)));
+      }while(current(run)&&run.target==='running'&&lanes.some(side=>run.lanes[side].next<run.lanes[side].limit));
       if(!current(run))return;
       run.elapsed+=performance.now()-run.started;
       send(run,'compute-clock',{elapsedMs:run.elapsed,running:false});
@@ -102,10 +122,13 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       if(!current(run))return;
       scenario.input=input;run.scenario=scenario;
       const grid=createGrid(input.grid,input.grid,scenario.domain);
-      run.field=createDisplayField(grid,{band:input.band,perimeter:input.perimeter});
-      for(const side of sides)run.lanes[side]={client:createMethod(side,input,scenario.domain),
-        evaluator:createPSPTEvaluator(scenario,grid),pending:new Map(),next:0,limit:message.single?1:input.snapshots};
-      await Promise.all(sides.map(side=>run.lanes[side].client.ready));
+      await Promise.all([...sides,'field'].map(async side=>{
+        const client=side==='field' ? createFieldClient(grid,{band:input.band,perimeter:input.perimeter})
+          : createMethod(side,input,scenario.domain);
+        const lane=run.lanes[side]={client,pending:new Map(),next:0,limit:message.single?1:input.snapshots};
+        await client.ready;
+        if(side!=='field'&&current(run))lane.evaluator=createPSPTEvaluator(scenario,grid);
+      }));
       if(!current(run))return;
       run.ready=true;
       send(run,'prepared',{scenario,grid,protocol:echoProtocol(input)});

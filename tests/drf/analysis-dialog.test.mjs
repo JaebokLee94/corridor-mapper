@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
+import { setMathText } from '../../drf/dom-math.mjs';
 
 function fixture(t) {
   const html = readFileSync(new URL('../../drf.html', import.meta.url), 'utf8');
@@ -23,6 +24,25 @@ function fixture(t) {
   $('analysisButton').click();
   return { $, dialog, fire };
 }
+
+test('the measured cell readout shares the analysis button footer and renders each field symbol', t => {
+  const { $ } = fixture(t);
+  const inspector=$('inspector'), button=$('analysisButton');
+  assert.equal(button.nextElementSibling,inspector);
+  assert.equal(inspector.parentElement.className,'workbench-footer');
+  assert.equal(inspector.closest('.dashboard'),null);
+  const previous=globalThis.document;
+  globalThis.document=inspector.ownerDocument;
+  t.after(()=>{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;});
+  const symbols=['D','A','Q',String.raw`\bar{D}`,String.raw`\hat{\beta}`,String.raw`\mathrm{m}^{-2}`];
+  setMathText(inspector,['snapshot 10 · grid (109.00, 6.00) m · ',...symbols.map(tex=>({tex})),
+    ' · Wall-sample distance 9.27 m · evaluation only']);
+  assert.deepEqual([...inspector.querySelectorAll('[data-rendered-tex]')].map(node=>node.dataset.renderedTex),symbols);
+  for(const node of inspector.querySelectorAll('[data-tex]')) {
+    assert.ok(node.querySelector('svg path'));assert.ok(parseFloat(node.firstElementChild.style.width)>0);
+  }
+  assert.match(inspector.textContent,/Wall-sample distance 9.27 m/);
+});
 
 test('Analysis tools closes on each outside edge and can reopen', t => {
   const { $, dialog, fire } = fixture(t);

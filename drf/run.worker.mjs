@@ -1,6 +1,6 @@
-import { workerMethod } from './method-client.mjs?v=20261119-cnn-stride4';
+import { workerDisplayField, workerMethod } from './method-client.mjs?v=20261127-independent-field';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { createRunEngine } from './run-engine.mjs?v=20261127-field-extent';
+import { createRunEngine } from './run-engine.mjs?v=20261127-independent-field';
 import { warmTruthCache } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 import { truthCacheKey } from './truth-cache.mjs';
@@ -12,6 +12,11 @@ const identity = raw => {
 let warming, pendingStart;
 
 const engine = createRunEngine({ prepare:preparePublicScenario,
+  createFieldClient(grid,numerical){
+    const worker=globalThis.__echoFieldUrl?new Worker(globalThis.__echoFieldUrl):
+      new Worker(new URL('./field.worker.mjs?v=20261127-independent-field',import.meta.url),{type:'module'});
+    return workerDisplayField(worker,grid,numerical);
+  },
   createMethod(side,input,domain){
     const worker=globalThis.__echoMethodUrl?new Worker(globalThis.__echoMethodUrl):
       new Worker(new URL('./compare.worker.mjs?v=20261119-cnn-stride4',import.meta.url),{type:'module'});

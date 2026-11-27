@@ -43,7 +43,8 @@ test('published online and sweep workers request one version of each wall estima
   const entries={
     'drf.html':['app.mjs','offline.bundle.js'],
     'drf/app.mjs':['experiment-settings.mjs','echo-comparison.mjs','sweep.mjs'],
-    'drf/run.worker.mjs':['method-client.mjs','run-engine.mjs','compare.worker.mjs'],
+    'drf/run.worker.mjs':['method-client.mjs','run-engine.mjs','compare.worker.mjs','field.worker.mjs'],
+    'drf/device-benchmark.mjs':['method-client.mjs','compare.worker.mjs'],
     'drf/run-engine.mjs':['experiment-settings.mjs','echo-comparison.mjs'],
     'drf/compare.worker.mjs':['echo-comparison.mjs'],
     'drf/sweep.mjs':['experiment-settings.mjs','echo-comparison.mjs','sweep.worker.mjs'],

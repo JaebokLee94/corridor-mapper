@@ -1,12 +1,14 @@
 import { createGrid, createField } from "./field.mjs?v=20261118-device-selection-final";
+import { createDisplayField } from "./display-field.mjs?v=20261127-independent-field";
 
 let field;
 globalThis.onmessage = ({ data: message }) => {
   try {
-    if (message.type === "init") {
+    if (message.type === "init" || message.type === "initDisplay") {
       const grid = message.grid ?? {}, numerical = message.numerical ?? {};
-      field = createField(createGrid(grid.nx, grid.ny, grid.domain), numerical);
-      globalThis.postMessage({ type: "initialized", requestId: message.requestId, grid: field.grid });
+      const baseGrid = createGrid(grid.nx, grid.ny, grid.domain);
+      field = (message.type === "initDisplay" ? createDisplayField : createField)(baseGrid, numerical);
+      globalThis.postMessage({ type: "initialized", requestId: message.requestId, grid: baseGrid });
     } else if (message.type === "step") {
       if (!field) throw new Error("field worker must be initialized");
       const frame = field.step(message.snapshot);

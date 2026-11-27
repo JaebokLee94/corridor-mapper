@@ -821,6 +821,64 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
       context.renderSelected(new dom.window.Event('change'));
       finish({t:1});await stale;assert.equal($('inspector').textContent,'');
     });
+
+    await t.test('live maps and replay advance per method while the independent field is still pending',async()=>{
+      let now=0;
+      Object.assign(state,{generation:1,mode:'running',method:'compare',methodFrames:null,followLive:true,
+        frames:[],evaluations:[],frameTimes:[],selected:0,next:0,replay:false,computeClock:null});
+      Object.assign(context,{performance:{now:()=>now},requestAnimationFrame:()=>1,replayFrame:0,
+        syncComputeClock(){},controls(){},notice:text=>{$('status').textContent=text;},fail:error=>assert.fail(error.message),hashField:async()=>''});
+      vm.runInContext(section('async function receiveRunMessage(','async function hashField(')+
+        section('function replayTick(','function resetView('),context);
+      const send=async message=>{await context.receiveRunMessage({requestId:1,...message},1);};
+      const method=(side,t,at)=>send({type:'method-frame',side,t,at,result:{ms:1},evaluation:{}});
+      const join=(t,fieldAt)=>send({type:'frame',next:t,fieldAt,frame:{t,methods:{echoSpline:{ms:1},guarded:{ms:1}}},
+        evaluation:{methods:{echoSpline:{},guarded:{}}}});
+      function expectViews(left,right,field){
+        for (const [view,t] of [[maps.map,left],[maps.baselineMap,right],[maps.densityMap,field],[maps.contrastMap,field]]) {
+          assert.equal(view.state.frame?.t??0,t);assert.equal(view.state.wire,snapshots[t-1]);
+          assert.deepEqual(view.state.history,snapshots.slice(0,t));
+        }
+        assert.match($('primaryProgress').title,new RegExp('Snapshot '+left+'/3'));
+        assert.match($('secondaryProgress').title,new RegExp('Snapshot '+right+'/3'));
+      }
+      function live(left,right,field){
+        assert.ok(state.livePaint,'a completed result schedules painting without waiting for the next pair');
+        state.livePaint=0;context.renderSelected({framesOnly:true});expectViews(left,right,field);
+      }
+      await method('echoSpline',1,2);await method('echoSpline',2,4);live(2,0,0);
+      assert.equal($('status').textContent,'EchoSpline 2/3 · WM-P 0/3');
+      const leftPane=maps.map.state,rightPane=maps.baselineMap.state;
+      await send({type:'field-frame',t:1,at:8,field:{t:1,grid:wideGrid}});live(2,0,1);
+      assert.equal(maps.map.state,leftPane);assert.equal(maps.baselineMap.state,rightPane);
+      const heat=maps.densityMap.state;
+      await method('guarded',1,10);await join(1,8);live(2,1,1);
+      assert.equal(maps.map.state,leftPane);assert.equal(maps.densityMap.state,heat);
+      assert.equal(state.methodFrames.echoSpline[0].field,undefined);
+      await send({type:'field-frame',t:1,at:8,field:{t:1,grid:wideGrid}});
+      assert.equal(state.methodFrames.echoSpline[0].field,undefined,'joined fields own their raster once');
+      await method('guarded',2,12);await method('guarded',3,14);live(2,3,1);
+      assert.equal($('status').textContent,'EchoSpline 2/3 · WM-P 3/3');
+      state.mode='paused';context.renderSelected();expectViews(2,3,1);
+      $('status').textContent='Pausing after the current snapshot.';
+      await join(2,20);assert.equal($('status').textContent,'Pausing after the current snapshot.');
+      state.mode='running';live(2,3,2);
+      await method('echoSpline',3,24);live(3,3,2);
+      assert.equal($('status').textContent,'Both maps complete · updating measurement fields 2 / 3');
+      await join(3,60);live(3,3,3);
+      assert.equal($('status').textContent,'Both maps complete · measurement fields ready');
+      assert.deepEqual(state.frameTimes,[10,20,60]);
+      await send({type:'status',mode:'done'});
+      assert.equal($('status').textContent,'Complete · 3 snapshots');
+      $('playbackSpeed').value='1';
+      context.toggleReplay();expectViews(0,0,0);
+      assert.equal($('replayButton').textContent,'Stop');
+      const tick=(time,...counts)=>{now=time;context.replayTick(time);expectViews(...counts);};
+      tick(4,2,0,0);tick(8,2,0,1);  // Only the delayed field changes at 8 ms.
+      tick(10,2,1,1);tick(14,2,3,1);tick(20,2,3,2);
+      tick(24,3,3,2);tick(59,3,3,2);tick(60,3,3,3);
+      assert.equal(state.selected,3);
+    });
   } finally {dom.window.close();}
 });
 

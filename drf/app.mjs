@@ -17,7 +17,7 @@ import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261127-field-extent';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261104-diagnostics1';
-import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261119-cnn-stride4';
+import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261127-independent-field';
 import { createRunPreloader } from './run-preloader.mjs?v=20261104-background2';
 
 renderMath();
@@ -123,7 +123,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261127-field-extent';
+  const revision = '20261127-independent-field';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -398,6 +398,17 @@ async function receiveRunMessage(data, generation) {
       if(!list || data.t!==list.length+1)throw new Error('Out-of-order method result');
       list.push({...data,totalMs:(list.at(-1)?.totalMs??0)+data.result.ms});
       syncComputeClock(Math.max(data.at,state.computeClock?.elapsedMs??0),true);
+      updateComparisonStatus();
+      scheduleLivePaint();
+      return;
+    }
+    if (data.type === 'field-frame') {
+      // A joined frame already owns this grid if the same prefix has reached both estimators.
+      if (state.frames[data.t-1]) return;
+      const sample=state.methodFrames?.echoSpline[data.t-1];
+      if (!sample || data.field?.t!==data.t) throw new Error('Unexpected display field snapshot');
+      sample.field=data.field;
+      sample.fieldAt=data.at;
       scheduleLivePaint();
       return;
     }
@@ -408,10 +419,12 @@ async function receiveRunMessage(data, generation) {
         const pair=Object.entries(state.methodFrames).map(([side,list])=>{
           const sample=list[data.next-1];
           delete sample.field;
+          if (side==='echoSpline' && Number.isFinite(data.fieldAt)) sample.fieldAt=data.fieldAt;
           sample.result=data.frame.methods[side];sample.evaluation=data.evaluation.methods[side];
           return sample.at;
         });
-        state.frameTimes.push(Math.max(...pair));
+        // Slider positions follow complete snapshots. Each map still uses its own completion clock.
+        state.frameTimes.push(Math.max(...pair,data.fieldAt ?? 0));
       }else {
         state.frameTimes.push(state.next ? state.frameTimes.at(-1) + (now - state.lastFrameAt) : 0);
         // Older workers only report estimator durations in the joined frame.
@@ -426,7 +439,7 @@ async function receiveRunMessage(data, generation) {
       if(state.methodFrames)scheduleLivePaint();
       else renderSelected();
       controls();
-      notice(`Comparing methods ${data.frame.t} / ${state.scenario.input.snapshots}`);
+      updateComparisonStatus();
       return;
     }
     if (data.type === 'status') {
@@ -444,9 +457,22 @@ async function receiveRunMessage(data, generation) {
     }
   } catch (error) { if (generation === state.generation) fail(error); }
 }
+function updateComparisonStatus() {
+  if (state.mode!=='running') return;
+  const total=state.scenario.input.snapshots, joined=state.frames.length;
+  const left=state.methodFrames?.echoSpline.length ?? joined, right=state.methodFrames?.guarded.length ?? joined;
+  if (state.methodFrames && left===total && right===total) {
+    notice(joined<total ? `Both maps complete · updating measurement fields ${joined} / ${total}` : 'Both maps complete · measurement fields ready');
+  } else if (left!==right) {
+    const name=(state.protocol?.guarded?.name ?? 'WM-P').split(' (')[0].replace(/^EchoSpline-/,'ES-');
+    notice(`EchoSpline ${left}/${total} · ${name} ${right}/${total}`);
+  } else {
+    notice(`Comparing methods ${left} / ${total}`);
+  }
+}
 function scheduleLivePaint() {
   if (!document.hidden && !state.livePaint) {
-    state.livePaint = requestAnimationFrame(() => { state.livePaint = 0; renderSelected(); });
+    state.livePaint = requestAnimationFrame(() => { state.livePaint = 0; renderSelected({framesOnly:true}); });
   }
 }
 function commandRun(type) {
@@ -514,7 +540,7 @@ function previewWalls() {
     return preview;
   }
 }
-function renderSelected({layoutOnly=false}={}) {
+function renderSelected({layoutOnly=false,framesOnly=false}={}) {
   // Keep every result, but defer hidden-tab chart work until visibility returns.
   if (document.hidden) return;
   const frame = state.frames[state.selected - 1], evaluation = state.evaluations[state.selected - 1], scenario = state.scenario;
@@ -556,9 +582,16 @@ function renderSelected({layoutOnly=false}={}) {
     return (kind === 'extended' || kind === 'checked') && map?.extendedBridges?.length ? [...map.bridges, ...map.extendedBridges] : map?.bridges ?? [];
   };
   const walls = scenario?.walls ?? previewWalls();
-  // Older saved runs only carry fields on paired frames.
-  const fieldFrame = records.echoSpline?.field ?? (independently
-    ? state.frames[Math.min(methodT(first), state.frames.length) - 1] : frame);
+  let fieldFrame=frame;
+  if (independently) {
+    // The field can trail either map. Select a complete, visible prefix even during replay.
+    fieldFrame=undefined;
+    for (let t=methodT(first);t>0 && !fieldFrame;t--) {
+      const sample=state.methodFrames.echoSpline[t-1];
+      if (state.replay && sample.fieldAt>state.replayPosition) continue;
+      fieldFrame=sample.field ?? state.frames[t-1];
+    }
+  }
   const displayedFrame = method => independently ? records[method] : frame;
   // The inspector itself can resize the charts; redrawing the same frames must keep its reading.
   if (!layoutOnly || fieldFrame!==densityMap.state?.frame ||
@@ -598,12 +631,15 @@ function renderSelected({layoutOnly=false}={}) {
   if($('historyMetric').selectedOptions[0]?.disabled)$('historyMetric').value='mapF1';
   renderComputeTimes(first,second,selected,independently);
   for(const [view,method,labelId] of [[map,selected,'primaryProgress'],[baselineMap,second,'secondaryProgress']]){
+    const paneFrame=displayedFrame(method);
+    // A heatmap or the other estimator can finish between two updates of this pane.
+    if (framesOnly && view.state?.grid===display.grid && view.state?.frame===paneFrame && view.state?.mode==='geometry') continue;
     const t=methodT(method),sample=records[method],result=methodResult(method),label=$(labelId);
     label.textContent=result?.backend??(result?'CPU':'');
     label.hidden=!independently || !label.textContent;
     if(independently){
       const ms=sample?.totalMs??0;
-      label.title=`Cumulative estimator time at this point: ${(ms/1000).toFixed(3)} s.`;
+      label.title=`Snapshot ${t}/${scenario?.input.snapshots ?? 0}. Cumulative estimator time at this point: ${(ms/1000).toFixed(3)} s.`;
       if(Number.isFinite(result?.ms)){
         label.title+=` This update: ${result.ms.toFixed(3)} ms.`;
         if(result.backend){
@@ -624,13 +660,15 @@ function renderSelected({layoutOnly=false}={}) {
       const stages=result?.stageTotalsMs;
       if(stages)label.title+=` GAT inference: ${(stages.gat/1000).toFixed(3)} s. GPR fit and prediction: ${(stages.gpr/1000).toFixed(3)} s. Other processing: ${(Math.max(0,ms-stages.gat-stages.gpr)/1000).toFixed(3)} s.`;
     }
-    view.set({...display,frame:displayedFrame(method),truth:scenario?.truth[t-1],wire:scenario?.wire[t-1],
+    view.set({...display,frame:paneFrame,truth:scenario?.truth[t-1],wire:scenario?.wire[t-1],
       history:scenario?.wire.slice(0,t),observed:methodEvaluation(method)?.observed,bridges:visibleBridges(method),
       curves:result?.curves,candidates:result?.candidates??[],mode:'geometry',xRange:[-10,display.domain[1]+10]});
   }
-  const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
-  densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
-  contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
+  if (!framesOnly || densityMap.state?.grid!==display.grid || densityMap.state?.frame?.t!==fieldFrame?.t || !densityMap.state?.heatField) {
+    const fieldLayers={showTruth:layers.showTruth,showVehicles:layers.showVehicles};
+    densityMap.set({...display,layers:fieldLayers,heatField:'Dbar'});
+    contrastMap.set({...display,layers:fieldLayers,heatField:'betaHat'});
+  }
   $('snapshotLabel').textContent = `${frame?.t ?? 0} / ${scenario?.input.snapshots ?? form.elements.namedItem('snapshots').value}`;
   const visibleEvaluation=independently?{methods:{[first]:methodEvaluation(first),[second]:methodEvaluation(second)}}:evaluation;
   renderInterpolationPanel($, state.method, kind, visibleEvaluation, fmt, legacy, right.name, rightSolo);
@@ -740,8 +778,9 @@ function replayTick(time) {
   }
   const methodChanged=state.methodFrames && Object.values(state.methodFrames).some(list=>
     list.findLastIndex(s=>s.at<=previousTime)!==list.findLastIndex(s=>s.at<=state.replayPosition));
-  if (state.selected !== previous || methodChanged) {
-    $('timeSlider').value = state.selected; renderSelected();
+  const fieldChanged=state.methodFrames?.echoSpline?.some(s=>s.fieldAt>previousTime && s.fieldAt<=state.replayPosition);
+  if (state.selected !== previous || methodChanged || fieldChanged) {
+    $('timeSlider').value = state.selected; renderSelected({framesOnly:true});
     // Start the unscaled hold after drawing the final metrics, even on a late repaint.
     if (state.selected === times.length) state.replayAt = performance.now();
   }

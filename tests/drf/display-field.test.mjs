@@ -107,3 +107,24 @@ test('full mode preserves Float32 density tails above 16 SD for narrow high-dens
   }
   assert.ok(beyond16 > 0);
 });
+
+test('new margins and a retried snapshot match a single full-grid accumulator', () => {
+  const base = createGrid(10, 10, [-0.5, 9.5, -0.5, 9.5]);
+  const display = createDisplayField(base);
+  const wires = [
+    {t:1,configs:[config([2,2],[6,2],4.5)]},
+    {t:2,configs:[config([15,12],[17,16],20)]},
+    {t:3,configs:[config([-1,-3],[-4,-5],24),config([15,1],[15,2],8)]},
+  ];
+  display.step(wires[0]);
+  const previous = display.step(wires[1]), saved = structuredClone(previous);
+  // Only cells at x=15 have zero variance. The original tile can complete before a margin rejects the input.
+  const invalid = config([15,1],[15,2],8,0);
+  invalid.Sigma_i = [1,0,0]; invalid.Sigma_j = [1,0,0];
+  assert.throws(() => display.step({t:3,configs:[invalid]}), /variance/);
+  const final = display.step(wires[2]), reference = createField(final.grid);
+  let expected;
+  for (const wire of wires) expected = reference.step(wire);
+  assert.deepEqual(previous, saved);
+  for (const key of ['Q','admitted','rejected','epsilonA','Dbar','betaHat']) assert.deepEqual(final[key],expected[key],key);
+});

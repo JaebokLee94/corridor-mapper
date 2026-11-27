@@ -27,6 +27,7 @@
 * { box-sizing:border-box; }
 body { margin:0; background:var(--color-bg); color:var(--color-ink); font:14px/1.5 var(--font-ui); -webkit-font-smoothing:antialiased; }
 h1,h2,h3,p,figure { margin:0; }
+html { scrollbar-gutter:stable; }
 h1 { font-size:28px; font-weight:650; line-height:1.2; letter-spacing:-.025em; }
 h2 { font-size:16px; font-weight:650; line-height:1.35; }
 h3 { font-size:18px; margin:24px 0 10px; }
@@ -266,8 +267,6 @@ kbd { font:inherit; color:var(--color-ink-muted); padding:2px 4px; background:va
 
 .line-pspt,.line-baseline { width:18px; height:0; border-top:2px solid var(--color-accent); }
 .line-baseline { border-color:var(--color-baseline); border-top-style:dashed; }
-.inspector { padding:12px 0 16px; font-size:14px; color:var(--color-ink-muted); min-height:3em; overflow-wrap:anywhere; }
-.inspector:empty { display:none; }
 .analysis-panel { background:var(--color-surface-1); border:1px solid var(--color-line); border-radius:var(--radius); padding:16px 20px; }
 .analysis-content { padding-top:16px; }
 .tabs { display:flex; gap:4px; border-bottom:1px solid var(--color-line); margin-bottom:20px; padding-bottom:12px; }
@@ -414,13 +413,24 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 .map-name { max-width:100%; margin:0; font-size:18px; color:var(--color-accent); }
 .baseline-name { color:var(--color-baseline); }
 #baselineCanvas { height:clamp(290px,24vw,430px); }
-.workbench-footer { display:flex; align-items:center; flex-wrap:wrap; gap:8px 24px; min-width:0; }
-.analysis-launch { flex:none; width:auto; max-width:100%; gap:18px; }
-.workbench-footer .provenance { flex:1 1 480px; justify-content:flex-end; margin:0; padding:0; gap:4px 16px; font-size:12px; }
+.workbench-footer {
+  display:grid; grid-template-columns:fit-content(42%) minmax(0,1fr); align-items:start;
+  gap:4px 12px; min-width:0;
+}
+.analysis-launch { grid-area:1 / 1; justify-self:start; max-width:100%; gap:8px; white-space:normal; }
+.inspector {
+  grid-area:1 / 2; align-self:center; min-width:0; color:var(--color-ink-muted);
+  font-size:13px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere;
+}
+.workbench-footer .provenance { grid-column:1/-1; justify-content:flex-end; margin:0; padding:0; gap:4px 16px; font-size:12px; }
+@media(min-width:1100px) {
+  .inspector:empty + .provenance { grid-area:1 / 2; align-self:center; }
+}
 @media(max-width:1099px) { .workbench-footer .provenance { justify-content:flex-start; } }
 #analysisDialog { width:min(1200px,calc(100vw - 32px)); overscroll-behavior:contain; }
 @media(min-width:1100px) and (min-height:700px) {
   :root { --header-height:56px; --sidebar:260px; }
+  html { scrollbar-gutter:auto; }
   body { height:100dvh; overflow:hidden; }
   .site-header { height:var(--header-height); min-height:0; padding:8px 20px; }
   .brand { font-size:22px; }
@@ -448,12 +458,13 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .sidebar .toggle-list legend { margin:3px 0; }
   .sidebar .toggle { min-height:clamp(24px,3.2dvh,28px); }
   .sidebar-section>.note { margin:4px 0 6px; }
-  .content { min-height:0; overflow:auto; overscroll-behavior:contain; padding:12px 18px 8px; display:grid; grid-template-rows:minmax(32px,auto) minmax(540px,1fr) auto; gap:6px; }
+  /* Reserve the existing button row for layout. Longer readings extend the scrollable footer below the plots. */
+  .content { min-height:0; overflow:auto; scrollbar-gutter:stable; overscroll-behavior:contain; padding:12px 18px 8px; display:grid; grid-template-rows:minmax(32px,auto) minmax(540px,1fr) 30px; gap:6px; }
+  .workbench-footer { align-self:start; }
   .workbench-title { margin:0; gap:12px; }
   .run-state { transform:translateY(-3px); margin-right:0; }
   h1 { font-size:22px; }
-  .dashboard { min-height:0; display:grid; grid-template-rows:minmax(420px,1.9fr) 42px minmax(var(--field-row-min,150px),1fr) 20px; gap:6px; }
-  .dashboard:has(#inspector:empty) { grid-template-rows:minmax(420px,1.9fr) 42px minmax(var(--field-row-min,150px),1fr); }
+  .dashboard { min-height:0; display:grid; grid-template-rows:minmax(420px,1.9fr) 42px minmax(var(--field-row-min,150px),1fr); gap:6px; }
   /* Keep replay controls under the maps, freeing their row for the metrics. */
   .dashboard { grid-template-columns:minmax(0,1fr) var(--comparison-width,320px); column-gap:12px; }
   .dashboard .main-grid { display:contents; }
@@ -461,7 +472,6 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .dashboard .results-panel { grid-column:2; grid-row:1/3; }
   .dashboard .playback-bar { grid-column:1; grid-row:2; }
   .dashboard .field-grid { grid-column:1/-1; grid-row:3; }
-  .dashboard .inspector { grid-column:1/-1; grid-row:4; }
   .main-grid { min-height:0; grid-template-columns:minmax(0,1fr) 350px; gap:12px; align-items:stretch; }
   #viewMain { display:grid; min-height:0; grid-template-rows:auto minmax(0,1fr) auto; }
   .map-panel { --heading-inset:12px; --method-button-inset:8px; }
@@ -491,7 +501,6 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   #viewMetrics { grid-column:auto; grid-template-rows:auto minmax(0,1fr) 20px; }
   #viewMetrics .vlabel { flex-wrap:wrap; }
   #viewMetrics select { width:auto; height:28px; font-size:13px; }
-  .inspector { padding:0; font-size:12px; line-height:20px; min-height:0; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
   .analysis-launch { min-height:30px; padding:4px 12px; }
   .provenance { margin:0; padding:0; font-size:12px; gap:8px 18px; align-items:center; }
   footer { display:none; }
@@ -513,7 +522,7 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
 @media(min-width:1400px) and (min-height:900px) {
   .dashboard:has(#mapPair:not([data-mode="compare"])) {
     grid-template-columns:minmax(0,1.6fr) minmax(280px,.7fr) minmax(310px,.65fr);
-    grid-template-rows:repeat(2,minmax(250px,1fr)) 36px 20px;
+    grid-template-rows:repeat(2,minmax(250px,1fr)) 36px;
     --comparison-height:470px;
     column-gap:12px;
   }
@@ -525,8 +534,6 @@ dialog p { font-size:16px; line-height:1.65; margin:12px 0; }
   .dashboard:has(#mapPair:not([data-mode="compare"])) #viewDensity { grid-column:2; grid-row:1; }
   .dashboard:has(#mapPair:not([data-mode="compare"])) #viewContrast { grid-column:2; grid-row:2; }
   .dashboard:has(#mapPair:not([data-mode="compare"])) .playback-bar { grid-column:1/3; grid-row:3; }
-  .dashboard:has(#mapPair:not([data-mode="compare"])) .inspector { grid-column:1/-1; grid-row:4; }
-  .dashboard:has(#mapPair:not([data-mode="compare"])):has(#inspector:empty) { grid-template-rows:repeat(2,minmax(250px,1fr)) 36px; }
 }
 
 @media(min-width:1400px) and (min-height:800px) and (max-height:839px) {

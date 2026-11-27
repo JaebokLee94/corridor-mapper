@@ -64,7 +64,12 @@ test('offline bundle is current and its classic Blob workers preserve the field'
     }
   }
   assert.equal(blobs.size, 7);
-  const messages = [], workerContext = vm.createContext({ performance, postMessage: data => messages.push(data) });
+  const runContext = vm.createContext({performance, TextEncoder, TextDecoder, URL});
+  vm.runInContext(await blobs.get(runtime.worker('run').url).text(), runContext);
+  assert.equal(runContext.__echoMethodUrl, runtime.worker('compare').url);
+  assert.equal(runContext.__echoFieldUrl, runtime.worker('field').url);
+  const messages = [], workerContext = vm.createContext({ performance,
+    postMessage: (data, transfer=[]) => messages.push(structuredClone(data,{transfer})) });
   workerContext.self = workerContext;
   vm.runInContext(await blobs.get(runtime.worker('field').url).text(), workerContext);
   const grid = createGrid(19, 13), numerical = { band: 4, perimeter: 'exact' };
@@ -76,6 +81,16 @@ test('offline bundle is current and its classic Blob workers preserve the field'
   assert.equal(actual.type, 'frame'); assert.equal(actual.Q, expected.Q);
   assert.deepEqual(Array.from(actual.Dbar), Array.from(expected.Dbar));
   assert.deepEqual(Array.from(actual.betaHat), Array.from(expected.betaHat));
+  workerContext.onmessage({ data: { type: 'initDisplay', requestId: 3, grid, numerical } });
+  const extended = {...snapshot, configs: [{...snapshot.configs[0], paths: [{dHat:100, sigmaD:.1}]}]};
+  for (const t of [1,2]) {
+    workerContext.onmessage({data:{type:'step',snapshot:{...extended,t}}});
+    const frame=messages.at(-1);
+    assert.equal(frame.type,'frame'); assert.equal(frame.Q,t);
+    assert.ok(frame.grid.xmin<grid.xmin && frame.grid.xmax>grid.xmax);
+    assert.equal(frame.grid.x.length,frame.grid.nx,'shared grid coordinates survive field transfers');
+    assert.ok(frame.Dbar.some(x=>x>0));
+  }
   const scenarioMessages = [], scenarioContext = vm.createContext({ performance, setTimeout,
     TextEncoder, TextDecoder, structuredClone, URL,
     postMessage: data => scenarioMessages.push(data) });

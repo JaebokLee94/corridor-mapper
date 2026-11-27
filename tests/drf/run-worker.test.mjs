@@ -8,6 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createRunEngine } from '../../drf/run-engine.mjs';
 import { generateScenario } from '../../drf/scenario.mjs';
 import { createGrid, createField } from '../../drf/field.mjs';
+import { createDisplayField } from '../../drf/display-field.mjs';
 import { MethodComparison, protocolForFleet } from '../../drf/comparison.mjs';
 import { createPSPTEvaluator } from '../../drf/pspt-evaluate.mjs';
 
@@ -180,29 +181,126 @@ test('cancellation during generation suppresses prepared data and all inference 
 
 for(const blockedSide of ['echoSpline','guarded']){
   test(`the other estimator can finish while ${blockedSide} is still processing snapshot one`,async()=>{
-    const messages=[],release=Promise.withResolvers();
+    const messages=[],release=Promise.withResolvers(),fieldRelease=Promise.withResolvers();
     const engine=createRunEngine({emit:m=>messages.push(m),createMethod:side=>({
       async step(wire){
         if(side===blockedSide&&wire.t===1)await release.promise;
         return {candidates:[],curves:[],ms:1};
       },close(){}
-    })});
+    }),createFieldClient(grid,numerical){
+      const field=createDisplayField(grid,numerical);
+      return {async step(wire){
+        if(blockedSide==='guarded' && wire.t===1)await fieldRelease.promise;
+        return field.step(wire);
+      },close(){}};
+    }});
     const finished=engine.command({type:'start',requestId:1,input});
     try{
       await waitUntil(()=>messages.some(m=>m.type==='method-frame'&&m.t===input.snapshots),'fast side must progress independently');
       assert.deepEqual(messages.filter(m=>m.type==='method-frame').map(m=>[m.side,m.t]),[1,2,3].map(t=>[blockedSide==='echoSpline'?'guarded':'echoSpline',t]));
       assert.equal(messages.some(m=>m.type==='frame'||m.mode==='done'),false);
+      fieldRelease.resolve();
+      if(blockedSide==='guarded')await waitUntil(()=>messages.some(m=>m.field?.t===input.snapshots),'field must also finish');
       const early = messages.filter(m => m.field);
       assert.deepEqual(early.map(m => m.field.t), blockedSide === 'guarded' ? [1,2,3] : []);
+      assert.ok(early.every(m => m.type === 'field-frame' && Number.isFinite(m.at)));
       const {scenario} = messages.find(m => m.type === 'prepared');
       for (const m of early) {
+        assert.ok(messages.slice(0,messages.indexOf(m)+1).some(e=>e.type==='method-frame'&&e.side==='echoSpline'&&e.t===m.t));
         const expected = referenceDisplayFrame(scenario, m.field.grid, m.t);
         assert.deepEqual(m.field.Dbar, expected.Dbar);
         assert.deepEqual(m.field.betaHat, expected.betaHat);
       }
-    }finally{release.resolve();await finished;}
+    }finally{fieldRelease.resolve();release.resolve();await finished;}
     assert.deepEqual(messages.filter(m=>m.type==='frame').map(m=>m.next),[1,2,3]);
     assert.equal(messages.at(-1).mode,'done');
+  });
+}
+
+test('both estimators can finish while the first display field is blocked, then pause, step and resume in order', async () => {
+  const messages = [], gate = Promise.withResolvers(), closed = [];
+  const engine = createRunEngine({emit: m => messages.push(m),
+    createMethod: side => ({step: () => ({candidates: [], curves: [], ms: 1}), close: () => closed.push(side)}),
+    createFieldClient(grid, numerical) {
+      const field = createDisplayField(grid, numerical);
+      return {async step(wire) {
+        if (wire.t === 1) await gate.promise;
+        return field.step(wire);
+      }, close: () => closed.push('field')};
+    }});
+  const finished = engine.command({type:'start', requestId:46, input});
+  try {
+    await waitUntil(() => messages.filter(m => m.type === 'method-frame').length === 2 * input.snapshots,
+      'waiting for the field must not prevent either estimator from advancing');
+    for (const side of ['echoSpline', 'guarded'])
+      assert.deepEqual(messages.filter(m => m.side === side).map(m => m.t), [1, 2, 3]);
+    assert.ok(!messages.some(m => m.field || m.type === 'frame' || m.mode === 'done'));
+    engine.command({type:'pause',requestId:46});
+  } finally { gate.resolve(); await finished; }
+  assert.equal(messages.at(-1).mode, 'paused'); assert.equal(messages.at(-1).next, 1);
+  await engine.command({type:'step',requestId:46});
+  assert.equal(messages.at(-1).mode, 'paused'); assert.equal(messages.at(-1).next, 2);
+  await engine.command({type:'resume',requestId:46});
+  assert.equal(messages.at(-1).mode, 'done');
+  const joined = messages.filter(m => m.type === 'frame');
+  assert.deepEqual(joined.map(m => m.next), [1, 2, 3]);
+  const {scenario} = messages.find(m => m.type === 'prepared');
+  for (const m of joined) {
+    for (const side of ['echoSpline', 'guarded'])
+      assert.ok(messages.find(method => method.side === side && method.t === m.next).at <= m.fieldAt);
+    const expected = referenceDisplayFrame(scenario, m.frame.grid, m.next);
+    assert.deepEqual(m.frame.Dbar, expected.Dbar); assert.deepEqual(m.frame.betaHat, expected.betaHat);
+  }
+  assert.deepEqual(closed.sort(), ['echoSpline','field','guarded']);
+});
+
+test('a field that finishes before both estimators first appears with its matching EchoSpline snapshot', async () => {
+  const gates = {echoSpline:Promise.withResolvers(), guarded:Promise.withResolvers()}, messages = [];
+  let latestField = 0;
+  const engine = createRunEngine({emit: m => messages.push(m),
+    createMethod: side => ({async step(wire) {
+      if (wire.t === 1) await gates[side].promise;
+      return {candidates:[], curves:[], ms:1};
+    }, close(){}}),
+    createFieldClient(grid,numerical) {
+      const field = createDisplayField(grid,numerical);
+      return {step(wire){latestField = wire.t; return field.step(wire);}, close(){}};
+    }});
+  const finished = engine.command({type:'start',requestId:47,input});
+  try {
+    await waitUntil(() => latestField === input.snapshots, 'the display worker may finish first');
+    assert.ok(!messages.some(m => m.field || m.type === 'frame'));
+    gates.echoSpline.resolve();
+    await waitUntil(() => messages.filter(m => m.side === 'echoSpline').length === 3, 'left estimator should finish');
+    assert.deepEqual(messages.filter(m => m.field).map(m => [m.type,m.t,m.field.t]),
+      [1,2,3].map(t => ['method-frame',t,t]));
+  } finally {
+    gates.echoSpline.resolve(); gates.guarded.resolve(); await finished;
+  }
+  for (const m of messages.filter(m => m.type === 'frame'))
+    assert.ok(m.fieldAt <= messages.find(method => method.side === 'echoSpline' && method.t === m.next).at);
+});
+
+for (const stop of ['cancel','fail']) {
+  test(`a pending field can ${stop} without leaking workers or sending stale frames`, async () => {
+    const gate = Promise.withResolvers(), messages = [], closed = [];
+    let fieldStarted = false;
+    const engine = createRunEngine({emit:m=>messages.push(m),
+      createMethod:side=>({step:()=>({candidates:[],curves:[],ms:1}),close:()=>closed.push(side)}),
+      createFieldClient:()=>({step(){fieldStarted=true; return gate.promise;}, close:()=>closed.push('field')})});
+    const finished = engine.command({type:'start', requestId:48, input});
+    try {
+      await waitUntil(()=>fieldStarted,'first field request not issued');
+      if (stop === 'cancel') engine.command({type:'cancel', requestId:48});
+    } finally {
+      gate.reject(new Error('display worker stopped')); await finished;
+    }
+    assert.deepEqual(closed.sort(), ['echoSpline','field','guarded']);
+    assert.ok(!messages.some(m => m.type === 'frame' || m.mode === 'done'));
+    if (stop === 'cancel') {
+      assert.equal(messages.at(-1).mode,'cancelled');
+      assert.ok(!messages.some(m=>m.type==='error'));
+    } else assert.deepEqual(messages.at(-1),{type:'error',requestId:48,message:'display worker stopped'});
   });
 }
 

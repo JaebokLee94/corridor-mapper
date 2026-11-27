@@ -1,6 +1,6 @@
 import { experimentSettings } from './experiment-settings.mjs?v=20261119-cnn-stride4';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { workerMethod } from './method-client.mjs?v=20261119-cnn-stride4';
+import { workerMethod } from './method-client.mjs?v=20261127-independent-field';
 import { createGrid } from './field.mjs?v=20261119-cnn-stride4';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 import { activeRightMethods } from './right-methods.mjs?v=20261119-cnn-stride4';

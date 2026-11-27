@@ -52,17 +52,37 @@ function paddedGrid(base, [left, right, bottom, top]) {
     y: Float64Array.from({length: ny}, (_, iy) => base.ymin + (iy - bottom + 0.5) * dy)};
 }
 
-/** Display-only cumulative Dbar and betaHat. Inputs are a cell-centred base grid
- * in metres and ordered measured wires. Each frame owns its iy*nx+ix readouts
- * and references the grid in effect at that snapshot.
- * The ordinary field step is reused on G cells. An extension replays earlier
- * measurements so the new cells also include every past denominator term.
- * Storage is O(G + measured prefix), in addition to the frames retained by callers.
+// Tiles keep their original integer cell indices as the outer rectangle grows.
+function addMargins(tiles, grid, old, margins, base, replay) {
+  const [left, right, bottom, top] = margins;
+  const x0 = -left, x1 = base.nx + right, y0 = -bottom, y1 = base.ny + top;
+  const oldX0 = -old[0], oldX1 = base.nx + old[1], oldY0 = -old[2], oldY1 = base.ny + old[3];
+  function add(x, endX, y, endY) {
+    if (endX === x || endY === y) return;
+    const coords = {nx:endX-x, ny:endY-y, x:grid.x.subarray(x-x0,endX-x0), y:grid.y.subarray(y-y0,endY-y0)};
+    tiles.push({x, y, field:replay(coords)});
+  }
+  // Side strips cover the previous height; top and bottom span the new width.
+  add(x0, oldX0, oldY0, oldY1);
+  add(oldX1, x1, oldY0, oldY1);
+  add(x0, x1, y0, oldY0);
+  add(x0, x1, oldY1, y1);
+}
+
+/** Cumulative Dbar and betaHat on the original metre lattice, using measured prefixes only.
+ * Grown cells need past D and A, including denominator contributions far from any return.
+ * Backfill only the new strips. Old cells receive each measurement exactly once. Storage
+ * is O(G + measured prefix), including the O(G) contiguous frame used by display/export.
  */
 export function createDisplayField(baseGrid, numerical = {}) {
   const band = numerical.band ?? 4;
-  let grid = baseGrid, field = createField(grid, numerical), margins = [0, 0, 0, 0];
   const history = [];
+  function replay(coords) {
+    const field = createField(coords, numerical);
+    for (const past of history) field.step(past);
+    return field;
+  }
+  let grid = baseGrid, margins = [0, 0, 0, 0], tiles = [{x:0, y:0, field:replay(grid)}];
   return {step(snapshot) {
     const started = performance.now(), wire = makeWire(snapshot);
     if (wire.t !== history.length + 1) throw new RangeError('Display snapshots must follow causal t=1,2,... order');
@@ -73,15 +93,41 @@ export function createDisplayField(baseGrid, numerical = {}) {
       growMargin(margins[2], (baseGrid.ymin - ymin) / baseGrid.dy, baseGrid.ny),
       growMargin(margins[3], (ymax - baseGrid.ymax) / baseGrid.dy, baseGrid.ny),
     ];
-    let nextGrid = grid, nextField = field;
+    let nextGrid = grid, nextTiles = tiles;
     if (nextMargins.some((n, i) => n !== margins[i])) {
       nextGrid = paddedGrid(baseGrid, nextMargins);
-      nextField = createField(nextGrid, numerical);
-      for (const past of history) nextField.step(past);
+      if (history.length) {
+        nextTiles = tiles.slice();
+        addMargins(nextTiles, nextGrid, margins, nextMargins, baseGrid, replay);
+      } else {
+        nextTiles = [{x:-nextMargins[0], y:-nextMargins[2], field:createField(nextGrid,numerical)}];
+      }
     }
-    const frame = nextField.step(wire);
+    let frames;
+    try {
+      frames = nextTiles.map(tile => tile.field.step(wire));
+    } catch (error) {
+      // A rejected snapshot must not advance an earlier tile before a retry.
+      for (const tile of tiles) if (tile.field.t === wire.t) tile.field = replay(tile.field.grid);
+      throw error;
+    }
     history.push(wire);
-    grid = nextGrid; field = nextField; margins = nextMargins;
-    return {...frame, grid, ms: performance.now() - started};
+    grid = nextGrid; margins = nextMargins; tiles = nextTiles;
+    const first = frames[0];
+    if (tiles.length === 1) return {...first, grid, ms:performance.now()-started};
+    const epsilonA = Math.max(...frames.map(f => f.epsilonA));
+    const Dbar = new Float32Array(grid.nx*grid.ny), betaHat = new Float32Array(Dbar.length);
+    for (const [k, tile] of tiles.entries()) {
+      const {D, A, grid:part} = tile.field, src = frames[k].Dbar;
+      for (let iy=0; iy<part.ny; iy++) {
+        const row = iy*part.nx, dest = (tile.y+margins[2]+iy)*grid.nx+tile.x+margins[0];
+        Dbar.set(src.subarray(row,row+part.nx),dest);
+        for (let ix=0; ix<part.nx; ix++) {
+          const cell = row+ix, denominator = A[cell]+epsilonA;
+          betaHat[dest+ix] = denominator>0 ? D[cell]/denominator : 0;
+        }
+      }
+    }
+    return {...first, grid, Dbar, betaHat, epsilonA, ms:performance.now()-started};
   }};
 }
