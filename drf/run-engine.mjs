@@ -1,7 +1,7 @@
 import { experimentSettings as normalizeInput } from './experiment-settings.mjs?v=20261119-cnn-stride4';
 import { prepareScenario as generateScenario } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { createGrid } from './field.mjs?v=20261119-cnn-stride4';
-import { createDisplayField } from './display-field.mjs?v=20261128-viewport-field';
+import { createDisplayField } from './display-field.mjs?v=20261128-fast-viewport';
 import { EchoComparison, echoProtocol } from './echo-comparison.mjs?v=20261127-cnn-display';
 import { createPSPTEvaluator } from './pspt-evaluate.mjs?v=20261117-map-metrics';
 
@@ -19,6 +19,8 @@ export function yieldWorkerTask() {
 }
 
 const sides=['echoSpline','guarded'];
+// Only retain a few camera rasters while the estimator models are initializing.
+const initialViewSteps=3;
 
 function localMethod(side,input,domain){
   const estimator=new EchoComparison(input,domain,side);
@@ -40,6 +42,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
   const send=(run,type,value={})=>emit({type,requestId:run.requestId,...value});
   const status=(run,mode)=>send(run,'status',{mode,next:run.next,total:run.input.snapshots});
   function close(run){
+    run.releaseFieldWait?.();
     for(const lane of Object.values(run.lanes)){
       lane.client.close(); lane.pending.clear();
     }
@@ -73,12 +76,26 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
     send(run,'method-frame',{side,t,at,result,evaluation:metrics,field:display?.field});
   }
 
-  async function advance(run,side){
+  async function advance(run,side,prefetch=false){
     const lane=run.lanes[side];
-    while(current(run)&&run.target==='running'&&lane.next<lane.limit){
+    if(side==='field' && run.fieldStartup && !prefetch){
+      // An uninitialized field has no step in flight. Pause/cancel can release
+      // this wait immediately; an actual prefetched step must finish just once.
+      if(!lane.initialized && run.target==='running'){
+        const interrupted=new Promise(resolve=>{run.releaseFieldWait=resolve;});
+        await Promise.race([run.fieldStartup,interrupted]);
+        run.releaseFieldWait=undefined;
+      }
+      if(!lane.initialized || !current(run))return;
+      await run.fieldStartup;
+    }
+    const canStep=()=>current(run)&&run.target==='running'&&lane.next<lane.limit &&
+      (!prefetch || !run.ready && lane.next<initialViewSteps);
+    while(canStep()){
       const wire=run.scenario.wire[lane.next],result=await lane.client.step(wire);
       if(!current(run))return;
-      const at=run.elapsed+performance.now()-run.started,t=++lane.next;
+      // A field ready before the maps start is already available at replay time zero.
+      const at=run.started==null ? 0 : run.elapsed+performance.now()-run.started,t=++lane.next;
       if(side==='field'){
         lane.pending.set(t,{field:result,at});
         if(run.lanes.echoSpline.pending.has(t)&&!run.lanes.guarded.pending.has(t))
@@ -86,7 +103,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
       }else recordMethod(run,side,t,at,result);
       if(!current(run))return;
       join(run);
-      if(current(run)&&lane.next<lane.limit)await yieldTask();
+      if(canStep())await yieldTask();
     }
   }
   async function pump(run){
@@ -112,6 +129,7 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
     const input=normalizeInput(message.input);
     if(input.sigmaD===0)throw new Error('Both methods require range SD σd > 0.');
     const run=active={requestId:message.requestId,input,next:0,target:'running',lanes:{},elapsed:0,
+      viewBounds:message.viewBounds,limit:message.single?1:input.snapshots,
       method:!input.rightMethod||input.rightMethod==='wmp'?'guarded-tuned':input.rightMethod};
     status(run,'running');
     try {
@@ -126,7 +144,16 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
         const client=side==='field' ? createFieldClient(grid,{band:input.band,perimeter:input.perimeter,
           ...(message.viewBounds ? {viewBounds:message.viewBounds} : {})})
           : createMethod(side,input,scenario.domain);
-        const lane=run.lanes[side]={client,pending:new Map(),next:0,limit:message.single?1:input.snapshots};
+        const lane=run.lanes[side]={client,pending:new Map(),next:0,limit:run.limit};
+        if(side==='field'){
+          run.fieldStartup=Promise.resolve(client.ready).then(async()=>{
+            lane.initialized=true;
+            // The local fallback uses the coordinator's own thread. Only an
+            // independent field client can overlap model loading with computation.
+            if(run.viewBounds && !run.ready && createFieldClient!==localField)await advance(run,'field',true);
+          }).catch(error=>fail(run,error));
+          return;
+        }
         await client.ready;
         if(side!=='field'&&current(run))lane.evaluator=createPSPTEvaluator(scenario,grid);
       }));
@@ -141,10 +168,14 @@ export function createRunEngine({emit,yieldTask=yieldWorkerTask,prepare=generate
     const run=active;
     if(!run||message.requestId!==run.requestId||!current(run))return;
     if(message.type==='cancel'){run.target='cancelled';close(run);status(run,'cancelled');return;}
-    if(message.type==='pause'){run.target='paused';if(run.ready&&!run.busy)status(run,'paused');return;}
+    if(message.type==='pause'){run.target='paused';run.releaseFieldWait?.();if(run.ready&&!run.busy)status(run,'paused');return;}
     if(!['step','resume'].includes(message.type))throw new Error('Unknown run command');
     if(message.type==='step'&&(run.target!=='paused'||run.busy))return;
-    for(const lane of Object.values(run.lanes))lane.limit=message.type==='step'?Math.min(lane.next+1,run.input.snapshots):run.input.snapshots;
+    run.limit=message.type==='step'?Math.min(run.next+1,run.input.snapshots):run.input.snapshots;
+    for(const lane of Object.values(run.lanes)){
+      // A prefetched field already covers the requested prefix of a viewport single step.
+      lane.limit=message.type==='step'&&!run.viewBounds?Math.min(lane.next+1,run.input.snapshots):run.limit;
+    }
     run.target='running';if(message.type==='resume')status(run,'running');
     return pump(run);
   }

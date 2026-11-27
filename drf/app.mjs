@@ -15,7 +15,7 @@ import { METHOD_PROTOCOL } from './comparison.mjs?v=20261112-upper-wmp';
 import { LEGACY_RUN_PROTOCOL } from './legacy-run-protocol.mjs';
 import { startSweep, parseValues, sweepJobs, aggregateRuns } from './sweep.mjs?v=20261127-cnn-display';
 import { DrfMap, linkMapCameras, drawComparisonHistory, drawSweep, drawHistogram, drawProfile, drawCounts, sweepPng } from './render.mjs?v=20261128-viewport-field';
-import { createViewportReadout } from './viewport-readout.mjs?v=20261128-viewport-field';
+import { createViewportReadout } from './viewport-readout.mjs?v=20261128-fast-viewport';
 import { download, png300dpi } from '../surf/exports.mjs';
 import { connectComputeServer, createServerRunWorker, startServerSweep } from './server-client.mjs?v=20261128-viewport-field';
 import { startDeviceBenchmark, benchmarkCases, benchmarkMethods, benchmarkDisplayRows } from './device-benchmark.mjs?v=20261127-cnn-display';
@@ -124,7 +124,7 @@ function settings() {
   return normalizeInput(values);
 }
 function createLocalWorker(name) {
-  const revision = '20261128-viewport-field';
+  const revision = '20261128-independent-wall';
   return globalThis.__drfOffline?.worker(name) ?? new Worker(new URL(`./${name}.worker.mjs?v=${revision}`, import.meta.url), { type: 'module' });
 }
 function warmSelectedInput(input) {
@@ -430,7 +430,6 @@ async function receiveRunMessage(data, generation) {
       if (!sample || data.field?.t!==data.t) throw new Error('Unexpected display field snapshot');
       sample.field=data.field;
       sample.fieldAt=data.at;
-      if (state.fieldViewBounds) updateComparisonStatus();
       scheduleLivePaint();
       return;
     }
@@ -485,9 +484,8 @@ async function receiveRunMessage(data, generation) {
 function updateComparisonStatus() {
   if (state.mode!=='running') return;
   const total=state.scenario.input.snapshots, joined=state.frames.length;
-  const rightFrames=state.methodFrames?.guarded, leftFrames=state.methodFrames?.echoSpline;
-  const left=state.fieldViewBounds && leftFrames
-    ? (leftFrames.findLast(s=>s.field || state.frames[s.t-1])?.t ?? 0) : leftFrames?.length ?? joined;
+  const rightFrames=state.methodFrames?.guarded;
+  const left=state.methodFrames?.echoSpline.length ?? joined;
   const right=rightFrames?.at(-1)?.displayAt!=null ? liveMethodFrame(rightFrames).t : rightFrames?.length ?? joined;
   if (state.methodFrames && left===total && right===total) {
     notice(joined<total ? `Both maps complete · updating measurement fields ${joined} / ${total}` : 'Both maps complete · measurement fields ready');
@@ -619,11 +617,6 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
     if(list){
       records[method]=state.replay?list.findLast(s=>(s.displayAt??s.at)<=state.replayPosition):
         state.followLive && ['running','paused'].includes(state.mode)?liveMethodFrame(list):list[state.selected-1];
-      if (method==='echoSpline' && state.fieldViewBounds && (state.replay || state.followLive && ['running','paused'].includes(state.mode))) {
-        // Present the estimate and both measurement fields in the same paint, leaving the other estimator independent.
-        records[method]=list.findLast(s=>(s.field || state.frames[s.t-1]) &&
-          (!state.replay || Math.max(s.at,s.fieldAt??s.at)<=state.replayPosition));
-      }
       if (method==='guarded') state.nextMapPaintAt=state.followLive && state.mode==='running'
         ? list[records[method]?.t??0]?.displayAt : undefined;
     }
@@ -641,7 +634,7 @@ function renderSelected({layoutOnly=false,framesOnly=false}={}) {
   const walls = scenario?.walls ?? previewWalls();
   let fieldFrame=frame;
   if (independently) {
-    // The field can trail either map. Select a complete, visible prefix even during replay.
+    // A late field may only hold its own panes. Never hold the wall estimate or show a field ahead of it.
     fieldFrame=undefined;
     for (let t=methodT(first);t>0 && !fieldFrame;t--) {
       const sample=state.methodFrames.echoSpline[t-1];

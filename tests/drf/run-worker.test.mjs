@@ -254,6 +254,124 @@ test('both estimators can finish while the first display field is blocked, then 
   assert.deepEqual(closed.sort(), ['echoSpline','field','guarded']);
 });
 
+for (const [mode,bounds] of [['viewport',[-4,27,-5,14]],['full field',undefined]]) test(
+  `both estimators finish independently of ${mode} initialization and a pause releases that wait`, async () => {
+  const fieldReady=Promise.withResolvers(), messages=[], processed=[], closed=[];
+  const engine=createRunEngine({emit:m=>messages.push(m),
+    createMethod:side=>({step:()=>({candidates:[],curves:[],ms:1}),close:()=>closed.push(side)}),
+    createFieldClient:(grid,numerical)=>{
+      const field=createDisplayField(grid,numerical);
+      return {ready:fieldReady.promise,step(wire){processed.push(wire.t);return field.step(wire);},close:()=>closed.push('field')};
+    }});
+  const finished=engine.command({type:'start',requestId:145,input,...(bounds?{viewBounds:bounds}:{})});
+  try {
+    await waitUntil(()=>messages.filter(m=>m.type==='method-frame').length===2*input.snapshots,
+      'both estimators must finish even while the display worker cannot initialize');
+    assert.deepEqual(processed,[]);
+    assert.ok(!messages.some(m=>m.field || m.type==='frame'));
+    assert.deepEqual(messages.find(m=>m.type==='prepared').viewBounds,bounds);
+    engine.command({type:'pause',requestId:145});
+    await waitUntil(()=>messages.at(-1).mode==='paused','an uninitialized worker cannot hold a pause');
+    assert.equal(messages.at(-1).next,0);
+  } finally {fieldReady.resolve(); await finished;}
+  await engine.command({type:'step',requestId:145});
+  assert.equal(messages.at(-1).mode,'paused'); assert.deepEqual(processed,[1]);
+  await engine.command({type:'resume',requestId:145});
+  const scene=messages.find(m=>m.type==='prepared').scenario;
+  const frames=messages.filter(m=>m.type==='frame');
+  assert.deepEqual(frames.map(m=>m.next),[1,2,3]);
+  for(const m of frames){
+    const expected=referenceDisplayFrame(scene,m.frame.grid,m.next);
+    assert.deepEqual(m.frame.Dbar,expected.Dbar);assert.deepEqual(m.frame.betaHat,expected.betaHat);
+  }
+  assert.equal(messages.at(-1).mode,'done'); assert.deepEqual(closed.sort(),['echoSpline','field','guarded']);
+});
+
+test('model loading overlaps bounded viewport work without publishing a future field or charging preparation to map clocks', async t => {
+  const model=Promise.withResolvers(), right=Promise.withResolvers(), messages=[], fieldSteps=[];
+  const settings={...input,snapshots:5}, scene=await generateScenario(settings), viewBounds=[-4,27,-5,14];
+  let now=1000;
+  t.mock.method(performance,'now',()=>now);
+  const engine=createRunEngine({emit:m=>messages.push(m),prepare:async()=>scene,yieldTask:()=>Promise.resolve(),
+    createMethod:side=>({ready:model.promise,async step(wire){
+      if(side==='guarded'&&wire.t===1)await right.promise;
+      now++;
+      return {candidates:[],curves:[],ms:1};
+    },close(){}}),
+    createFieldClient:(grid,numerical)=>{
+      const field=createDisplayField(grid,numerical);
+      return {ready:Promise.resolve(),step(wire){fieldSteps.push(wire.t);now+=10;return field.step(wire);},close(){}};
+    }});
+  const finished=engine.command({type:'start',requestId:146,input:settings,viewBounds});
+  try {
+    await waitUntil(()=>fieldSteps.length>=3,'the field should have a bounded head start during model loading');
+    assert.deepEqual(fieldSteps,[1,2,3]);
+    assert.ok(!messages.some(m=>m.type==='prepared'||m.type==='compute-clock'||m.type==='method-frame'||m.field||m.type==='frame'));
+    now+=5000;model.resolve();
+    await waitUntil(()=>messages.filter(m=>m.side==='echoSpline').length===5,'fast estimator should finish first');
+    const left=messages.filter(m=>m.side==='echoSpline');
+    assert.ok(left.every(m=>m.at>0&&m.at<100),'estimator clock excludes model loading and precomputed fields');
+    for(const m of left.slice(0,3))assert.equal(m.field.t,m.t);
+    for(const [i,m] of messages.entries())if(m.field)
+      assert.ok(messages.slice(0,i+1).some(e=>e.side==='echoSpline'&&e.t===m.field.t));
+  } finally { model.resolve();right.resolve();await finished; }
+  assert.deepEqual(fieldSteps,[1,2,3,4,5]);
+  const joined=messages.filter(m=>m.type==='frame');
+  assert.deepEqual(joined.map(m=>m.next),fieldSteps);
+  assert.deepEqual(joined.slice(0,3).map(m=>m.fieldAt),[0,0,0]);
+  assert.ok(joined.slice(3).every(m=>m.fieldAt>0));
+  assert.equal(messages.at(-1).mode,'done');
+});
+
+test('obsolete viewport readiness cannot emit a field or fail a replacement run', async () => {
+  const gate=Promise.withResolvers(), replacementReady=Promise.withResolvers(), messages=[], closed=[];
+  let generation=0;
+  const engine=createRunEngine({emit:m=>messages.push(m),
+    createMethod:side=>({step:()=>({candidates:[],curves:[],ms:1}),close:()=>closed.push(side)}),
+    createFieldClient:(grid,numerical)=>{
+      if(++generation===1)return {ready:gate.promise,step:()=>assert.fail('obsolete field was stepped'),close:()=>closed.push('field')};
+      const field=createDisplayField(grid,numerical);
+      return {ready:replacementReady.promise,step:wire=>field.step(wire),close:()=>closed.push('field')};
+    }});
+  const viewBounds=[-6,16,-3,15];
+  const finished=engine.command({type:'start',requestId:147,input,viewBounds});
+  await waitUntil(()=>messages.some(m=>m.side==='echoSpline'),'method should start without viewport');
+  engine.command({type:'cancel',requestId:147}); await finished;
+  assert.equal(messages.at(-1).mode,'cancelled');
+  assert.deepEqual(closed.sort(),['echoSpline','field','guarded']);
+  const cancelledCount=messages.length;
+  const replaced=engine.command({type:'start',requestId:148,input,viewBounds});
+  try {
+    await waitUntil(()=>messages.some(m=>m.requestId===148 && m.side==='echoSpline'),'replacement estimator should already be running');
+    gate.reject(new Error('late viewport initialization')); await delay(0);
+    assert.equal(messages.filter(m=>m.requestId===147).length,cancelledCount);
+  } finally { replacementReady.resolve(); await replaced; }
+  assert.ok(!messages.some(m=>m.type==='error'));assert.equal(messages.at(-1).mode,'done');
+});
+
+test('pausing a viewport prefetch keeps its in-flight prefix and a single step consumes it only once', async () => {
+  const models=Promise.withResolvers(), firstField=Promise.withResolvers(), messages=[], steps=[];
+  const engine=createRunEngine({emit:m=>messages.push(m),
+    createMethod:()=>({ready:models.promise,step:()=>({candidates:[],curves:[],ms:1}),close(){}}),
+    createFieldClient:(grid,numerical)=>{
+      const field=createDisplayField(grid,numerical);
+      return {async step(wire){steps.push(wire.t);if(wire.t===1)await firstField.promise;return field.step(wire);},close(){}};
+    }});
+  const started=engine.command({type:'start',requestId:149,input,viewBounds:[-6,16,-3,15]});
+  try {
+    await waitUntil(()=>steps.length===1,'an early prefix step should be executing');
+    engine.command({type:'pause',requestId:149}); models.resolve();
+    await waitUntil(()=>messages.some(m=>m.type==='prepared'),'models should initialize while the field step is pending');
+    assert.ok(!messages.some(m=>m.type==='method-frame'||m.type==='frame'||m.mode==='paused'));
+  } finally { models.resolve();firstField.resolve();await started; }
+  assert.equal(messages.at(-1).mode,'paused');assert.equal(messages.at(-1).next,0);
+  await engine.command({type:'step',requestId:149});
+  assert.equal(messages.at(-1).mode,'paused');assert.equal(messages.at(-1).next,1);
+  assert.deepEqual(steps,[1]);
+  await engine.command({type:'resume',requestId:149});
+  assert.deepEqual(steps,[1,2,3]);assert.equal(messages.at(-1).mode,'done');
+});
+
 test('a field that finishes before both estimators first appears with its matching EchoSpline snapshot', async () => {
   const gates = {echoSpline:Promise.withResolvers(), guarded:Promise.withResolvers()}, messages = [];
   let latestField = 0;

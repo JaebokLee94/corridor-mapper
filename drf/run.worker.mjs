@@ -1,6 +1,6 @@
 import { workerDisplayField, workerMethod } from './method-client.mjs?v=20261127-independent-field';
 import { preparePublicScenario } from './public-measure.mjs?v=20261114-wall-geometry';
-import { createRunEngine } from './run-engine.mjs?v=20261128-viewport-field';
+import { createRunEngine } from './run-engine.mjs?v=20261128-independent-wall';
 import { warmTruthCache } from './prepare-scenario.mjs?v=20261114-wall-geometry';
 import { normalizeInput } from './scenario.mjs?v=20261114-wall-geometry';
 import { truthCacheKey } from './truth-cache.mjs';
@@ -14,7 +14,7 @@ let warming, pendingStart;
 const engine = createRunEngine({ prepare:preparePublicScenario,
   createFieldClient(grid,numerical){
     const worker=globalThis.__echoFieldUrl?new Worker(globalThis.__echoFieldUrl):
-      new Worker(new URL('./field.worker.mjs?v=20261128-viewport-field',import.meta.url),{type:'module'});
+      new Worker(new URL('./field.worker.mjs?v=20261128-fast-viewport',import.meta.url),{type:'module'});
     return workerDisplayField(worker,grid,numerical);
   },
   createMethod(side,input,domain){

@@ -1,4 +1,4 @@
-import { createField } from './field.mjs';
+import { createField } from './field.mjs?v=20261128-fast-viewport';
 import { makeWire } from './wire.mjs';
 
 // Both perimeter methods give P >= π*dHat/2. With |grad rho| <= 2 and

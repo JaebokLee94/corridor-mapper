@@ -909,14 +909,14 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
       assert.equal(state.selected,3);
     });
 
-    await t.test('the viewport field and EchoSpline paint one measured prefix while CNN and raw completion times stay independent',async()=>{
+    await t.test('EchoSpline paints immediately and the viewport heatmaps catch up to its latest visible prefix',async()=>{
       const input={snapshots:3,rightMethod:'spline-cnn-fast'};
       Object.assign(state,{generation:1,mode:'running',method:'compare',followLive:true,replay:false,
         fieldViewBounds:wideGrid.domain,protocol:echoProtocol(input),scenario:{...state.scenario,input,wire:snapshots,truth:snapshots},
         frames:[],evaluations:[],frameTimes:[],methodFrames:null,next:0,selected:0,
         livePaint:0,computeClock:null,computePaint:0,computeDisplay:null,nextMapPaintAt:undefined});
       let now=0;
-      Object.assign(context,{performance:{now:()=>now},requestAnimationFrame:()=>1,controls(){},notice(){},
+      Object.assign(context,{performance:{now:()=>now},requestAnimationFrame:()=>1,controls(){},notice:text=>{$('status').textContent=text;},
         fail:error=>assert.fail(error.message),hashField:async()=>''});
       vm.runInContext(section('async function receiveRunMessage(','async function hashField(')
         +section('function renderSelected(','// Sweep diagnostics')+section('function replayTick(','function resetView('),context);
@@ -925,8 +925,8 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
       const method=(side,t,at,early)=>send({type:'method-frame',side,t,at,result:{ms:t},evaluation:{},field:early});
       const join=(t,fieldAt)=>send({type:'frame',next:t,fieldAt,frame:{...field(t),methods:{echoSpline:{ms:t},guarded:{ms:t}}},
         evaluation:{methods:{echoSpline:{},guarded:{}}}});
-      function check(left,right) {
-        for(const [view,t] of [[maps.map,left],[maps.densityMap,left],[maps.contrastMap,left],[maps.baselineMap,right]]){
+      function check(left,right,heat) {
+        for(const [view,t] of [[maps.map,left],[maps.densityMap,heat],[maps.contrastMap,heat],[maps.baselineMap,right]]){
           assert.equal(view.state.frame?.t??0,t);
           assert.equal(view.state.wire,snapshots[t-1]);
           assert.deepEqual(view.state.history,snapshots.slice(0,t));
@@ -935,24 +935,30 @@ test('fields follow EchoSpline through replay and saved previous-CNN results ret
         assert.match($('primaryProgress').title,new RegExp('Snapshot '+left+'/3'));
         assert.match($('secondaryProgress').title,new RegExp('Snapshot '+right+'/3'));
       }
-      function live(left,right) {state.livePaint=0;context.renderSelected({framesOnly:true});check(left,right);}
-      now=1;await method('guarded',1,now);live(0,1);
-      now=3;await method('echoSpline',1,now);
-      now=4;await method('echoSpline',2,now);live(0,1);
+      function live(left,right,heat) {state.livePaint=0;context.renderSelected({framesOnly:true});check(left,right,heat);}
+      now=1;await method('guarded',1,now);live(0,1,0);
+      now=3;await method('echoSpline',1,now);live(1,1,0);
+      now=4;await method('echoSpline',2,now);live(2,1,0);
+      assert.equal($('status').textContent,'EchoSpline 2/3 · ES-CNN 1/3');
       assert.equal($('updateP95Value').textContent,'2.0','Time statistics already include the two left estimator results');
-      now=8;await join(1,now);live(1,1);
-      now=12;await send({type:'field-frame',t:2,at:now,field:field(2)});live(2,1);
-      now=15;await method('guarded',2,now);await join(2,12);live(2,2);
+      const leftPane=maps.map.state;
+      now=8;await join(1,now);live(2,1,1);
+      now=12;await send({type:'field-frame',t:2,at:now,field:field(2)});live(2,1,2);
+      assert.equal(maps.map.state,leftPane,'A delayed field does not redraw or rewind the wall');
+      now=13;await send({type:'field-frame',t:1,at:now,field:field(1)});live(2,1,2);
+      assert.equal(state.methodFrames.echoSpline[0].fieldAt,8,'A stale field packet does not change recorded time');
+      now=15;await method('guarded',2,now);await join(2,12);live(2,2,2);
       // The third field finished at 16, before either estimator requested painting at t=3.
-      now=18;await method('echoSpline',3,now,field(3));live(3,2);
+      now=18;await method('echoSpline',3,now,field(3));live(3,2,3);
       assert.equal($('computeTimeValue').textContent,'0.018');
-      now=30;await method('guarded',3,now);await join(3,16);live(3,3);
+      now=30;await method('guarded',3,now);await join(3,16);live(3,3,3);
       assert.deepEqual(state.frameTimes,[8,15,30]);
       await send({type:'status',mode:'done'});
-      $('playbackSpeed').value='1';context.toggleReplay();check(0,0);
+      $('playbackSpeed').value='1';context.toggleReplay();check(0,0,0);
       const start=now;
-      for(const [at,left,right] of [[1,0,1],[4,0,1],[8,1,1],[11,1,1],[12,2,1],[15,2,2],[16,2,2],[18,3,2],[30,3,3]]){
-        now=start+at;context.replayTick(now);check(left,right);
+      for(const [at,left,right,heat] of [[1,0,1,0],[3,1,1,0],[4,2,1,0],[8,2,1,1],[11,2,1,1],
+        [12,2,1,2],[15,2,2,2],[16,2,2,2],[18,3,2,3],[30,3,3,3]]){
+        now=start+at;context.replayTick(now);check(left,right,heat);
       }
       assert.equal($('computeTimeValue').textContent,'0.018');assert.equal($('bComputeTimeValue').textContent,'0.030');
       state.fieldViewBounds=undefined;

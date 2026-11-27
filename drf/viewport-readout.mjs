@@ -1,4 +1,4 @@
-import { viewGridLayout } from './display-field.mjs?v=20261128-viewport-field';
+import { viewGridLayout } from './display-field.mjs?v=20261128-fast-viewport';
 
 /** Read an exact display prefix on a panned/resized cell rectangle. The run's
  * wire array identifies its measured stream; only entries through target t go

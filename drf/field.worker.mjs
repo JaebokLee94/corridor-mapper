@@ -1,5 +1,5 @@
-import { createGrid, createField } from "./field.mjs?v=20261118-device-selection-final";
-import { createDisplayField } from "./display-field.mjs?v=20261128-viewport-field";
+import { createGrid, createField } from "./field.mjs?v=20261128-fast-viewport";
+import { createDisplayField } from "./display-field.mjs?v=20261128-fast-viewport";
 
 let field;
 globalThis.onmessage = ({ data: message }) => {

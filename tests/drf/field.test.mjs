@@ -204,7 +204,7 @@ test("historical scalar prefix inspection is bit-identical and uses the original
   } finally { globalThis.onmessage = oldMessage; globalThis.postMessage = oldPost; }
 });
 
-test('known-pose grid reuse preserves the sum of scalar pair fields as measured poses change', () => {
+test('known-pose viewport fields preserve native scalar pair sums after grid and pose edits', () => {
   for (const band of [3, 4, 5, 'full']) {
     const grid = createGrid(21, 13, [-0.5, 20.5, -0.5, 12.5]);
     const poses = [[3, 3], [7, 3], [8, 5]];
@@ -214,16 +214,29 @@ test('known-pose grid reuse preserves the sum of scalar pair fields as measured 
     }));
     // Repeated IDs may have different measured coordinates in the standalone field API.
     configs[2].pHat_i = [9, 4];
-    const combined = createField(grid, {band});
-    combined.step({t: 1, configs});
+    const combined = createField(grid, {band, viewBounds: grid.domain});
     const expectedD = new Float64Array(combined.D.length), expectedA = new Float64Array(combined.A.length);
-    for (const config of configs) {
-      const single = createField(grid, {band});
-      single.step({t: 1, configs: [config]});
-      for (let i = 0; i < single.D.length; i++) {
-        expectedA[i] += single.A[i]; expectedD[i] += single.D[i];
+    for (const t of [1, 2]) {
+      if (t === 2) {
+        grid.x[0] += .1; grid.y[1] -= .4;
+        poses[2][0] += .25;
       }
+      const frame = combined.step({t, configs});
+      const deltaD = new Float64Array(expectedD.length), deltaA = new Float64Array(expectedA.length);
+      for (const config of configs) {
+        const single = createField(grid, {band});
+        single.step({t: 1, configs: [config]});
+        for (let i = 0; i < single.D.length; i++) {
+          deltaA[i] += single.A[i]; deltaD[i] += single.D[i];
+        }
+      }
+      for (let i = 0; i < expectedD.length; i++) {
+        expectedA[i] += deltaA[i]; expectedD[i] += deltaD[i];
+      }
+      assert.deepEqual(combined.A, expectedA); assert.deepEqual(combined.D, expectedD);
+      assert.equal(frame.epsilonA, 1e-12 * Math.max(...expectedA));
+      assert.deepEqual(frame.Dbar, Float32Array.from(expectedD, d => d / frame.Q));
+      assert.deepEqual(frame.betaHat, Float32Array.from(expectedD, (d, i) => d / (expectedA[i] + frame.epsilonA)));
     }
-    assert.deepEqual(combined.A, expectedA); assert.deepEqual(combined.D, expectedD);
   }
 });

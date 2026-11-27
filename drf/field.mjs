@@ -3,6 +3,18 @@ import { validateFieldUpdateCache, findFieldIncrement, saveFieldIncrement } from
 
 const SQRT_2PI = Math.sqrt(2 * Math.PI), FOCAL_EPS = 1e-9;
 
+// V8's two-input Math.hypot divides both magnitudes by the larger one. Its
+// normalized square is exactly 1, so only the smaller magnitude needs division.
+function scaledHypot2(x, y) {
+  const a = Math.abs(x), b = Math.abs(y), scale = Math.max(a, b);
+  if (scale === 0) return 0;
+  if (!Number.isFinite(scale)) return Math.hypot(x, y);
+  const ratio = Math.min(a, b) / scale;
+  return scale * Math.sqrt(1 + ratio * ratio);
+}
+const scaledV8Hypot = (globalThis.process?.versions?.v8 || /\b(?:Chrome|Chromium)\/\d+/.test(globalThis.navigator?.userAgent ?? ''))
+  && Math.hypot(.1, .4) === scaledHypot2(.1, .4);
+
 /** F16–F22: E uses parameter m=k², not modulus k.
  * AGM correction: E=π/(2 AGM(1,√(1-m))) (1-Σ 2^(n-1)c_n²).
  * Reference: https://dlmf.nist.gov/19.8.E6 . O(log precision), O(1) storage.
@@ -81,12 +93,14 @@ export function createGrid(nx = 150, ny = 150, domain = [0, 60, 0, 30]) {
 
 // A vehicle appears in multiple measured pairs. Reuse only the grid distances
 // and unit directions; covariance, range noise and accumulation stay pair specific.
-function focalGrid(id, pose, slots, maxSlots, x, y) {
+let spareFocalBuffers = [];
+function focalGrid(id, pose, slots, maxSlots, x, y, buffers) {
   let slot = slots.get(id);
   if (slot && Object.is(slot.px, pose[0]) && Object.is(slot.py, pose[1])) return slot.data;
   if (!slot) {
     if (slots.size >= maxSlots) return null;
-    slot = {data: new Float64Array(3 * x.length * y.length)};
+    const length = 3 * x.length * y.length, spare = buffers?.pop();
+    slot = {data: spare?.length === length ? spare : new Float64Array(length)};
     slots.set(id, slot);
   }
   slot.px = pose[0]; slot.py = pose[1];
@@ -102,18 +116,19 @@ function focalGrid(id, pose, slots, maxSlots, x, y) {
 }
 
 // For zero position covariance, sigmaR is constant at all grid points.
-function accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA) {
+function accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA, hypot) {
   const variance = sigmaD * sigmaD;
   if (!(variance > 0) || !Number.isFinite(variance))
     throw new RangeError("residual variance must be positive; all-noise-zero kernels are undefined");
   const sd = Math.sqrt(variance), denom = SQRT_2PI * sd,
     radius = band === "full" ? Infinity : band * sd;
+  const minPath = paths[0].dHat, maxPath = paths[paths.length - 1].dHat;
   for (let g = 0, j = 0; g < deltaA.length; g++, j += 3) {
-    const rho = fi[j] + fj[j], factor = Math.hypot(fi[j + 1] + fj[j + 1], fi[j + 2] + fj[j + 2]) / denom;
+    const rho = fi[j] + fj[j], factor = hypot(fi[j + 1] + fj[j + 1], fi[j + 2] + fj[j + 2]) / denom;
     if (!Number.isFinite(rho) || !Number.isFinite(factor)) throw new RangeError("geometry exceeds finite numerical range");
     deltaA[g] += factor * inversePSum;
     const lo = rho - radius, hi = rho + radius;
-    if (hi < paths[0].dHat || lo > paths[paths.length - 1].dHat) continue;
+    if (hi < minPath || lo > maxPath) continue;
     let sum = 0;
     for (let q = lowerBound(paths, lo); q < paths.length && paths[q].dHat <= hi; q++) {
       const z = (rho - paths[q].dHat) / sd;
@@ -203,11 +218,12 @@ export function createRidgeDensityField(grid) {
  * O(C[P log P+G log P]+B) time, O(G+P) scratch plus up to 16 MiB for focal grids; D/A accumulate float64.
  * F41 A=f(x)Σ(1/P_q); sigmaD must be equal within each configuration.
  */
-export function createField(grid, { band = 4, perimeter = "exact", updateCache = null } = {}) {
+export function createField(grid, { band = 4, perimeter = "exact", updateCache = null, viewBounds } = {}) {
   validateFieldUpdateCache(updateCache);
   if (![3, 4, 5, "full"].includes(band) || !["exact", "ramanujan"].includes(perimeter))
     throw new RangeError("numerical settings require band 3/4/5/full and exact/ramanujan perimeter");
   const { nx, ny, x, y } = grid, count = nx * ny;
+  const viewport = viewBounds !== undefined, hypot = viewport && scaledV8Hypot ? scaledHypot2 : Math.hypot;
   // Match the arrays captured by this field, even if the caller replaces grid.x/y.
   const calculationGrid = { nx, ny, x, y };
   if (!Number.isSafeInteger(nx) || !Number.isSafeInteger(ny) || nx < 1 || ny < 1
@@ -251,6 +267,7 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
       }
       // Grid coordinates may be edited by the caller between steps.
       const slots = new Map(), maxSlots = Math.floor((16 * 1024 * 1024) / (3 * 8 * count));
+      const buffers = viewport ? spareFocalBuffers : undefined;
       for (const config of reused ? [] : wire.configs) {
         if (!config.paths.length) continue;
         const sigmaD = config.paths[0].sigmaD;
@@ -264,10 +281,10 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
         const inversePSum = paths.reduce((sum, p) => sum + p.inverseP, 0);
         if (wire.configs.length >= 3 && maxSlots >= 2 &&
             config.Sigma_i.every(value => value === 0) && config.Sigma_j.every(value => value === 0)) {
-          const fi = focalGrid(config.i, config.pHat_i, slots, maxSlots, x, y),
-            fj = focalGrid(config.j, config.pHat_j, slots, maxSlots, x, y);
+          const fi = focalGrid(config.i, config.pHat_i, slots, maxSlots, x, y, buffers),
+            fj = focalGrid(config.j, config.pHat_j, slots, maxSlots, x, y, buffers);
           if (fi && fj) {
-            accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA);
+            accumulateKnownPoses(fi, fj, paths, sigmaD, band, inversePSum, deltaD, deltaA, hypot);
             continue;
           }
         }
@@ -284,6 +301,9 @@ export function createField(grid, { band = 4, perimeter = "exact", updateCache =
           deltaD[g] += geo.factor * sum;
         }
       }
+      // Keep at most one step's (16 MiB) storage per worker. Geometry is rebuilt
+      // after checkout, even if vehicle IDs and poses repeat on an edited grid.
+      if (viewport && slots.size) spareFocalBuffers = Array.from(slots.values(), slot => slot.data);
       // Commit only after every configuration succeeds: malformed input leaves the prior frame intact.
       for (let g = 0; g < count; g++) {
         const d = D[g] + deltaD[g], a = A[g] + deltaA[g];
